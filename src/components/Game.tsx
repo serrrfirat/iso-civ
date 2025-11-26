@@ -2231,7 +2231,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     const west = isWater(gridX, gridY + 1);   // bottom-left edge
     
     // Beach/sidewalk configuration
-    const beachWidth = w * 0.08; // Width of the beach strip (same as sidewalk)
+    const beachWidth = w * 0.04; // Width of the beach strip (50% thinner)
     const beachColor = '#d4a574'; // Light sandy/tan color for beach
     const curbColor = '#b8956a'; // Darker color for curb edge
     
@@ -3305,7 +3305,9 @@ export default function Game() {
       }
 
       if (e.key === 'Escape') {
-        if (state.activePanel !== 'none') {
+        if (overlayMode !== 'none') {
+          setOverlayMode('none');
+        } else if (state.activePanel !== 'none') {
           setActivePanel('none');
         } else if (selectedTile) {
           setSelectedTile(null);
@@ -3320,7 +3322,7 @@ export default function Game() {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.activePanel, state.selectedTool, selectedTile, setActivePanel, setTool]);
+  }, [state.activePanel, state.selectedTool, selectedTile, setActivePanel, setTool, overlayMode]);
   
   return (
     <TooltipProvider>
