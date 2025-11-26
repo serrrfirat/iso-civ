@@ -69,6 +69,29 @@ type Car = {
   laneOffset: number;
 };
 
+type EmergencyVehicleType = 'fire_truck' | 'police_car';
+type EmergencyVehicleState = 'dispatching' | 'responding' | 'returning';
+
+type EmergencyVehicle = {
+  id: number;
+  type: EmergencyVehicleType;
+  tileX: number;
+  tileY: number;
+  direction: CarDirection;
+  progress: number;
+  speed: number;
+  state: EmergencyVehicleState;
+  stationX: number;
+  stationY: number;
+  targetX: number;
+  targetY: number;
+  path: { x: number; y: number }[];
+  pathIndex: number;
+  respondTime: number; // Time spent at the scene
+  laneOffset: number;
+  flashTimer: number; // For emergency light animation
+};
+
 type DirectionMeta = {
   step: { x: number; y: number };
   vec: { dx: number; dy: number };
@@ -141,6 +164,131 @@ function pickNextDirection(
   const filtered = options.filter(dir => dir !== incoming);
   const pool = filtered.length > 0 ? filtered : options;
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// BFS pathfinding on road network - finds path from start to a tile adjacent to target
+function findPathOnRoads(
+  gridData: Tile[][],
+  gridSizeValue: number,
+  startX: number,
+  startY: number,
+  targetX: number,
+  targetY: number
+): { x: number; y: number }[] | null {
+  // Find the nearest road tile to the target (since buildings aren't on roads)
+  const targetRoad = findNearestRoadToBuilding(gridData, gridSizeValue, targetX, targetY);
+  if (!targetRoad) return null;
+  
+  // Find the nearest road tile to the start (station)
+  const startRoad = findNearestRoadToBuilding(gridData, gridSizeValue, startX, startY);
+  if (!startRoad) return null;
+  
+  // BFS from start road to target road
+  const queue: { x: number; y: number; path: { x: number; y: number }[] }[] = [
+    { x: startRoad.x, y: startRoad.y, path: [{ x: startRoad.x, y: startRoad.y }] }
+  ];
+  const visited = new Set<string>();
+  visited.add(`${startRoad.x},${startRoad.y}`);
+  
+  const directions = [
+    { dx: -1, dy: 0 },
+    { dx: 1, dy: 0 },
+    { dx: 0, dy: -1 },
+    { dx: 0, dy: 1 },
+  ];
+  
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    
+    // Check if we reached the target road
+    if (current.x === targetRoad.x && current.y === targetRoad.y) {
+      return current.path;
+    }
+    
+    for (const { dx, dy } of directions) {
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      const key = `${nx},${ny}`;
+      
+      if (nx < 0 || ny < 0 || nx >= gridSizeValue || ny >= gridSizeValue) continue;
+      if (visited.has(key)) continue;
+      if (!isRoadTile(gridData, gridSizeValue, nx, ny)) continue;
+      
+      visited.add(key);
+      queue.push({
+        x: nx,
+        y: ny,
+        path: [...current.path, { x: nx, y: ny }],
+      });
+    }
+  }
+  
+  return null; // No path found
+}
+
+// Find the nearest road tile adjacent to a building
+function findNearestRoadToBuilding(
+  gridData: Tile[][],
+  gridSizeValue: number,
+  buildingX: number,
+  buildingY: number
+): { x: number; y: number } | null {
+  // Check adjacent tiles first (distance 1)
+  const adjacentOffsets = [
+    { dx: -1, dy: 0 },
+    { dx: 1, dy: 0 },
+    { dx: 0, dy: -1 },
+    { dx: 0, dy: 1 },
+  ];
+  
+  for (const { dx, dy } of adjacentOffsets) {
+    const nx = buildingX + dx;
+    const ny = buildingY + dy;
+    if (isRoadTile(gridData, gridSizeValue, nx, ny)) {
+      return { x: nx, y: ny };
+    }
+  }
+  
+  // BFS to find nearest road within reasonable distance
+  const queue: { x: number; y: number; dist: number }[] = [{ x: buildingX, y: buildingY, dist: 0 }];
+  const visited = new Set<string>();
+  visited.add(`${buildingX},${buildingY}`);
+  
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current.dist > 10) break; // Max search distance
+    
+    for (const { dx, dy } of adjacentOffsets) {
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      const key = `${nx},${ny}`;
+      
+      if (nx < 0 || ny < 0 || nx >= gridSizeValue || ny >= gridSizeValue) continue;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      
+      if (isRoadTile(gridData, gridSizeValue, nx, ny)) {
+        return { x: nx, y: ny };
+      }
+      
+      queue.push({ x: nx, y: ny, dist: current.dist + 1 });
+    }
+  }
+  
+  return null;
+}
+
+// Get direction from current tile to next tile
+function getDirectionToTile(fromX: number, fromY: number, toX: number, toY: number): CarDirection | null {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  
+  if (dx === -1 && dy === 0) return 'north';
+  if (dx === 1 && dy === 0) return 'south';
+  if (dx === 0 && dy === -1) return 'east';
+  if (dx === 0 && dy === 1) return 'west';
+  
+  return null;
 }
 
 // Convert grid coordinates to screen coordinates (isometric)
@@ -1473,6 +1621,11 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
   const carsRef = useRef<Car[]>([]);
   const carIdRef = useRef(0);
   const carSpawnTimerRef = useRef(0);
+  const emergencyVehiclesRef = useRef<EmergencyVehicle[]>([]);
+  const emergencyVehicleIdRef = useRef(0);
+  const emergencyDispatchTimerRef = useRef(0);
+  const activeFiresRef = useRef<Set<string>>(new Set()); // Track fires that already have a truck dispatched
+  const activeCrimesRef = useRef<Set<string>>(new Set()); // Track crimes that already have a car dispatched
   const worldStateRef = useRef<WorldRenderState>({
     grid,
     gridSize,
@@ -1598,6 +1751,288 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     
     return false;
   }, []);
+
+  // Find all fire stations in the grid
+  const findStations = useCallback((type: 'fire_station' | 'police_station'): { x: number; y: number }[] => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0) return [];
+    
+    const stations: { x: number; y: number }[] = [];
+    for (let y = 0; y < currentGridSize; y++) {
+      for (let x = 0; x < currentGridSize; x++) {
+        if (currentGrid[y][x].building.type === type) {
+          stations.push({ x, y });
+        }
+      }
+    }
+    return stations;
+  }, []);
+
+  // Find all active fires in the grid
+  const findFires = useCallback((): { x: number; y: number }[] => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0) return [];
+    
+    const fires: { x: number; y: number }[] = [];
+    for (let y = 0; y < currentGridSize; y++) {
+      for (let x = 0; x < currentGridSize; x++) {
+        if (currentGrid[y][x].building.onFire) {
+          fires.push({ x, y });
+        }
+      }
+    }
+    return fires;
+  }, []);
+
+  // Find tiles with high crime (simulated based on low police coverage)
+  const findCrimeIncidents = useCallback((): { x: number; y: number }[] => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0) return [];
+    
+    const crimes: { x: number; y: number }[] = [];
+    // Look for buildings with low police coverage - simulate crime incidents there
+    for (let y = 0; y < currentGridSize; y++) {
+      for (let x = 0; x < currentGridSize; x++) {
+        const tile = currentGrid[y][x];
+        // Only consider populated buildings (residential/commercial)
+        if (tile.building.type !== 'grass' && 
+            tile.building.type !== 'water' && 
+            tile.building.type !== 'road' && 
+            tile.building.type !== 'tree' &&
+            tile.building.type !== 'empty' &&
+            tile.building.population > 0 || tile.building.jobs > 0) {
+          // Simulate crime incidents in areas with some activity
+          // Higher chance in areas with low police coverage
+          const policeCoverage = state.services.police[y]?.[x] || 0;
+          if (policeCoverage < 30 && Math.random() < 0.001) {
+            crimes.push({ x, y });
+          }
+        }
+      }
+    }
+    return crimes;
+  }, [state.services.police]);
+
+  // Dispatch emergency vehicle
+  const dispatchEmergencyVehicle = useCallback((
+    type: EmergencyVehicleType,
+    stationX: number,
+    stationY: number,
+    targetX: number,
+    targetY: number
+  ): boolean => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0) return false;
+
+    const path = findPathOnRoads(currentGrid, currentGridSize, stationX, stationY, targetX, targetY);
+    if (!path || path.length < 2) return false;
+
+    const startTile = path[0];
+    const nextTile = path[1];
+    const direction = getDirectionToTile(startTile.x, startTile.y, nextTile.x, nextTile.y);
+    if (!direction) return false;
+
+    emergencyVehiclesRef.current.push({
+      id: emergencyVehicleIdRef.current++,
+      type,
+      tileX: startTile.x,
+      tileY: startTile.y,
+      direction,
+      progress: 0,
+      speed: type === 'fire_truck' ? 0.8 : 0.9, // Emergency vehicles are faster
+      state: 'dispatching',
+      stationX,
+      stationY,
+      targetX,
+      targetY,
+      path,
+      pathIndex: 0,
+      respondTime: 0,
+      laneOffset: 0, // Emergency vehicles drive in the center
+      flashTimer: 0,
+    });
+
+    return true;
+  }, []);
+
+  // Update emergency vehicles dispatch logic
+  const updateEmergencyDispatch = useCallback(() => {
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) return;
+
+    // Find fires that need trucks dispatched
+    const fires = findFires();
+    const fireStations = findStations('fire_station');
+    
+    for (const fire of fires) {
+      const fireKey = `${fire.x},${fire.y}`;
+      if (activeFiresRef.current.has(fireKey)) continue; // Already has a truck dispatched
+      
+      // Find nearest fire station
+      let nearestStation: { x: number; y: number } | null = null;
+      let nearestDist = Infinity;
+      
+      for (const station of fireStations) {
+        const dist = Math.abs(station.x - fire.x) + Math.abs(station.y - fire.y);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestStation = station;
+        }
+      }
+      
+      if (nearestStation) {
+        if (dispatchEmergencyVehicle('fire_truck', nearestStation.x, nearestStation.y, fire.x, fire.y)) {
+          activeFiresRef.current.add(fireKey);
+        }
+      }
+    }
+
+    // Find crimes that need police dispatched
+    const crimes = findCrimeIncidents();
+    const policeStations = findStations('police_station');
+    
+    // Limit police dispatches per update to avoid too many at once
+    let dispatched = 0;
+    for (const crime of crimes) {
+      if (dispatched >= 2) break; // Max 2 new police cars per check
+      
+      const crimeKey = `${crime.x},${crime.y}`;
+      if (activeCrimesRef.current.has(crimeKey)) continue;
+      
+      // Find nearest police station
+      let nearestStation: { x: number; y: number } | null = null;
+      let nearestDist = Infinity;
+      
+      for (const station of policeStations) {
+        const dist = Math.abs(station.x - crime.x) + Math.abs(station.y - crime.y);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestStation = station;
+        }
+      }
+      
+      if (nearestStation) {
+        if (dispatchEmergencyVehicle('police_car', nearestStation.x, nearestStation.y, crime.x, crime.y)) {
+          activeCrimesRef.current.add(crimeKey);
+          dispatched++;
+        }
+      }
+    }
+  }, [findFires, findCrimeIncidents, findStations, dispatchEmergencyVehicle]);
+
+  // Update emergency vehicles movement and state
+  const updateEmergencyVehicles = useCallback((delta: number) => {
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0) {
+      emergencyVehiclesRef.current = [];
+      return;
+    }
+
+    const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
+    
+    // Dispatch check every second or so
+    emergencyDispatchTimerRef.current -= delta;
+    if (emergencyDispatchTimerRef.current <= 0) {
+      updateEmergencyDispatch();
+      emergencyDispatchTimerRef.current = 1.0 + Math.random() * 0.5;
+    }
+
+    const updatedVehicles: EmergencyVehicle[] = [];
+    
+    for (const vehicle of emergencyVehiclesRef.current) {
+      // Update flash timer for lights
+      vehicle.flashTimer += delta * 8;
+      
+      if (vehicle.state === 'responding') {
+        // At the scene - spend some time responding
+        vehicle.respondTime += delta * speedMultiplier;
+        const respondDuration = vehicle.type === 'fire_truck' ? 8 : 5; // Fire trucks stay longer
+        
+        if (vehicle.respondTime >= respondDuration) {
+          // Done responding - calculate return path
+          const returnPath = findPathOnRoads(
+            currentGrid, currentGridSize,
+            vehicle.tileX, vehicle.tileY,
+            vehicle.stationX, vehicle.stationY
+          );
+          
+          if (returnPath && returnPath.length >= 2) {
+            vehicle.path = returnPath;
+            vehicle.pathIndex = 0;
+            vehicle.state = 'returning';
+            vehicle.progress = 0;
+            
+            const nextTile = returnPath[1];
+            const dir = getDirectionToTile(vehicle.tileX, vehicle.tileY, nextTile.x, nextTile.y);
+            if (dir) vehicle.direction = dir;
+          } else {
+            // Can't find return path - remove vehicle and clear tracking
+            const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
+            if (vehicle.type === 'fire_truck') {
+              activeFiresRef.current.delete(targetKey);
+            } else {
+              activeCrimesRef.current.delete(targetKey);
+            }
+            continue;
+          }
+        }
+        
+        updatedVehicles.push(vehicle);
+        continue;
+      }
+      
+      // Check if vehicle is still on a valid road
+      if (!isRoadTile(currentGrid, currentGridSize, vehicle.tileX, vehicle.tileY)) {
+        const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
+        if (vehicle.type === 'fire_truck') {
+          activeFiresRef.current.delete(targetKey);
+        } else {
+          activeCrimesRef.current.delete(targetKey);
+        }
+        continue;
+      }
+      
+      // Move vehicle along path
+      vehicle.progress += vehicle.speed * delta * speedMultiplier;
+      
+      while (vehicle.progress >= 1 && vehicle.pathIndex < vehicle.path.length - 1) {
+        vehicle.pathIndex++;
+        vehicle.progress -= 1;
+        
+        const currentTile = vehicle.path[vehicle.pathIndex];
+        vehicle.tileX = currentTile.x;
+        vehicle.tileY = currentTile.y;
+        
+        // Check if reached destination
+        if (vehicle.pathIndex >= vehicle.path.length - 1) {
+          if (vehicle.state === 'dispatching') {
+            // Arrived at emergency scene
+            vehicle.state = 'responding';
+            vehicle.respondTime = 0;
+          } else if (vehicle.state === 'returning') {
+            // Arrived back at station - remove vehicle
+            const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
+            if (vehicle.type === 'fire_truck') {
+              activeFiresRef.current.delete(targetKey);
+            } else {
+              activeCrimesRef.current.delete(targetKey);
+            }
+            continue; // Don't add to updated list - vehicle is done
+          }
+          break;
+        }
+        
+        // Update direction for next segment
+        const nextTile = vehicle.path[vehicle.pathIndex + 1];
+        const dir = getDirectionToTile(vehicle.tileX, vehicle.tileY, nextTile.x, nextTile.y);
+        if (dir) vehicle.direction = dir;
+      }
+      
+      updatedVehicles.push(vehicle);
+    }
+    
+    emergencyVehiclesRef.current = updatedVehicles;
+  }, [updateEmergencyDispatch]);
 
   const updateCars = useCallback((delta: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
@@ -1778,6 +2213,161 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     ctx.restore();
   }, []);
 
+  // Draw emergency vehicles (fire trucks and police cars)
+  const drawEmergencyVehicles = useCallback((ctx: CanvasRenderingContext2D) => {
+    const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    const canvas = ctx.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Early exit if no emergency vehicles
+    if (!currentGrid || currentGridSize <= 0 || emergencyVehiclesRef.current.length === 0) {
+      return;
+    }
+    
+    ctx.save();
+    ctx.scale(dpr * currentZoom, dpr * currentZoom);
+    ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
+    
+    const viewWidth = canvas.width / (dpr * currentZoom);
+    const viewHeight = canvas.height / (dpr * currentZoom);
+    const viewLeft = -currentOffset.x / currentZoom - TILE_WIDTH;
+    const viewTop = -currentOffset.y / currentZoom - TILE_HEIGHT * 2;
+    const viewRight = viewWidth - currentOffset.x / currentZoom + TILE_WIDTH;
+    const viewBottom = viewHeight - currentOffset.y / currentZoom + TILE_HEIGHT * 2;
+    
+    // Helper function to check if a vehicle is behind a building
+    const isVehicleBehindBuilding = (tileX: number, tileY: number): boolean => {
+      const vehicleDepth = tileX + tileY;
+      
+      for (let dy = 0; dy <= 1; dy++) {
+        for (let dx = 0; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          
+          const checkX = tileX + dx;
+          const checkY = tileY + dy;
+          
+          if (checkX < 0 || checkY < 0 || checkX >= currentGridSize || checkY >= currentGridSize) {
+            continue;
+          }
+          
+          const tile = currentGrid[checkY]?.[checkX];
+          if (!tile) continue;
+          
+          const buildingType = tile.building.type;
+          const skipTypes: BuildingType[] = ['road', 'grass', 'empty', 'water', 'tree'];
+          if (skipTypes.includes(buildingType)) {
+            continue;
+          }
+          
+          const buildingDepth = checkX + checkY;
+          if (buildingDepth > vehicleDepth) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    };
+    
+    emergencyVehiclesRef.current.forEach(vehicle => {
+      const { screenX, screenY } = gridToScreen(vehicle.tileX, vehicle.tileY, 0, 0);
+      const centerX = screenX + TILE_WIDTH / 2;
+      const centerY = screenY + TILE_HEIGHT / 2;
+      const meta = DIRECTION_META[vehicle.direction];
+      const vehicleX = centerX + meta.vec.dx * vehicle.progress + meta.normal.nx * vehicle.laneOffset;
+      const vehicleY = centerY + meta.vec.dy * vehicle.progress + meta.normal.ny * vehicle.laneOffset;
+      
+      if (vehicleX < viewLeft - 40 || vehicleX > viewRight + 40 || vehicleY < viewTop - 60 || vehicleY > viewBottom + 60) {
+        return;
+      }
+      
+      // Check if vehicle is behind a building
+      if (isVehicleBehindBuilding(vehicle.tileX, vehicle.tileY)) {
+        return;
+      }
+      
+      ctx.save();
+      ctx.translate(vehicleX, vehicleY);
+      ctx.rotate(meta.angle);
+      
+      const scale = 0.85; // Emergency vehicles are slightly larger
+      
+      // Vehicle body color
+      const bodyColor = vehicle.type === 'fire_truck' ? '#dc2626' : '#1e40af';
+      const bodyColorLight = vehicle.type === 'fire_truck' ? '#ef4444' : '#3b82f6';
+      
+      // Draw vehicle body (longer for fire trucks)
+      const length = vehicle.type === 'fire_truck' ? 14 : 11;
+      ctx.fillStyle = bodyColor;
+      ctx.beginPath();
+      ctx.moveTo(-length * scale, -5 * scale);
+      ctx.lineTo(length * scale, -5 * scale);
+      ctx.lineTo((length + 2) * scale, 0);
+      ctx.lineTo(length * scale, 5 * scale);
+      ctx.lineTo(-length * scale, 5 * scale);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Draw stripe/accent
+      ctx.fillStyle = vehicle.type === 'fire_truck' ? '#fbbf24' : '#ffffff';
+      ctx.fillRect(-length * scale * 0.6, -4 * scale, length * scale * 1.2, 8 * scale * 0.3);
+      
+      // Draw windshield
+      ctx.fillStyle = 'rgba(200, 220, 255, 0.7)';
+      ctx.fillRect(-2 * scale, -3 * scale, 6 * scale, 6 * scale);
+      
+      // Draw emergency lights (flashing)
+      const flashOn = Math.sin(vehicle.flashTimer) > 0;
+      const flashOn2 = Math.sin(vehicle.flashTimer + Math.PI) > 0;
+      
+      // Light bar on top
+      if (vehicle.type === 'fire_truck') {
+        // Fire truck has red lights
+        ctx.fillStyle = flashOn ? '#ff0000' : '#880000';
+        ctx.fillRect(-8 * scale, -6 * scale, 4 * scale, 3 * scale);
+        ctx.fillStyle = flashOn2 ? '#ff0000' : '#880000';
+        ctx.fillRect(4 * scale, -6 * scale, 4 * scale, 3 * scale);
+        
+        // Add glow effect when lights are on
+        if (flashOn || flashOn2) {
+          ctx.shadowColor = '#ff0000';
+          ctx.shadowBlur = 8;
+          ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+          ctx.fillRect(-10 * scale, -7 * scale, 20 * scale, 5 * scale);
+          ctx.shadowBlur = 0;
+        }
+      } else {
+        // Police car has red and blue lights
+        ctx.fillStyle = flashOn ? '#ff0000' : '#880000';
+        ctx.fillRect(-6 * scale, -6 * scale, 3 * scale, 3 * scale);
+        ctx.fillStyle = flashOn2 ? '#0066ff' : '#003388';
+        ctx.fillRect(3 * scale, -6 * scale, 3 * scale, 3 * scale);
+        
+        // Add glow effect
+        if (flashOn || flashOn2) {
+          ctx.shadowColor = flashOn ? '#ff0000' : '#0066ff';
+          ctx.shadowBlur = 8;
+          ctx.fillStyle = flashOn ? 'rgba(255, 0, 0, 0.3)' : 'rgba(0, 100, 255, 0.3)';
+          ctx.fillRect(-8 * scale, -7 * scale, 16 * scale, 5 * scale);
+          ctx.shadowBlur = 0;
+        }
+      }
+      
+      // Draw rear wheels/details
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(-length * scale, -4 * scale, 2.5 * scale, 8 * scale);
+      
+      // Headlights
+      ctx.fillStyle = vehicle.state !== 'returning' ? 'rgba(255, 255, 200, 0.9)' : 'rgba(255, 255, 200, 0.5)';
+      ctx.fillRect((length - 1) * scale, -2.5 * scale, 2.5 * scale, 2 * scale);
+      ctx.fillRect((length - 1) * scale, 0.5 * scale, 2.5 * scale, 2 * scale);
+      
+      ctx.restore();
+    });
+    
+    ctx.restore();
+  }, []);
+
   // Load sprite sheet on mount and when sprite pack changes
   useEffect(() => {
     // Load the sprite sheet with background color filtering
@@ -1786,6 +2376,64 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       .then(() => setImagesLoaded(true))
       .catch(console.error);
   }, [currentSpritePack]);
+  
+  // Helper function to check if a tile is part of a multi-tile building footprint
+  function isPartOfMultiTileBuilding(gridX: number, gridY: number): boolean {
+    // Check all possible origin positions that could have a multi-tile building covering this tile
+    // For a 2x2 building, check up to 1 tile away in each direction
+    // For a 3x3 building, check up to 2 tiles away
+    // For a 4x4 building, check up to 3 tiles away
+    const maxSize = 4; // Maximum building size
+    
+    for (let dy = 0; dy < maxSize; dy++) {
+      for (let dx = 0; dx < maxSize; dx++) {
+        const originX = gridX - dx;
+        const originY = gridY - dy;
+        
+        if (originX >= 0 && originX < gridSize && originY >= 0 && originY < gridSize) {
+          const originTile = grid[originY][originX];
+          const buildingSize = getBuildingSize(originTile.building.type);
+          
+          // Check if this tile is within the footprint of the building at origin
+          if (buildingSize.width > 1 || buildingSize.height > 1) {
+            if (gridX >= originX && gridX < originX + buildingSize.width &&
+                gridY >= originY && gridY < originY + buildingSize.height) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    
+    return false;
+  }
+  
+  // Helper function to check if a tile is part of a park building footprint
+  function isPartOfParkBuilding(gridX: number, gridY: number): boolean {
+    const maxSize = 4; // Maximum building size
+    const parkBuildings: BuildingType[] = ['park_large'];
+
+    for (let dy = 0; dy < maxSize; dy++) {
+      for (let dx = 0; dx < maxSize; dx++) {
+        const originX = gridX - dx;
+        const originY = gridY - dy;
+
+        if (originX >= 0 && originX < gridSize && originY >= 0 && originY < gridSize) {
+          const originTile = grid[originY][originX];
+
+          // Check if this is a park building and if this tile is within its footprint
+          if (parkBuildings.includes(originTile.building.type)) {
+            const buildingSize = getBuildingSize(originTile.building.type);
+            if (gridX >= originX && gridX < originX + buildingSize.width &&
+                gridY >= originY && gridY < originY + buildingSize.height) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
   
   // Update canvas size on resize with high-DPI support
   useEffect(() => {
@@ -1862,6 +2510,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     const buildingQueue: BuildingDraw[] = [];
     const waterQueue: BuildingDraw[] = [];
     const beachQueue: BuildingDraw[] = [];
+    const baseTileQueue: BuildingDraw[] = [];
     const overlayQueue: OverlayDraw[] = [];
     
     // Helper function to check if a tile is adjacent to water
@@ -1908,8 +2557,24 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
           y >= Math.min(dragStartTile.y, dragEndTile.y) &&
           y <= Math.max(dragStartTile.y, dragEndTile.y);
         
-        // Draw base tile for all tiles (including water)
-        drawIsometricTile(ctx, screenX, screenY, tile, !!(isHovered || isSelected || isInDragRect), zoom);
+        // Draw base tile for all tiles (including water), but skip gray bases for buildings
+        drawIsometricTile(ctx, screenX, screenY, tile, !!(isHovered || isSelected || isInDragRect), zoom, true);
+        
+        // Check if this tile needs a gray base tile (buildings except parks)
+        const isPark = tile.building.type === 'park' || tile.building.type === 'park_large' || tile.building.type === 'tennis' ||
+                       (tile.building.type === 'empty' && isPartOfParkBuilding(x, y));
+        const isDirectBuilding = !isPark &&
+          tile.building.type !== 'grass' &&
+          tile.building.type !== 'empty' &&
+          tile.building.type !== 'water' &&
+          tile.building.type !== 'road' &&
+          tile.building.type !== 'tree';
+        const isPartOfBuilding = tile.building.type === 'empty' && isPartOfMultiTileBuilding(x, y);
+        const needsGreyBase = (isDirectBuilding || isPartOfBuilding) && !isPark;
+        
+        if (needsGreyBase) {
+          baseTileQueue.push({ screenX, screenY, tile, depth: x + y });
+        }
         
         // Separate water tiles into their own queue (drawn after base tiles, below other buildings)
         if (tile.building.type === 'water') {
@@ -1948,6 +2613,13 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       .sort((a, b) => a.depth - b.depth)
       .forEach(({ tile, screenX, screenY }) => {
         drawBuilding(ctx, screenX, screenY, tile);
+      });
+    
+    // Draw gray building base tiles (after water, before buildings)
+    baseTileQueue
+      .sort((a, b) => a.depth - b.depth)
+      .forEach(({ tile, screenX, screenY }) => {
+        drawGreyBaseTile(ctx, screenX, screenY, tile, zoom);
       });
     
     // Draw beach tiles (below buildings but above water)
@@ -2035,66 +2707,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     return () => cancelAnimationFrame(animationFrameId);
   }, [canvasSize.width, canvasSize.height, updateCars, drawCars]);
   
-  // Helper function to check if a tile is part of a multi-tile building footprint
-  function isPartOfMultiTileBuilding(gridX: number, gridY: number): boolean {
-    // Check all possible origin positions that could have a multi-tile building covering this tile
-    // For a 2x2 building, check up to 1 tile away in each direction
-    // For a 3x3 building, check up to 2 tiles away
-    // For a 4x4 building, check up to 3 tiles away
-    const maxSize = 4; // Maximum building size
-    
-    for (let dy = 0; dy < maxSize; dy++) {
-      for (let dx = 0; dx < maxSize; dx++) {
-        const originX = gridX - dx;
-        const originY = gridY - dy;
-        
-        if (originX >= 0 && originX < gridSize && originY >= 0 && originY < gridSize) {
-          const originTile = grid[originY][originX];
-          const buildingSize = getBuildingSize(originTile.building.type);
-          
-          // Check if this tile is within the footprint of the building at origin
-          if (buildingSize.width > 1 || buildingSize.height > 1) {
-            if (gridX >= originX && gridX < originX + buildingSize.width &&
-                gridY >= originY && gridY < originY + buildingSize.height) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-    
-    return false;
-  }
-  
-  // Helper function to check if a tile is part of a park building footprint
-  function isPartOfParkBuilding(gridX: number, gridY: number): boolean {
-    const maxSize = 4; // Maximum building size
-    const parkBuildings: BuildingType[] = ['park_large'];
-
-    for (let dy = 0; dy < maxSize; dy++) {
-      for (let dx = 0; dx < maxSize; dx++) {
-        const originX = gridX - dx;
-        const originY = gridY - dy;
-
-        if (originX >= 0 && originX < gridSize && originY >= 0 && originY < gridSize) {
-          const originTile = grid[originY][originX];
-
-          // Check if this is a park building and if this tile is within its footprint
-          if (parkBuildings.includes(originTile.building.type)) {
-            const buildingSize = getBuildingSize(originTile.building.type);
-            if (gridX >= originX && gridX < originX + buildingSize.width &&
-                gridY >= originY && gridY < originY + buildingSize.height) {
-              return true;
-            }
-          }
-        }
-      }
-    }
-    return false;
-  }
-
   // Draw isometric tile base
-  function drawIsometricTile(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile, highlight: boolean, currentZoom: number) {
+  function drawIsometricTile(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile, highlight: boolean, currentZoom: number, skipGreyBase: boolean = false) {
     const w = TILE_WIDTH;
     const h = TILE_HEIGHT;
     
@@ -2135,8 +2749,9 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       leftColor = '#3d6634';
       rightColor = '#5a8f4f';
       strokeColor = '#2d4a26';
-    } else if (hasGreyBase) {
+    } else if (hasGreyBase && !skipGreyBase) {
       // Grey/concrete base tiles for ALL buildings (except parks)
+      // Skip if skipGreyBase is true (will be drawn later after water)
       topColor = '#6b7280';
       leftColor = '#4b5563';
       rightColor = '#9ca3af';
@@ -2209,6 +2824,35 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     if (highlight) {
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+  
+  // Draw gray base tile for buildings (called after water tiles)
+  function drawGreyBaseTile(ctx: CanvasRenderingContext2D, x: number, y: number, tile: Tile, currentZoom: number) {
+    const w = TILE_WIDTH;
+    const h = TILE_HEIGHT;
+    
+    // Grey/concrete base tiles for ALL buildings (except parks)
+    const topColor = '#6b7280';
+    const leftColor = '#4b5563';
+    const rightColor = '#9ca3af';
+    const strokeColor = '#374151';
+    
+    // Draw the isometric diamond (top face)
+    ctx.fillStyle = topColor;
+    ctx.beginPath();
+    ctx.moveTo(x + w / 2, y);
+    ctx.lineTo(x + w, y + h / 2);
+    ctx.lineTo(x + w / 2, y + h);
+    ctx.lineTo(x, y + h / 2);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw grid lines only when zoomed in (hide when zoom < 0.6)
+    if (currentZoom >= 0.6) {
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = 0.5;
       ctx.stroke();
     }
   }
