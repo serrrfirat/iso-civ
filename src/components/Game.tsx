@@ -2005,14 +2005,35 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         continue;
       }
       
+      // Bounds check - remove vehicle if out of bounds
+      if (vehicle.tileX < 0 || vehicle.tileX >= currentGridSize || 
+          vehicle.tileY < 0 || vehicle.tileY >= currentGridSize) {
+        const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
+        if (vehicle.type === 'fire_truck') {
+          activeFiresRef.current.delete(targetKey);
+        } else {
+          activeCrimesRef.current.delete(targetKey);
+        }
+        continue; // Remove vehicle
+      }
+      
       // Move vehicle along path
       vehicle.progress += vehicle.speed * delta * speedMultiplier;
       
+      let shouldRemove = false;
       while (vehicle.progress >= 1 && vehicle.pathIndex < vehicle.path.length - 1) {
         vehicle.pathIndex++;
         vehicle.progress -= 1;
         
         const currentTile = vehicle.path[vehicle.pathIndex];
+        
+        // Validate the next tile is in bounds
+        if (currentTile.x < 0 || currentTile.x >= currentGridSize || 
+            currentTile.y < 0 || currentTile.y >= currentGridSize) {
+          shouldRemove = true;
+          break;
+        }
+        
         vehicle.tileX = currentTile.x;
         vehicle.tileY = currentTile.y;
         
@@ -2024,21 +2045,27 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
             vehicle.respondTime = 0;
           } else if (vehicle.state === 'returning') {
             // Arrived back at station - remove vehicle
-            const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
-            if (vehicle.type === 'fire_truck') {
-              activeFiresRef.current.delete(targetKey);
-            } else {
-              activeCrimesRef.current.delete(targetKey);
-            }
-            continue; // Don't add to updated list - vehicle is done
+            shouldRemove = true;
           }
           break;
         }
         
         // Update direction for next segment
-        const nextTile = vehicle.path[vehicle.pathIndex + 1];
-        const dir = getDirectionToTile(vehicle.tileX, vehicle.tileY, nextTile.x, nextTile.y);
-        if (dir) vehicle.direction = dir;
+        if (vehicle.pathIndex + 1 < vehicle.path.length) {
+          const nextTile = vehicle.path[vehicle.pathIndex + 1];
+          const dir = getDirectionToTile(vehicle.tileX, vehicle.tileY, nextTile.x, nextTile.y);
+          if (dir) vehicle.direction = dir;
+        }
+      }
+      
+      if (shouldRemove) {
+        const targetKey = `${vehicle.targetX},${vehicle.targetY}`;
+        if (vehicle.type === 'fire_truck') {
+          activeFiresRef.current.delete(targetKey);
+        } else {
+          activeCrimesRef.current.delete(targetKey);
+        }
+        continue; // Don't add to updated list
       }
       
       updatedVehicles.push(vehicle);
