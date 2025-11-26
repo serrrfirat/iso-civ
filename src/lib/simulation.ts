@@ -1073,6 +1073,7 @@ const BUILDING_SIZES: Partial<Record<BuildingType, { width: number; height: numb
   stadium: { width: 3, height: 3 },
   university: { width: 3, height: 2 },
   airport: { width: 4, height: 4 },
+  space_program: { width: 3, height: 3 },
   // Industrial buildings are all 2x2
   factory_small: { width: 2, height: 2 },
   factory_medium: { width: 2, height: 2 },

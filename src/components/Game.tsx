@@ -1080,6 +1080,7 @@ const BUILDING_IMAGES: Record<string, string> = {
   water_tower: '/assets/buildings/watertower.png',
   power_plant: '/assets/buildings/powerplant.png',
   stadium: '/assets/buildings/stadium.png',
+  space_program: '/assets/buildings/space.png',
   tree: '/assets/buildings/trees.png',
   house_medium: '/assets/buildings/house_medium.png',
 };
@@ -1902,6 +1903,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       // Larger buildings need bigger sprites
       if (buildingType === 'power_plant') sizeMultiplier = 2.25; // Scaled down 10% from 2.5
       else if (buildingType === 'stadium') sizeMultiplier = 2.8; // Scaled down 20% from 3.5
+      else if (buildingType === 'space_program') sizeMultiplier = 2.8; // 3x3 building, same as stadium
       else if (buildingType === 'university') sizeMultiplier = 2.8;
       else if (buildingType === 'hospital') sizeMultiplier = 2.25; // 2x2 building
       else if (buildingType === 'school') sizeMultiplier = 2.25; // 2x2 building
