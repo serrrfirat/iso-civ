@@ -155,6 +155,15 @@ export function HealthIcon({ size = 18, className }: IconProps) {
   );
 }
 
+export function MedicalCrossIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path {...baseStroke} d="M12 2v20M2 12h20" />
+      <circle {...baseStroke} cx="12" cy="12" r="10" />
+    </svg>
+  );
+}
+
 export function EducationIcon({ size = 18, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className={className}>

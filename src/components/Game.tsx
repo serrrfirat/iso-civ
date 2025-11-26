@@ -21,6 +21,7 @@ import {
   HealthIcon,
   EducationIcon,
   SafetyIcon,
+  MedicalCrossIcon,
   EnvironmentIcon,
   ChartIcon,
   TrophyIcon,
@@ -1098,7 +1099,7 @@ function SettingsPanel() {
 // Background color to filter
 const BACKGROUND_COLOR = { r: 255, g: 0, b: 0 };
 // Color distance threshold - pixels within this distance will be made transparent
-const COLOR_THRESHOLD = 170; // Adjust this value to be more/less aggressive (increased from 10 for better filtering)
+const COLOR_THRESHOLD = 175; // Adjust this value to be more/less aggressive (increased from 10 for better filtering)
 
 /**
  * Filters colors close to the background color from an image, making them transparent
@@ -1615,9 +1616,9 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         tileY,
         direction,
         progress: Math.random() * 0.8,
-        speed: 0.35 + Math.random() * 0.35,
+        speed: (0.35 + Math.random() * 0.35) * 0.7,
         age: 0,
-        maxAge: 120 + Math.random() * 180,
+        maxAge: 360 + Math.random() * 540,
         color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)],
         laneOffset: (Math.random() < 0.5 ? -1 : 1) * (4 + Math.random() * 3),
       });
@@ -1637,7 +1638,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     // Speed multiplier: 0 = paused, 1 = normal, 2 = fast (2x), 3 = very fast (4x)
     const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
     
-    const maxCars = Math.min(80, Math.max(8, Math.floor(currentGridSize)));
+    const maxCars = Math.min(160, Math.max(16, Math.floor(currentGridSize * 2)));
     carSpawnTimerRef.current -= delta;
     if (carsRef.current.length < maxCars && carSpawnTimerRef.current <= 0) {
       if (spawnRandomCar()) {
@@ -3084,7 +3085,7 @@ const OverlayModeToggle = React.memo(function OverlayModeToggle({
   setOverlayMode: (mode: OverlayMode) => void;
 }) {
   return (
-    <Card className="absolute top-4 left-4 p-2 shadow-lg bg-card/90 border-border/70 z-50">
+    <Card className="absolute bottom-4 left-4 p-2 shadow-lg bg-card/90 border-border/70 z-50">
       <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-semibold mb-2">
         View Overlay
       </div>
@@ -3146,7 +3147,7 @@ const OverlayModeToggle = React.memo(function OverlayModeToggle({
           className={`h-8 px-3 ${overlayMode === 'health' ? 'bg-green-500 hover:bg-green-600' : ''}`}
           title="Health Coverage"
         >
-          <HealthIcon size={14} />
+          <MedicalCrossIcon size={14} />
         </Button>
         
         <Button
