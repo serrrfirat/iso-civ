@@ -1156,7 +1156,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         age: 0,
         maxAge: 12 + Math.random() * 18,
         color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)],
-        laneOffset: (Math.random() - 0.5) * 6,
+        laneOffset: (Math.random() < 0.5 ? -1 : 1) * (4 + Math.random() * 3),
       });
       return true;
     }
@@ -1261,23 +1261,23 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       
       ctx.fillStyle = car.color;
       ctx.beginPath();
-      ctx.moveTo(-5, -2.5);
-      ctx.lineTo(5, -2.5);
-      ctx.lineTo(6, 0);
-      ctx.lineTo(5, 2.5);
-      ctx.lineTo(-5, 2.5);
+      ctx.moveTo(-10, -5);
+      ctx.lineTo(10, -5);
+      ctx.lineTo(12, 0);
+      ctx.lineTo(10, 5);
+      ctx.lineTo(-10, 5);
       ctx.closePath();
       ctx.fill();
       
       ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.fillRect(-2, -1.4, 3.5, 2.8);
+      ctx.fillRect(-4, -2.8, 7, 5.6);
       
       ctx.fillStyle = '#111827';
-      ctx.fillRect(-5, -2, 1.2, 4);
+      ctx.fillRect(-10, -4, 2.4, 8);
       
       ctx.fillStyle = 'rgba(255, 255, 199, 0.8)';
-      ctx.fillRect(4.8, -1, 1.2, 0.8);
-      ctx.fillRect(4.8, 0.2, 1.2, 0.8);
+      ctx.fillRect(9.6, -2, 2.4, 1.6);
+      ctx.fillRect(9.6, 0.4, 2.4, 1.6);
       
       ctx.restore();
     });
@@ -1850,6 +1850,9 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       }
       if (buildingType === 'stadium') {
         drawY += h * 1.0; // Shift stadium down more
+      }
+      if (buildingType === 'water_tower') {
+        drawY -= h * 0.3; // Shift water tower up
       }
       
       // Draw with crisp rendering

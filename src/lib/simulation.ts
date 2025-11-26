@@ -1087,6 +1087,15 @@ export function placeBuilding(
   // Can't build on water
   if (tile.building.type === 'water') return state;
 
+  // Can't place roads on existing buildings (only allow on grass, tree, or existing roads)
+  // Note: 'empty' tiles are part of multi-tile building footprints, so roads can't be placed there either
+  if (buildingType === 'road') {
+    const allowedTypes: BuildingType[] = ['grass', 'tree', 'road'];
+    if (!allowedTypes.includes(tile.building.type)) {
+      return state; // Can't place road on existing building
+    }
+  }
+
   const newGrid = state.grid.map(row => row.map(t => ({ ...t, building: { ...t.building } })));
 
   if (zone !== null) {
