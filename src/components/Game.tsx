@@ -177,19 +177,11 @@ function findPathOnRoads(
 ): { x: number; y: number }[] | null {
   // Find the nearest road tile to the target (since buildings aren't on roads)
   const targetRoad = findNearestRoadToBuilding(gridData, gridSizeValue, targetX, targetY);
-  if (!targetRoad) {
-    console.log(`[Pathfinding] No road found near target (${targetX},${targetY})`);
-    return null;
-  }
+  if (!targetRoad) return null;
   
   // Find the nearest road tile to the start (station)
   const startRoad = findNearestRoadToBuilding(gridData, gridSizeValue, startX, startY);
-  if (!startRoad) {
-    console.log(`[Pathfinding] No road found near start (${startX},${startY})`);
-    return null;
-  }
-  
-  console.log(`[Pathfinding] Finding path from road (${startRoad.x},${startRoad.y}) to road (${targetRoad.x},${targetRoad.y})`);
+  if (!startRoad) return null;
   
   // If start and target roads are the same, return a simple path
   if (startRoad.x === targetRoad.x && startRoad.y === targetRoad.y) {
@@ -215,7 +207,6 @@ function findPathOnRoads(
     
     // Check if we reached the target road
     if (current.x === targetRoad.x && current.y === targetRoad.y) {
-      console.log(`[Pathfinding] Path found with ${current.path.length} tiles`);
       return current.path;
     }
     
@@ -237,7 +228,6 @@ function findPathOnRoads(
     }
   }
   
-  console.log(`[Pathfinding] No path found between roads`);
   return null; // No path found
 }
 
@@ -1856,8 +1846,6 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       if (dir) direction = dir;
     }
 
-    console.log(`[Emergency] Creating ${type} at (${startTile.x},${startTile.y}) with path of ${path.length} tiles`);
-
     emergencyVehiclesRef.current.push({
       id: emergencyVehicleIdRef.current++,
       type,
@@ -1884,26 +1872,14 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
   // Update emergency vehicles dispatch logic
   const updateEmergencyDispatch = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) return;
     
-    // Always log what we find
     const fires = findFires();
     const fireStations = findStations('fire_station');
     
-    // Debug logging - always log station count, and fire count if any
-    if (fireStations.length > 0 || fires.length > 0) {
-      console.log(`[Emergency] Stations: ${fireStations.length} fire stations | Fires: ${fires.length} | Speed: ${currentSpeed}`);
-    }
-    
-    if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
-      if (fires.length > 0) {
-        console.log(`[Emergency] Skipping dispatch - game paused or no grid`);
-      }
-      return;
-    }
-    
     for (const fire of fires) {
       const fireKey = `${fire.x},${fire.y}`;
-      if (activeFiresRef.current.has(fireKey)) continue; // Already has a truck dispatched
+      if (activeFiresRef.current.has(fireKey)) continue;
       
       // Find nearest fire station
       let nearestStation: { x: number; y: number } | null = null;
@@ -1918,15 +1894,9 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       }
       
       if (nearestStation) {
-        console.log(`[Emergency] Attempting to dispatch fire truck from (${nearestStation.x},${nearestStation.y}) to fire at (${fire.x},${fire.y})`);
         if (dispatchEmergencyVehicle('fire_truck', nearestStation.x, nearestStation.y, fire.x, fire.y)) {
           activeFiresRef.current.add(fireKey);
-          console.log(`[Emergency] Fire truck dispatched successfully!`);
-        } else {
-          console.log(`[Emergency] Failed to dispatch fire truck - no valid road path`);
         }
-      } else {
-        console.log(`[Emergency] Fire at (${fire.x},${fire.y}) but no fire stations found`);
       }
     }
 
@@ -2240,15 +2210,13 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       ctx.closePath();
       ctx.fill();
       
+      // Windshield
       ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
       ctx.fillRect(-4 * scale, -2.8 * scale, 7 * scale, 5.6 * scale);
       
+      // Rear
       ctx.fillStyle = '#111827';
       ctx.fillRect(-10 * scale, -4 * scale, 2.4 * scale, 8 * scale);
-      
-      ctx.fillStyle = 'rgba(255, 255, 199, 0.8)';
-      ctx.fillRect(9.6 * scale, -2 * scale, 2.4 * scale, 1.6 * scale);
-      ctx.fillRect(9.6 * scale, 0.4 * scale, 2.4 * scale, 1.6 * scale);
       
       ctx.restore();
     });
@@ -2261,14 +2229,6 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     const canvas = ctx.canvas;
     const dpr = window.devicePixelRatio || 1;
-    
-    // Log count periodically
-    if (emergencyVehiclesRef.current.length > 0) {
-      // Only log occasionally to avoid spam
-      if (Math.random() < 0.01) {
-        console.log(`[Emergency] Drawing ${emergencyVehiclesRef.current.length} emergency vehicles`);
-      }
-    }
     
     // Early exit if no emergency vehicles
     if (!currentGrid || currentGridSize <= 0 || emergencyVehiclesRef.current.length === 0) {
@@ -2328,107 +2288,80 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       const vehicleX = centerX + meta.vec.dx * vehicle.progress + meta.normal.nx * vehicle.laneOffset;
       const vehicleY = centerY + meta.vec.dy * vehicle.progress + meta.normal.ny * vehicle.laneOffset;
       
-      // Skip view culling and building occlusion for now - we want to see them!
-      // if (vehicleX < viewLeft - 40 || vehicleX > viewRight + 40 || vehicleY < viewTop - 60 || vehicleY > viewBottom + 60) {
-      //   return;
-      // }
+      // View culling
+      if (vehicleX < viewLeft - 40 || vehicleX > viewRight + 40 || vehicleY < viewTop - 60 || vehicleY > viewBottom + 60) {
+        return;
+      }
       
       ctx.save();
       ctx.translate(vehicleX, vehicleY);
       ctx.rotate(meta.angle);
       
-      const scale = 1.2; // Make emergency vehicles BIGGER and more visible
+      const scale = 0.6; // Smaller emergency vehicles
       
-      // Vehicle body color - brighter colors
-      const bodyColor = vehicle.type === 'fire_truck' ? '#ff0000' : '#0066ff';
+      // Vehicle body color
+      const bodyColor = vehicle.type === 'fire_truck' ? '#dc2626' : '#1e40af';
       
       // Draw vehicle body (longer for fire trucks)
-      const length = vehicle.type === 'fire_truck' ? 16 : 13;
+      const length = vehicle.type === 'fire_truck' ? 14 : 11;
       ctx.fillStyle = bodyColor;
       ctx.beginPath();
-      ctx.moveTo(-length * scale, -6 * scale);
-      ctx.lineTo(length * scale, -6 * scale);
-      ctx.lineTo((length + 3) * scale, 0);
-      ctx.lineTo(length * scale, 6 * scale);
-      ctx.lineTo(-length * scale, 6 * scale);
+      ctx.moveTo(-length * scale, -5 * scale);
+      ctx.lineTo(length * scale, -5 * scale);
+      ctx.lineTo((length + 2) * scale, 0);
+      ctx.lineTo(length * scale, 5 * scale);
+      ctx.lineTo(-length * scale, 5 * scale);
       ctx.closePath();
       ctx.fill();
       
-      // Draw stripe/accent - brighter
-      ctx.fillStyle = vehicle.type === 'fire_truck' ? '#ffff00' : '#ffffff';
-      ctx.fillRect(-length * scale * 0.7, -4 * scale, length * scale * 1.4, 8 * scale * 0.4);
+      // Draw stripe/accent
+      ctx.fillStyle = vehicle.type === 'fire_truck' ? '#fbbf24' : '#ffffff';
+      ctx.fillRect(-length * scale * 0.5, -3 * scale, length * scale, 6 * scale * 0.3);
       
       // Draw windshield
-      ctx.fillStyle = 'rgba(200, 220, 255, 0.8)';
-      ctx.fillRect(-3 * scale, -4 * scale, 8 * scale, 8 * scale);
+      ctx.fillStyle = 'rgba(200, 220, 255, 0.7)';
+      ctx.fillRect(-2 * scale, -3 * scale, 5 * scale, 6 * scale);
       
-      // Draw emergency lights (flashing) - MUCH bigger and brighter
+      // Draw emergency lights (flashing)
       const flashOn = Math.sin(vehicle.flashTimer) > 0;
       const flashOn2 = Math.sin(vehicle.flashTimer + Math.PI) > 0;
       
-      // Light bar on top - bigger
+      // Light bar on top
       if (vehicle.type === 'fire_truck') {
         // Fire truck has red lights
-        ctx.fillStyle = flashOn ? '#ff0000' : '#660000';
-        ctx.fillRect(-10 * scale, -10 * scale, 6 * scale, 5 * scale);
-        ctx.fillStyle = flashOn2 ? '#ff0000' : '#660000';
-        ctx.fillRect(4 * scale, -10 * scale, 6 * scale, 5 * scale);
+        ctx.fillStyle = flashOn ? '#ff0000' : '#880000';
+        ctx.fillRect(-6 * scale, -7 * scale, 3 * scale, 3 * scale);
+        ctx.fillStyle = flashOn2 ? '#ff0000' : '#880000';
+        ctx.fillRect(3 * scale, -7 * scale, 3 * scale, 3 * scale);
         
-        // Add STRONG glow effect when lights are on
-        if (flashOn) {
+        // Glow effect
+        if (flashOn || flashOn2) {
           ctx.shadowColor = '#ff0000';
-          ctx.shadowBlur = 20;
-          ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
-          ctx.beginPath();
-          ctx.arc(-7 * scale, -8 * scale, 10 * scale, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        }
-        if (flashOn2) {
-          ctx.shadowColor = '#ff0000';
-          ctx.shadowBlur = 20;
-          ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
-          ctx.beginPath();
-          ctx.arc(7 * scale, -8 * scale, 10 * scale, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.shadowBlur = 6;
+          ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+          ctx.fillRect(-8 * scale, -8 * scale, 16 * scale, 4 * scale);
           ctx.shadowBlur = 0;
         }
       } else {
         // Police car has red and blue lights
-        ctx.fillStyle = flashOn ? '#ff0000' : '#660000';
-        ctx.fillRect(-8 * scale, -10 * scale, 5 * scale, 5 * scale);
-        ctx.fillStyle = flashOn2 ? '#0088ff' : '#003366';
-        ctx.fillRect(3 * scale, -10 * scale, 5 * scale, 5 * scale);
+        ctx.fillStyle = flashOn ? '#ff0000' : '#880000';
+        ctx.fillRect(-5 * scale, -7 * scale, 3 * scale, 3 * scale);
+        ctx.fillStyle = flashOn2 ? '#0066ff' : '#003388';
+        ctx.fillRect(2 * scale, -7 * scale, 3 * scale, 3 * scale);
         
-        // Add STRONG glow effect
-        if (flashOn) {
-          ctx.shadowColor = '#ff0000';
-          ctx.shadowBlur = 20;
-          ctx.fillStyle = 'rgba(255, 0, 0, 0.6)';
-          ctx.beginPath();
-          ctx.arc(-5 * scale, -8 * scale, 10 * scale, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.shadowBlur = 0;
-        }
-        if (flashOn2) {
-          ctx.shadowColor = '#0088ff';
-          ctx.shadowBlur = 20;
-          ctx.fillStyle = 'rgba(0, 136, 255, 0.6)';
-          ctx.beginPath();
-          ctx.arc(5 * scale, -8 * scale, 10 * scale, 0, Math.PI * 2);
-          ctx.fill();
+        // Glow effect
+        if (flashOn || flashOn2) {
+          ctx.shadowColor = flashOn ? '#ff0000' : '#0066ff';
+          ctx.shadowBlur = 6;
+          ctx.fillStyle = flashOn ? 'rgba(255, 0, 0, 0.4)' : 'rgba(0, 100, 255, 0.4)';
+          ctx.fillRect(-7 * scale, -8 * scale, 14 * scale, 4 * scale);
           ctx.shadowBlur = 0;
         }
       }
       
       // Draw rear wheels/details
       ctx.fillStyle = '#111827';
-      ctx.fillRect(-length * scale, -5 * scale, 3 * scale, 10 * scale);
-      
-      // Headlights - brighter
-      ctx.fillStyle = vehicle.state !== 'returning' ? '#ffffcc' : 'rgba(255, 255, 200, 0.5)';
-      ctx.fillRect((length - 1) * scale, -3 * scale, 3 * scale, 2.5 * scale);
-      ctx.fillRect((length - 1) * scale, 0.5 * scale, 3 * scale, 2.5 * scale);
+      ctx.fillRect(-length * scale, -4 * scale, 2 * scale, 8 * scale);
       
       ctx.restore();
     });
