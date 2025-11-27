@@ -17,6 +17,11 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000'
+  ),
   title: 'ISOCITY — Metropolis Builder',
   description: 'A luxurious isometric city builder with Art Deco elegance. Zone districts, manage resources, and build your gleaming metropolis.',
   openGraph: {
