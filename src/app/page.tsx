@@ -143,8 +143,8 @@ export default function HomePage() {
         
         {/* Touch hint */}
         <div className="text-white/40 text-xs mt-4 text-center flex flex-col gap-1">
-          <span>👆 Tap to place • 👆👆 Pinch to zoom</span>
-          <span>☝️ Drag to pan</span>
+          <span>Tap to place • Pinch to zoom</span>
+          <span>Drag to pan</span>
         </div>
       </main>
     );
