@@ -77,7 +77,7 @@ function generateLakes(grid: Tile[][], size: number, seed: number): WaterBody[] 
   
   // Find lake seed points (local minimums in noise)
   const lakeCenters: { x: number; y: number; noise: number }[] = [];
-  const minDistFromEdge = Math.max(5, Math.floor(size * 0.1)); // Adaptive edge distance
+  const minDistFromEdge = Math.max(8, Math.floor(size * 0.15)); // Keep lakes away from ocean edges
   const minDistBetweenLakes = Math.max(size * 0.2, 10); // Adaptive but ensure minimum separation
   
   // Collect all potential lake centers with adaptive threshold
@@ -239,89 +239,94 @@ function generateLakes(grid: Tile[][], size: number, seed: number): WaterBody[] 
   return waterBodies;
 }
 
-// Generate ocean connections on map edges (sometimes)
+// Generate ocean connections on map edges (sometimes) with organic coastlines
 function generateOceans(grid: Tile[][], size: number, seed: number): WaterBody[] {
   const waterBodies: WaterBody[] = [];
   const oceanChance = 0.4; // 40% chance per edge
   
+  // Use noise for coastline variation
+  const coastNoise = (x: number, y: number) => perlinNoise(x, y, seed + 2000, 3);
+  
   // Check each edge independently
   const edges: Array<{ side: 'north' | 'east' | 'south' | 'west'; tiles: { x: number; y: number }[] }> = [];
   
-  // North edge (top)
-  if (Math.random() < oceanChance) {
+  // Ocean parameters
+  const baseDepth = Math.max(3, Math.floor(size * 0.08));
+  const depthVariation = Math.max(2, Math.floor(size * 0.05));
+  const maxDepth = Math.floor(size * 0.12);
+  
+  // Helper to generate organic ocean section along an edge
+  const generateOceanEdge = (
+    isHorizontal: boolean,
+    edgePosition: number, // 0 for north/west, size-1 for south/east
+    inwardDirection: 1 | -1 // 1 = increasing coord, -1 = decreasing coord
+  ): { x: number; y: number }[] => {
     const tiles: { x: number; y: number }[] = [];
-    const startX = Math.floor(size * 0.2);
-    const endX = Math.floor(size * 0.8);
-    const oceanDepth = Math.max(2, Math.floor(size * 0.1));
-    for (let x = startX; x < endX; x++) {
-      for (let y = 0; y < oceanDepth; y++) {
-        if (grid[y][x].building.type !== 'water') {
+    
+    // Randomize the span of the ocean (40-80% of edge, not full length)
+    const spanStart = Math.floor(size * (0.05 + Math.random() * 0.25));
+    const spanEnd = Math.floor(size * (0.7 + Math.random() * 0.25));
+    
+    for (let i = spanStart; i < spanEnd; i++) {
+      // Use noise to determine depth at this position, with fade at edges
+      const edgeFade = Math.min(
+        (i - spanStart) / 5,
+        (spanEnd - i) / 5,
+        1
+      );
+      
+      const noiseVal = coastNoise(
+        isHorizontal ? i * 0.12 : edgePosition * 0.12,
+        isHorizontal ? edgePosition * 0.12 : i * 0.12
+      );
+      
+      // Depth varies based on noise and fades at the ends
+      const rawDepth = baseDepth + (noiseVal - 0.5) * depthVariation * 2;
+      const localDepth = Math.max(1, Math.min(Math.floor(rawDepth * edgeFade), maxDepth));
+      
+      // Place water tiles from edge inward
+      for (let d = 0; d < localDepth; d++) {
+        const x = isHorizontal ? i : (inwardDirection === 1 ? d : size - 1 - d);
+        const y = isHorizontal ? (inwardDirection === 1 ? d : size - 1 - d) : i;
+        
+        if (x >= 0 && x < size && y >= 0 && y < size && grid[y][x].building.type !== 'water') {
           grid[y][x].building = createBuilding('water');
           grid[y][x].landValue = 60;
           tiles.push({ x, y });
         }
       }
     }
+    
+    return tiles;
+  };
+  
+  // North edge (top, y=0, extends downward)
+  if (Math.random() < oceanChance) {
+    const tiles = generateOceanEdge(true, 0, 1);
     if (tiles.length > 0) {
       edges.push({ side: 'north', tiles });
     }
   }
   
-  // South edge (bottom)
+  // South edge (bottom, y=size-1, extends upward)
   if (Math.random() < oceanChance) {
-    const tiles: { x: number; y: number }[] = [];
-    const startX = Math.floor(size * 0.2);
-    const endX = Math.floor(size * 0.8);
-    const oceanDepth = Math.max(2, Math.floor(size * 0.1));
-    for (let x = startX; x < endX; x++) {
-      for (let y = size - oceanDepth; y < size; y++) {
-        if (grid[y][x].building.type !== 'water') {
-          grid[y][x].building = createBuilding('water');
-          grid[y][x].landValue = 60;
-          tiles.push({ x, y });
-        }
-      }
-    }
+    const tiles = generateOceanEdge(true, size - 1, -1);
     if (tiles.length > 0) {
       edges.push({ side: 'south', tiles });
     }
   }
   
-  // East edge (right)
+  // East edge (right, x=size-1, extends leftward)
   if (Math.random() < oceanChance) {
-    const tiles: { x: number; y: number }[] = [];
-    const startY = Math.floor(size * 0.2);
-    const endY = Math.floor(size * 0.8);
-    const oceanDepth = Math.max(2, Math.floor(size * 0.1));
-    for (let y = startY; y < endY; y++) {
-      for (let x = size - oceanDepth; x < size; x++) {
-        if (grid[y][x].building.type !== 'water') {
-          grid[y][x].building = createBuilding('water');
-          grid[y][x].landValue = 60;
-          tiles.push({ x, y });
-        }
-      }
-    }
+    const tiles = generateOceanEdge(false, size - 1, -1);
     if (tiles.length > 0) {
       edges.push({ side: 'east', tiles });
     }
   }
   
-  // West edge (left)
+  // West edge (left, x=0, extends rightward)
   if (Math.random() < oceanChance) {
-    const tiles: { x: number; y: number }[] = [];
-    const startY = Math.floor(size * 0.2);
-    const endY = Math.floor(size * 0.8);
-    const oceanDepth = Math.max(2, Math.floor(size * 0.1));
-    for (let y = startY; y < endY; y++) {
-      for (let x = 0; x < oceanDepth; x++) {
-        if (grid[y][x].building.type !== 'water') {
-          grid[y][x].building = createBuilding('water');
-          grid[y][x].landValue = 60;
-          tiles.push({ x, y });
-        }
-      }
-    }
+    const tiles = generateOceanEdge(false, 0, 1);
     if (tiles.length > 0) {
       edges.push({ side: 'west', tiles });
     }
@@ -574,7 +579,7 @@ function calculateServiceCoverage(grid: Tile[][], size: number): ServiceCoverage
   const serviceRanges: Record<string, { building: BuildingType; range: number; type: keyof ServiceCoverage }[]> = {
     coverage: [
       { building: 'police_station', range: 10, type: 'police' },
-      { building: 'fire_station', range: 8, type: 'fire' },
+      { building: 'fire_station', range: 14, type: 'fire' },
       { building: 'hospital', range: 12, type: 'health' },
       { building: 'school', range: 8, type: 'education' },
       { building: 'university', range: 15, type: 'education' },
@@ -1242,12 +1247,12 @@ export function simulateTick(state: GameState): GameState {
         }
       }
 
-      // Random fire start (more common to see the mechanic)
+      // Random fire start
       if (state.disastersEnabled && !tile.building.onFire && 
           tile.building.type !== 'grass' && tile.building.type !== 'water' && 
           tile.building.type !== 'road' && tile.building.type !== 'tree' &&
           tile.building.type !== 'empty' &&
-          Math.random() < 0.00008) {
+          Math.random() < 0.00003) {
         tile.building.onFire = true;
         tile.building.fireProgress = 0;
       }

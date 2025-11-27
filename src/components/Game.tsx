@@ -1645,6 +1645,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     speed,
   });
   const [lastPlacedTile, setLastPlacedTile] = useState<{ x: number; y: number } | null>(null);
+  const [roadDrawDirection, setRoadDrawDirection] = useState<'h' | 'v' | null>(null);
+  const placedRoadTilesRef = useRef<Set<string>>(new Set());
   const [imagesLoaded, setImagesLoaded] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
   const [dragStartTile, setDragStartTile] = useState<{ x: number; y: number } | null>(null);
@@ -3742,6 +3744,10 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
           if (buildingType === 'space_program') {
             scaleMultiplier *= 1.25;
           }
+          // Special scale adjustment for stadium (scaled down 30%)
+          if (buildingType === 'stadium') {
+            scaleMultiplier *= 0.7; // Scale down by 30%
+          }
           const destWidth = w * 1.2 * scaleMultiplier;
           const aspectRatio = coords.sh / coords.sw;  // height/width ratio of source
           const destHeight = destWidth * aspectRatio;
@@ -3851,8 +3857,15 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
             setDragStartTile({ x: gridX, y: gridY });
             setDragEndTile({ x: gridX, y: gridY });
             setIsDragging(true);
+            // Reset road drawing state for new drag
+            setRoadDrawDirection(null);
+            placedRoadTilesRef.current.clear();
             // Place immediately on first click
             placeAtTile(gridX, gridY);
+            // Track initial tile for roads
+            if (selectedTool === 'road') {
+              placedRoadTilesRef.current.add(`${gridX},${gridY}`);
+            }
           }
         }
       }
@@ -3881,7 +3894,48 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         if (isDragging && showsDragGrid && dragStartTile) {
           setDragEndTile({ x: gridX, y: gridY });
         }
-        // For roads and other tools, place as you drag
+        // For roads, use straight-line snapping
+        else if (isDragging && selectedTool === 'road' && dragStartTile) {
+          const dx = Math.abs(gridX - dragStartTile.x);
+          const dy = Math.abs(gridY - dragStartTile.y);
+          
+          // Lock direction after moving at least 1 tile
+          let direction = roadDrawDirection;
+          if (!direction && (dx > 0 || dy > 0)) {
+            // Lock to the axis with more movement, or horizontal if equal
+            direction = dx >= dy ? 'h' : 'v';
+            setRoadDrawDirection(direction);
+          }
+          
+          // Calculate target position along the locked axis
+          let targetX = gridX;
+          let targetY = gridY;
+          if (direction === 'h') {
+            targetY = dragStartTile.y; // Lock to horizontal
+          } else if (direction === 'v') {
+            targetX = dragStartTile.x; // Lock to vertical
+          }
+          
+          setDragEndTile({ x: targetX, y: targetY });
+          
+          // Place all tiles from start to target in a straight line
+          const minX = Math.min(dragStartTile.x, targetX);
+          const maxX = Math.max(dragStartTile.x, targetX);
+          const minY = Math.min(dragStartTile.y, targetY);
+          const maxY = Math.max(dragStartTile.y, targetY);
+          
+          for (let x = minX; x <= maxX; x++) {
+            for (let y = minY; y <= maxY; y++) {
+              const key = `${x},${y}`;
+              if (!placedRoadTilesRef.current.has(key)) {
+                placeAtTile(x, y);
+                placedRoadTilesRef.current.add(key);
+              }
+            }
+          }
+          setLastPlacedTile({ x: targetX, y: targetY });
+        }
+        // For other tools (bulldoze, tree, etc.), place as you drag without snapping
         else if (isDragging && supportsDragPlace && dragStartTile) {
           setDragEndTile({ x: gridX, y: gridY });
           // Place at current tile if it's different from last placed
@@ -3894,7 +3948,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         setHoveredTile(null);
       }
     }
-  }, [isPanning, isDragging, dragStart, offset, gridSize, zoom, showsDragGrid, supportsDragPlace, dragStartTile, lastPlacedTile, placeAtTile, selectedTool]);
+  }, [isPanning, isDragging, dragStart, offset, gridSize, zoom, showsDragGrid, supportsDragPlace, dragStartTile, lastPlacedTile, placeAtTile, selectedTool, roadDrawDirection]);
   
   const handleMouseUp = useCallback(() => {
     // Check for road connection when dragging off edge
@@ -3915,6 +3969,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
           setIsPanning(false);
           setIsDragging(false);
           setLastPlacedTile(null);
+          setRoadDrawDirection(null);
+          placedRoadTilesRef.current.clear();
           return;
         }
       }
@@ -3941,6 +3997,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     setLastPlacedTile(null);
     setDragStartTile(null);
     setDragEndTile(null);
+    setRoadDrawDirection(null);
+    placedRoadTilesRef.current.clear();
   }, [isDragging, dragStartTile, dragEndTile, showsDragGrid, placeAtTile, selectedTool, adjacentCities, gridSize]);
   
   const handleWheel = useCallback((e: React.WheelEvent) => {
@@ -4188,15 +4246,15 @@ export default function Game() {
   
   // Auto-set overlay when selecting utility tools (but not on initial page load)
   useEffect(() => {
-    // Subway tool always sets overlay immediately (no restrictions)
-    if (state.selectedTool === 'subway' || state.selectedTool === 'subway_station') {
-      setOverlayMode('subway');
-      previousSelectedToolRef.current = state.selectedTool;
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
       return;
     }
     
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
+    // Subway tool sets overlay when actively selected (not on page load)
+    if (state.selectedTool === 'subway' || state.selectedTool === 'subway_station') {
+      setOverlayMode('subway');
+      previousSelectedToolRef.current = state.selectedTool;
       return;
     }
     
