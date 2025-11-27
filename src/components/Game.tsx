@@ -3719,18 +3719,29 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       const altitudeScale = 0.7 + plane.altitude * 0.5;
       ctx.scale(altitudeScale, altitudeScale);
       
-      // Fuselage
+      // Fuselage - cylindrical body (rounded rectangle shape)
       ctx.fillStyle = plane.color;
       ctx.beginPath();
-      ctx.ellipse(0, 0, 18, 4, 0, 0, Math.PI * 2);
+      // Draw a more cylindrical fuselage using a rounded rect approach
+      const fuselageLength = 16;
+      const fuselageWidth = 2.5; // Thinner for more cylindrical look
+      ctx.moveTo(-fuselageLength, -fuselageWidth);
+      ctx.lineTo(fuselageLength - 4, -fuselageWidth);
+      ctx.quadraticCurveTo(fuselageLength, -fuselageWidth, fuselageLength, 0);
+      ctx.quadraticCurveTo(fuselageLength, fuselageWidth, fuselageLength - 4, fuselageWidth);
+      ctx.lineTo(-fuselageLength, fuselageWidth);
+      ctx.quadraticCurveTo(-fuselageLength - 2, fuselageWidth, -fuselageLength - 2, 0);
+      ctx.quadraticCurveTo(-fuselageLength - 2, -fuselageWidth, -fuselageLength, -fuselageWidth);
+      ctx.closePath();
       ctx.fill();
       
-      // Nose
+      // Nose cone
       ctx.fillStyle = '#94a3b8'; // Gray nose cone
       ctx.beginPath();
-      ctx.moveTo(18, 0);
-      ctx.lineTo(14, -2);
-      ctx.lineTo(14, 2);
+      ctx.moveTo(fuselageLength, 0);
+      ctx.lineTo(fuselageLength + 6, 0);
+      ctx.lineTo(fuselageLength, -fuselageWidth * 0.8);
+      ctx.lineTo(fuselageLength, fuselageWidth * 0.8);
       ctx.closePath();
       ctx.fill();
       
@@ -5157,11 +5168,20 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
               const parksRows = activePack.parksRows || 6;
               const tileWidth = Math.floor(sheetWidth / parksCols);
               const tileHeight = Math.floor(sheetHeight / parksRows);
+              let sourceY = useParksBuilding.row * tileHeight;
+              let sourceH = tileHeight;
+              
+              // Special handling for pier_large - shift source down to avoid capturing
+              // content from the sprite above it in the sprite sheet
+              if (buildingType === 'pier_large') {
+                sourceY += tileHeight * 0.15; // Shift down 15% to avoid row above
+              }
+              
               coords = {
                 sx: useParksBuilding.col * tileWidth,
-                sy: useParksBuilding.row * tileHeight,
+                sy: sourceY,
                 sw: tileWidth,
-                sh: tileHeight,
+                sh: sourceH,
               };
             } else if (useDenseVariant) {
               isDenseVariant = true;
