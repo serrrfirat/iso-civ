@@ -16,6 +16,11 @@ export interface SpritePack {
   constructionSrc?: string;
   // Path to the abandoned sprite sheet (same layout, but buildings shown as abandoned/derelict)
   abandonedSrc?: string;
+  // Path to the dense variants sprite sheet (alternative sprites for high-density buildings)
+  denseSrc?: string;
+  // Dense variant definitions: maps building type to available variants in the dense sheet
+  // Each variant specifies row and column (0-indexed) in the dense sprite sheet
+  denseVariants?: Record<string, { row: number; col: number }[]>;
   // Number of columns in the sprite sheet
   cols: number;
   // Number of rows in the sprite sheet
@@ -112,8 +117,11 @@ const SPRITE_PACK_RED: SpritePack = {
     police_station: -0.2,
   },
   buildingVerticalOffsets: {
-    // 2x2 commercial buildings need to shift up ~1 tile
-    office_low: -1.0,
+    // Small houses shifted down 0.25 tiles
+    house_small: -0.05, // Was -0.3 from verticalOffsets, shifted down 0.25
+    house_medium: -0.05, // Was -0.3 from verticalOffsets, shifted down 0.25
+    // 2x2 commercial buildings
+    office_low: -0.5, // Shifted down 0.5 tiles from -1.0
     office_high: -0.7, // Shifted down 0.3 tiles from -1.0
     // 3x3 mall needs to shift up ~1 tile
     mall: -1.0,
@@ -173,6 +181,34 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   src: '/assets/sprites_red_water_new.png',
   constructionSrc: '/assets/sprites_red_water_new_construction.png',
   abandonedSrc: '/assets/sprites_red_water_new_abandoned.png',
+  denseSrc: '/assets/sprites_red_water_new_dense.png',
+  denseVariants: {
+    // Residential high density (apartment_high) - Row 1, columns 2, 3, 4 (0-indexed: 1, 2, 3)
+    apartment_high: [
+      { row: 0, col: 1 },
+      { row: 0, col: 2 },
+      { row: 0, col: 3 },
+    ],
+    // Commercial high density (mall) - Rows 3 and 4, all columns (0-indexed: rows 2, 3)
+    mall: [
+      { row: 2, col: 0 },
+      { row: 2, col: 1 },
+      { row: 2, col: 2 },
+      { row: 2, col: 3 },
+      { row: 2, col: 4 },
+      { row: 3, col: 0 },
+      { row: 3, col: 1 },
+      { row: 3, col: 2 },
+      { row: 3, col: 3 },
+      { row: 3, col: 4 },
+    ],
+    // Industrial high density (factory_large) - Row 5, columns 1, 3, 5 (0-indexed: row 4, cols 0, 2, 4)
+    factory_large: [
+      { row: 4, col: 0 },
+      { row: 4, col: 2 },
+      { row: 4, col: 4 },
+    ],
+  },
   cols: 5,
   rows: 6,
   layout: 'row',
@@ -253,8 +289,11 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     city_hall: 0.1, // Shift right about 0.2 tiles
   },
   buildingVerticalOffsets: {
-    // 2x2 commercial buildings need to shift up ~1 tile
-    office_low: -1.0,
+    // Small houses shifted down 0.25 tiles
+    house_small: -0.05, // Was -0.3 from verticalOffsets, shifted down 0.25
+    house_medium: -0.05, // Was -0.3 from verticalOffsets, shifted down 0.25
+    // 2x2 commercial buildings
+    office_low: -0.5, // Shifted down 0.5 tiles from -1.0
     office_high: -0.7, // Shifted down 0.3 tiles from -1.0
     // 3x3 mall needs to shift up ~1 tile
     mall: -1.0,

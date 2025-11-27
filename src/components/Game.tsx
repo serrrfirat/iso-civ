@@ -1394,7 +1394,7 @@ function SettingsPanel() {
 // Background color to filter
 const BACKGROUND_COLOR = { r: 255, g: 0, b: 0 };
 // Color distance threshold - pixels within this distance will be made transparent
-const COLOR_THRESHOLD = 160; // Adjust this value to be more/less aggressive (increased from 10 for better filtering)
+const COLOR_THRESHOLD = 165; // Adjust this value to be more/less aggressive (increased from 10 for better filtering)
 
 /**
  * Filters colors close to the background color from an image, making them transparent
@@ -3122,6 +3122,11 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     if (currentSpritePack.abandonedSrc) {
       imagesToLoad.push(loadSpriteImage(currentSpritePack.abandonedSrc, true));
     }
+    
+    // Also load dense variants sprite sheet if available
+    if (currentSpritePack.denseSrc) {
+      imagesToLoad.push(loadSpriteImage(currentSpritePack.denseSrc, true));
+    }
 
     Promise.all(imagesToLoad)
       .then(() => setImagesLoaded(true))
@@ -4243,12 +4248,27 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
           const isAbandoned = tile.building.abandoned === true;
 
           // Use appropriate sprite sheet based on building state
-          // Priority: construction > abandoned > normal
+          // Priority: construction > abandoned > dense variants > normal
           let spriteSource = activePack.src;
+          let useDenseVariant: { row: number; col: number } | null = null;
+          
           if (isUnderConstruction && activePack.constructionSrc) {
             spriteSource = activePack.constructionSrc;
           } else if (isAbandoned && activePack.abandonedSrc) {
             spriteSource = activePack.abandonedSrc;
+          } else if (activePack.denseSrc && activePack.denseVariants && activePack.denseVariants[buildingType]) {
+            // Check if this building type has dense variants available
+            const variants = activePack.denseVariants[buildingType];
+            // Use deterministic random based on tile position to select variant
+            // This ensures the same building always shows the same variant
+            const seed = (tile.x * 31 + tile.y * 17) % 100;
+            // ~50% chance to use a dense variant (when seed < 50)
+            if (seed < 50 && variants.length > 0) {
+              // Select which dense variant to use based on position
+              const variantIndex = (tile.x * 7 + tile.y * 13) % variants.length;
+              useDenseVariant = variants[variantIndex];
+              spriteSource = activePack.denseSrc;
+            }
           }
 
           const filteredSpriteSheet = imageCache.get(`${spriteSource}_filtered`) || imageCache.get(spriteSource);
@@ -4258,8 +4278,30 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
             const sheetWidth = filteredSpriteSheet.naturalWidth || filteredSpriteSheet.width;
             const sheetHeight = filteredSpriteSheet.naturalHeight || filteredSpriteSheet.height;
             
-            // getSpriteCoords handles building type to sprite key mapping
-            const coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight);
+            // Get sprite coordinates - either from dense variant or normal mapping
+            let coords: { sx: number; sy: number; sw: number; sh: number } | null;
+            let isDenseVariant = false;
+            if (useDenseVariant) {
+              isDenseVariant = true;
+              // Calculate coordinates directly from dense variant row/col
+              const tileWidth = Math.floor(sheetWidth / activePack.cols);
+              const tileHeight = Math.floor(sheetHeight / activePack.rows);
+              let sourceY = useDenseVariant.row * tileHeight;
+              // For mall dense variants (rows 2-3), shift source Y down to avoid capturing
+              // content from the row above that bleeds into the cell boundary
+              if (buildingType === 'mall') {
+                sourceY += tileHeight * 0.12; // Shift down ~12% to avoid row above
+              }
+              coords = {
+                sx: useDenseVariant.col * tileWidth,
+                sy: sourceY,
+                sw: tileWidth,
+                sh: tileHeight,
+              };
+            } else {
+              // getSpriteCoords handles building type to sprite key mapping
+              coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight);
+            }
             
             if (coords) {
               // Get building size to handle multi-tile buildings
@@ -4324,6 +4366,10 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
               // Special scale adjustment for office_high (scaled up 20%)
               if (buildingType === 'office_high') {
                 scaleMultiplier *= 1.20;
+              }
+              // Special scale adjustment for dense mall variants (scaled down 15%)
+              if (buildingType === 'mall' && isDenseVariant) {
+                scaleMultiplier *= 0.85;
               }
               // Apply global scale from sprite pack if available
               const globalScale = activePack.globalScale ?? 1;
