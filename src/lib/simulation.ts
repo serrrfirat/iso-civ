@@ -491,6 +491,7 @@ function createBuilding(type: BuildingType): Building {
     fireProgress: 0,
     age: 0,
     constructionProgress,
+    abandoned: false,
   };
 }
 
@@ -608,6 +609,11 @@ function calculateServiceCoverage(grid: Tile[][], size: number): ServiceCoverage
       
       // Skip buildings under construction - they don't provide services yet
       if (tile.building.constructionProgress !== undefined && tile.building.constructionProgress < 100) {
+        continue;
+      }
+      
+      // Skip abandoned buildings - they don't provide services
+      if (tile.building.abandoned) {
         continue;
       }
       
@@ -799,6 +805,64 @@ function evolveBuilding(grid: Tile[][], x: number, y: number, services: ServiceC
     
     // Don't age or evolve until construction is complete
     return building;
+  }
+
+  // Get zone demand for abandonment/recovery logic
+  const zoneDemandValue = demand ? (
+    zone === 'residential' ? demand.residential :
+    zone === 'commercial' ? demand.commercial :
+    zone === 'industrial' ? demand.industrial : 0
+  ) : 0;
+
+  // === ABANDONMENT MECHANIC ===
+  // Buildings can become abandoned when demand is very negative (oversupply)
+  // Abandoned buildings produce nothing but can recover when demand returns
+  
+  if (building.abandoned) {
+    // Abandoned building - check for recovery
+    // When demand is positive, abandoned buildings have a chance to be cleared
+    // The cleared land (zoned grass) can then be redeveloped
+    if (zoneDemandValue > 10) {
+      // Higher demand = higher chance of clearing abandoned building
+      // At demand 30, ~3% chance per tick; at demand 60, ~8% chance
+      const clearingChance = Math.min(0.12, (zoneDemandValue - 10) / 600);
+      if (Math.random() < clearingChance) {
+        // Clear the abandoned building - revert to zoned grass
+        // This allows natural redevelopment when demand recovers
+        const clearedBuilding = createBuilding('grass');
+        clearedBuilding.powered = building.powered;
+        clearedBuilding.watered = building.watered;
+        return clearedBuilding;
+      }
+    }
+    
+    // Abandoned buildings produce nothing
+    building.population = 0;
+    building.jobs = 0;
+    // Abandoned buildings still age but much slower
+    building.age = (building.age || 0) + 0.1;
+    return building;
+  }
+  
+  // Check if building should become abandoned (oversupply situation)
+  // Only happens when demand is significantly negative and building has been around a while
+  if (zoneDemandValue < -20 && building.age > 20) {
+    // Worse demand = higher chance of abandonment
+    // At demand -40, ~2% chance per tick; at demand -80, ~6% chance
+    const abandonmentChance = Math.min(0.08, Math.abs(zoneDemandValue + 20) / 1000);
+    
+    // Buildings without power/water are more likely to be abandoned
+    const utilityPenalty = (!hasPower ? 0.03 : 0) + (!hasWater ? 0.03 : 0);
+    
+    // Lower-level buildings are more likely to be abandoned
+    const levelPenalty = building.level <= 2 ? 0.02 : 0;
+    
+    if (Math.random() < abandonmentChance + utilityPenalty + levelPenalty) {
+      building.abandoned = true;
+      building.population = 0;
+      building.jobs = 0;
+      return building;
+    }
   }
 
   building.age = (building.age || 0) + 1;
@@ -1196,6 +1260,39 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
     });
   }
 
+  // Abandonment advisor
+  let abandonedBuildings = 0;
+  let abandonedResidential = 0;
+  let abandonedCommercial = 0;
+  let abandonedIndustrial = 0;
+  for (const row of grid) {
+    for (const tile of row) {
+      if (tile.building.abandoned) {
+        abandonedBuildings++;
+        if (tile.zone === 'residential') abandonedResidential++;
+        else if (tile.zone === 'commercial') abandonedCommercial++;
+        else if (tile.zone === 'industrial') abandonedIndustrial++;
+      }
+    }
+  }
+  if (abandonedBuildings > 0) {
+    const details: string[] = [];
+    if (abandonedResidential > 0) details.push(`${abandonedResidential} residential`);
+    if (abandonedCommercial > 0) details.push(`${abandonedCommercial} commercial`);
+    if (abandonedIndustrial > 0) details.push(`${abandonedIndustrial} industrial`);
+    
+    messages.push({
+      name: 'Urban Planning Advisor',
+      icon: 'planning',
+      messages: [
+        `${abandonedBuildings} abandoned building${abandonedBuildings > 1 ? 's' : ''} in your city (${details.join(', ')}).`,
+        'Oversupply has caused buildings to become vacant.',
+        'Increase demand by growing your city or wait for natural redevelopment.'
+      ],
+      priority: abandonedBuildings > 10 ? 'high' : abandonedBuildings > 5 ? 'medium' : 'low',
+    });
+  }
+
   return messages;
 }
 
@@ -1489,14 +1586,14 @@ export function getBuildingSize(buildingType: BuildingType): { width: number; he
 function getConstructionSpeed(buildingType: BuildingType): number {
   const size = getBuildingSize(buildingType);
   const area = size.width * size.height;
-  
-  // Base speed: 5-10% per tick for 1x1 buildings (~10-20 ticks to complete)
+
+  // Base speed: 24-36% per tick for 1x1 buildings (~3-4 ticks to complete)
   // Scale down by sqrt of area so larger buildings take proportionally longer:
-  // - 1x1 (1 tile):  5-10% per tick → ~10-20 ticks
-  // - 2x2 (4 tiles): 2.5-5% per tick → ~20-40 ticks
-  // - 3x3 (9 tiles): 1.7-3.3% per tick → ~30-60 ticks
-  // - 4x4 (16 tiles): 1.25-2.5% per tick → ~40-80 ticks
-  const baseSpeed = 5 + Math.random() * 5;
+  // - 1x1 (1 tile):  24-36% per tick → ~3-4 ticks
+  // - 2x2 (4 tiles): 12-18% per tick → ~6-8 ticks
+  // - 3x3 (9 tiles): 8-12% per tick → ~9-12 ticks
+  // - 4x4 (16 tiles): 6-9% per tick → ~11-16 ticks
+  const baseSpeed = 24 + Math.random() * 12;
   return baseSpeed / Math.sqrt(area);
 }
 

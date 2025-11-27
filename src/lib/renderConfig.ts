@@ -14,6 +14,8 @@ export interface SpritePack {
   src: string;
   // Path to the construction sprite sheet (same layout, but buildings under construction)
   constructionSrc?: string;
+  // Path to the abandoned sprite sheet (same layout, but buildings shown as abandoned/derelict)
+  abandonedSrc?: string;
   // Number of columns in the sprite sheet
   cols: number;
   // Number of rows in the sprite sheet
@@ -112,12 +114,12 @@ const SPRITE_PACK_RED: SpritePack = {
   buildingVerticalOffsets: {
     // 2x2 commercial buildings need to shift up ~1 tile
     office_low: -1.0,
-    office_high: -1.0,
+    office_high: -0.7, // Shifted down 0.3 tiles from -1.0
     // 3x3 mall needs to shift up ~1 tile
     mall: -1.0,
     // 2x2 residential apartments need shifting up
     apartment_low: -1.0,
-    apartment_high: -1.0,
+    apartment_high: -0.60, // Shifted down ~0.4 tiles from -1.0
   },
   buildingToSprite: {
     // Residential buildings
@@ -170,6 +172,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   name: 'Sprites 4',
   src: '/assets/sprites_red_water_new.png',
   constructionSrc: '/assets/sprites_red_water_new_construction.png',
+  abandonedSrc: '/assets/sprites_red_water_new_abandoned.png',
   cols: 5,
   rows: 6,
   layout: 'row',
@@ -252,12 +255,12 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   buildingVerticalOffsets: {
     // 2x2 commercial buildings need to shift up ~1 tile
     office_low: -1.0,
-    office_high: -1.0,
+    office_high: -0.7, // Shifted down 0.3 tiles from -1.0
     // 3x3 mall needs to shift up ~1 tile
     mall: -1.0,
     // 2x2 residential apartments need shifting up
     apartment_low: -1.0,
-    apartment_high: -1.0,
+    apartment_high: -0.60, // Shifted down ~0.4 tiles from -1.0
   },
   constructionVerticalOffsets: {
     water_tower: 0.0, // Construction water tower shifted down 0.5 tiles from normal (-0.5 + 0.5 = 0.0)

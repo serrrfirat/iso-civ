@@ -3118,6 +3118,11 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       imagesToLoad.push(loadSpriteImage(currentSpritePack.constructionSrc, true));
     }
     
+    // Also load abandoned sprite sheet if available
+    if (currentSpritePack.abandonedSrc) {
+      imagesToLoad.push(loadSpriteImage(currentSpritePack.abandonedSrc, true));
+    }
+
     Promise.all(imagesToLoad)
       .then(() => setImagesLoaded(true))
       .catch(console.error);
@@ -4231,15 +4236,21 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
           const activePack = getActiveSpritePack();
           
           // Check if building is under construction (constructionProgress < 100)
-          const isUnderConstruction = tile.building.constructionProgress !== undefined && 
+          const isUnderConstruction = tile.building.constructionProgress !== undefined &&
                                        tile.building.constructionProgress < 100;
           
-          // Use construction sprite sheet if building is under construction and one is available
+          // Check if building is abandoned
+          const isAbandoned = tile.building.abandoned === true;
+
+          // Use appropriate sprite sheet based on building state
+          // Priority: construction > abandoned > normal
           let spriteSource = activePack.src;
           if (isUnderConstruction && activePack.constructionSrc) {
             spriteSource = activePack.constructionSrc;
+          } else if (isAbandoned && activePack.abandonedSrc) {
+            spriteSource = activePack.abandonedSrc;
           }
-          
+
           const filteredSpriteSheet = imageCache.get(`${spriteSource}_filtered`) || imageCache.get(spriteSource);
           
           if (filteredSpriteSheet) {
@@ -4303,9 +4314,16 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
               if (buildingType === 'house_small') {
                 scaleMultiplier *= 1.08; // Scale up by 8%
               }
-              // Special scale adjustment for apartments (scaled up 15%)
-              if (buildingType === 'apartment_low' || buildingType === 'apartment_high') {
+              // Special scale adjustment for apartments
+              if (buildingType === 'apartment_low') {
                 scaleMultiplier *= 1.15; // Scale up by 15%
+              }
+              if (buildingType === 'apartment_high') {
+                scaleMultiplier *= 1.38; // Scale up by 38% (20% + 15%)
+              }
+              // Special scale adjustment for office_high (scaled up 20%)
+              if (buildingType === 'office_high') {
+                scaleMultiplier *= 1.20;
               }
               // Apply global scale from sprite pack if available
               const globalScale = activePack.globalScale ?? 1;

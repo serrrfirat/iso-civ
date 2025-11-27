@@ -122,6 +122,7 @@ export interface Building {
   fireProgress: number;
   age: number;
   constructionProgress: number; // 0-100, building is under construction until 100
+  abandoned: boolean; // Building is abandoned due to low demand, produces nothing
 }
 
 export interface Tile {
