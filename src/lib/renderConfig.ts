@@ -41,6 +41,9 @@ export interface SpritePack {
   // Per-sprite vertical offset adjustments for CONSTRUCTION sprites only
   // These override verticalOffsets when rendering buildings under construction
   constructionVerticalOffsets?: Record<string, number>;
+  // Per-building-type scale adjustments for CONSTRUCTION sprites only
+  // Values are multiplied with the normal scale (e.g., 0.95 = 95% of normal size)
+  constructionScales?: Record<string, number>;
   // Per-sprite vertical offset adjustments for ABANDONED sprites only
   // These override verticalOffsets when rendering abandoned buildings
   abandonedVerticalOffsets?: Record<string, number>;
@@ -50,6 +53,9 @@ export interface SpritePack {
   // Per-building-type vertical offset adjustments for DENSE variant sprites only
   // These override verticalOffsets when rendering dense variants
   denseVerticalOffsets?: Record<string, number>;
+  // Per-building-type scale adjustments for DENSE variant sprites only
+  // Values are multiplied with the normal scale (e.g., 0.95 = 95% of normal size)
+  denseScales?: Record<string, number>;
   // Maps building types to sprite keys in spriteOrder
   buildingToSprite: Record<string, string>;
   // Optional global scale multiplier for all sprites in this pack
@@ -312,6 +318,15 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   },
   constructionVerticalOffsets: {
     water_tower: 0.0, // Construction water tower shifted down 0.5 tiles from normal (-0.5 + 0.5 = 0.0)
+    apartment_high: 2.6, // Construction apartment_high shifted down 3.2 tiles from normal (-0.60 + 3.2 = 2.6)
+    apartment_low: -0.2, // Construction apartment_low shifted down 0.8 tiles from normal (-1.0 + 0.8 = -0.2)
+    mall: -0.2, // Construction mall shifted down 0.8 tiles from normal (-1.0 + 0.8 = -0.2)
+    office_high: 0.3, // Construction office_high shifted down 1.0 tiles from normal (-0.7 + 1.0 = 0.3)
+  },
+  constructionScales: {
+    mall: 0.92, // Construction mall scaled down 8%
+    office_high: 0.90, // Construction office_high scaled down 10%
+    apartment_high: 0.65, // Construction apartment_high scaled down 35%
   },
   abandonedVerticalOffsets: {
     // Abandoned apartments need different positioning than normal
@@ -323,8 +338,12 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     factory_large: 0.7,
   },
   denseVerticalOffsets: {
-    // Dense apartment_high needs to shift up ~0.3 tiles from normal position
-    apartment_high: -0.90, // Normal is -0.60, dense shifts up 0.3: -0.60 - 0.3 = -0.90
+    // Dense apartment_high shifted down 0.4 tiles from previous position
+    apartment_high: -0.80, // Shifted up 0.3 tiles from -0.50
+  },
+  denseScales: {
+    // Dense apartment_high scaled down 5%
+    apartment_high: 0.95,
   },
   buildingToSprite: {
     house_small: 'house_small',

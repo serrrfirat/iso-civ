@@ -4858,9 +4858,13 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
               if (buildingType === 'mall' && isDenseVariant) {
                 scaleMultiplier *= 0.85;
               }
-              // Special scale adjustment for dense apartment_high variants (scaled down 8%)
-              if (buildingType === 'apartment_high' && isDenseVariant) {
-                scaleMultiplier *= 0.92;
+              // Apply dense-specific scale if building uses dense variant and has custom scale in config
+              if (isDenseVariant && activePack.denseScales && buildingType in activePack.denseScales) {
+                scaleMultiplier *= activePack.denseScales[buildingType];
+              }
+              // Apply construction-specific scale if building is under construction and has custom scale
+              if (isUnderConstruction && activePack.constructionScales && buildingType in activePack.constructionScales) {
+                scaleMultiplier *= activePack.constructionScales[buildingType];
               }
               // Apply abandoned-specific scale if building is abandoned and has custom scale
               if (isAbandoned && activePack.abandonedScales && buildingType in activePack.abandonedScales) {
