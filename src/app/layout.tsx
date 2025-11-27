@@ -19,6 +19,16 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: 'ISOCITY — Metropolis Builder',
   description: 'A luxurious isometric city builder with Art Deco elegance. Zone districts, manage resources, and build your gleaming metropolis.',
+  openGraph: {
+    title: 'ISOCITY — Metropolis Builder',
+    description: 'A luxurious isometric city builder with Art Deco elegance. Zone districts, manage resources, and build your gleaming metropolis.',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'ISOCITY — Metropolis Builder',
+    description: 'A luxurious isometric city builder with Art Deco elegance.',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
