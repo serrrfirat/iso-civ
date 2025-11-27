@@ -4229,8 +4229,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       return;
     }
 
-    // Calculate max boats based on number of docks (5 boats per dock, max 50)
-    const maxBoats = Math.min(50, docks.length * 5);
+    // Calculate max boats based on number of docks (3 boats per dock, max 25)
+    const maxBoats = Math.min(25, docks.length * 3);
     
     // Speed multiplier based on game speed
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 1.5 : 2;
