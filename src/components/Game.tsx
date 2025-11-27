@@ -3807,12 +3807,13 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     return null;
   }, [grid, gridSize]);
   
-  // Helper function to check if a tile is part of a park building footprint
+// Helper function to check if a tile is part of a park building footprint
+  // Note: buildings with grey bases (baseball_stadium, swimming_pool, community_center, office_building_small) are NOT included
   const isPartOfParkBuilding = useCallback((gridX: number, gridY: number): boolean => {
     const maxSize = 4; // Maximum building size
-    const parkBuildings: BuildingType[] = ['park_large', 'baseball_field_small', 'football_field', 
-      'baseball_stadium', 'mini_golf_course', 'go_kart_track', 'amphitheater', 'greenhouse_garden',
-      'pier_large', 'roller_coaster_small', 'mountain_lodge'];
+    const parkBuildings: BuildingType[] = ['park_large', 'baseball_field_small', 'football_field',
+      'mini_golf_course', 'go_kart_track', 'amphitheater', 'greenhouse_garden',
+      'pier_large', 'roller_coaster_small', 'mountain_lodge', 'playground_large', 'mountain_trailhead'];
 
     for (let dy = 0; dy < maxSize; dy++) {
       for (let dx = 0; dx < maxSize; dx++) {
@@ -5027,7 +5028,11 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
               
               // Apply per-sprite horizontal offset adjustments
               const spriteKey = BUILDING_TO_SPRITE[buildingType];
-              const horizontalOffset = (spriteKey && SPRITE_HORIZONTAL_OFFSETS[spriteKey]) ? SPRITE_HORIZONTAL_OFFSETS[spriteKey] * w : 0;
+              let horizontalOffset = (spriteKey && SPRITE_HORIZONTAL_OFFSETS[spriteKey]) ? SPRITE_HORIZONTAL_OFFSETS[spriteKey] * w : 0;
+              // Apply parks-specific horizontal offset if available
+              if (isParksBuilding && activePack.parksHorizontalOffsets && buildingType in activePack.parksHorizontalOffsets) {
+                horizontalOffset = activePack.parksHorizontalOffsets[buildingType] * w;
+              }
               drawX += horizontalOffset;
               
               // Simple positioning: sprite bottom aligns with tile/footprint bottom

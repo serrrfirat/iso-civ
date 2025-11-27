@@ -247,9 +247,9 @@ const SPRITE_PACK_RED: SpritePack = {
     playground_small: -0.25,  // shifted up 0.1
     playground_large: -1.05,  // shifted up 0.2, now 2x2
     baseball_field_small: -0.85,
-    soccer_field_small: -0.15,
+    soccer_field_small: -0.20,  // shifted up slightly
     football_field: -0.85,
-    baseball_stadium: -1.5,  // adjusted for scale down
+    baseball_stadium: -1.8,  // adjusted for scale
     community_center: -0.2,
     office_building_small: -0.3,
     swimming_pool: -0.15,
@@ -271,9 +271,11 @@ const SPRITE_PACK_RED: SpritePack = {
     mountain_lodge: -0.85,
     mountain_trailhead: -1.5,  // now 3x3
   },
-  parksHorizontalOffsets: {},
+  parksHorizontalOffsets: {
+    swimming_pool: -0.2,  // shift left 0.2 tiles
+  },
   parksScales: {
-    baseball_stadium: 0.65,  // scaled down 35%
+    baseball_stadium: 0.55,  // scaled down 45%
     swimming_pool: 0.95,  // scaled down 5%
     soccer_field_small: 0.95,  // scaled down 5%
   },
@@ -484,9 +486,9 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     playground_small: -0.25,  // shifted up 0.1
     playground_large: -1.05,  // shifted up 0.2, now 2x2
     baseball_field_small: -0.85,
-    soccer_field_small: -0.15,
+    soccer_field_small: -0.20,  // shifted up slightly
     football_field: -0.85,
-    baseball_stadium: -1.5,  // adjusted for scale down
+    baseball_stadium: -1.8,  // adjusted for scale
     community_center: -0.2,
     office_building_small: -0.3,
     swimming_pool: -0.15,
@@ -509,10 +511,10 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     mountain_trailhead: -1.5,  // now 3x3
   },
   parksHorizontalOffsets: {
-    // Horizontal offset adjustments if needed
+    swimming_pool: -0.2,  // shift left 0.2 tiles
   },
   parksScales: {
-    baseball_stadium: 0.65,  // scaled down 35%
+    baseball_stadium: 0.55,  // scaled down 45%
     swimming_pool: 0.95,  // scaled down 5%
     soccer_field_small: 0.95,  // scaled down 5%
   },
