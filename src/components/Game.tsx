@@ -395,13 +395,17 @@ function gridToScreen(x: number, y: number, offsetX: number, offsetY: number): {
 
 // Convert screen coordinates to grid coordinates
 function screenToGrid(screenX: number, screenY: number, offsetX: number, offsetY: number): { gridX: number; gridY: number } {
-  const adjustedX = screenX - offsetX;
-  const adjustedY = screenY - offsetY;
+  // Adjust for the fact that tile centers are offset by half a tile from gridToScreen coordinates
+  // gridToScreen returns the top-left corner of the bounding box, but the visual center of the
+  // diamond tile is at (screenX + TILE_WIDTH/2, screenY + TILE_HEIGHT/2)
+  const adjustedX = screenX - offsetX - TILE_WIDTH / 2;
+  const adjustedY = screenY - offsetY - TILE_HEIGHT / 2;
   
   const gridX = (adjustedX / (TILE_WIDTH / 2) + adjustedY / (TILE_HEIGHT / 2)) / 2;
   const gridY = (adjustedY / (TILE_HEIGHT / 2) - adjustedX / (TILE_WIDTH / 2)) / 2;
   
-  return { gridX: Math.floor(gridX), gridY: Math.floor(gridY) };
+  // Use Math.round for accurate tile selection - this gives us the tile whose center is closest
+  return { gridX: Math.round(gridX), gridY: Math.round(gridY) };
 }
 
 const EVENT_ICON_MAP: Record<string, React.ReactNode> = {
@@ -6072,7 +6076,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       const { gridX, gridY } = screenToGrid(mouseX, mouseY, offset.x / zoom, offset.y / zoom);
       
       if (gridX >= 0 && gridX < gridSize && gridY >= 0 && gridY < gridSize) {
-        setHoveredTile({ x: gridX, y: gridY });
+        // Only update hovered tile if it actually changed to avoid unnecessary re-renders
+        setHoveredTile(prev => (prev?.x === gridX && prev?.y === gridY) ? prev : { x: gridX, y: gridY });
         
         // Update drag rectangle end point for zoning tools
         if (isDragging && showsDragGrid && dragStartTile) {
