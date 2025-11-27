@@ -211,7 +211,7 @@ function generateLakes(grid: Tile[][], size: number, seed: number): WaterBody[] 
     // Apply lake tiles to grid
     for (const tile of lakeTiles) {
       grid[tile.y][tile.x].building = createBuilding('water');
-      // Land value will be calculated dynamically by calculateLandValues
+      grid[tile.y][tile.x].landValue = 60; // Water increases nearby land value
     }
     
     // Calculate center for labeling
@@ -298,7 +298,7 @@ function generateOceans(grid: Tile[][], size: number, seed: number): WaterBody[]
         
         if (x >= 0 && x < size && y >= 0 && y < size && grid[y][x].building.type !== 'water') {
           grid[y][x].building = createBuilding('water');
-          // Land value will be calculated dynamically by calculateLandValues
+          grid[y][x].landValue = 60;
           tiles.push({ x, y });
         }
       }
@@ -543,484 +543,12 @@ function createTile(x: number, y: number, buildingType: BuildingType = 'grass'):
     y,
     zone: 'none',
     building: createBuilding(buildingType),
-    landValue: 0, // Will be calculated dynamically
+    landValue: 50,
     pollution: 0,
     crime: 0,
     traffic: 0,
     hasSubway: false,
   };
-}
-
-// ============================================================================
-// LAND VALUE SIMULATION SYSTEM
-// ============================================================================
-// Land value is influenced by multiple factors that create realistic urban dynamics:
-// - Water proximity (lakes, oceans provide premium)
-// - Service coverage (police, fire, health, education)
-// - Parks and green spaces (trees, parks boost nearby values)
-// - Pollution (industrial areas decrease value)
-// - Infrastructure (roads, subway, utilities)
-// - Building quality and density
-// - Zone compatibility (residential prefers distance from industrial)
-// ============================================================================
-
-// Influence radius for different factors (in tiles)
-const LAND_VALUE_INFLUENCE = {
-  water: 8,           // Water proximity bonus extends this far
-  park: 6,            // Park influence radius
-  tree: 3,            // Individual tree influence
-  industrial: 10,     // Industrial pollution influence
-  service: 8,         // Service building influence
-  commercial: 5,      // Commercial attraction influence
-  highRise: 6,        // High-density building influence
-  subway: 8,          // Subway station premium radius
-} as const;
-
-// Calculate land values for the entire grid
-// This is called each simulation tick to update values dynamically
-function calculateLandValues(
-  grid: Tile[][],
-  size: number,
-  services: ServiceCoverage,
-  waterBodies: WaterBody[]
-): void {
-  // Pre-calculate water tile positions for efficient lookups
-  const waterTiles = new Set<string>();
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      if (grid[y][x].building.type === 'water') {
-        waterTiles.add(`${x},${y}`);
-      }
-    }
-  }
-  
-  // Find city center (weighted average of developed tiles)
-  let centerX = size / 2;
-  let centerY = size / 2;
-  let developedCount = 0;
-  
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const tile = grid[y][x];
-      if (tile.zone !== 'none' || 
-          (tile.building.type !== 'grass' && 
-           tile.building.type !== 'water' && 
-           tile.building.type !== 'tree')) {
-        centerX += x;
-        centerY += y;
-        developedCount++;
-      }
-    }
-  }
-  
-  if (developedCount > 0) {
-    centerX = centerX / (developedCount + 1);
-    centerY = centerY / (developedCount + 1);
-  }
-  
-  const maxDistFromCenter = Math.sqrt(2) * size / 2;
-  
-  // Calculate land value for each tile
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const tile = grid[y][x];
-      
-      // Water tiles have fixed high value (waterfront premium extends from here)
-      if (tile.building.type === 'water') {
-        tile.landValue = 75;
-        continue;
-      }
-      
-      // === BASE VALUE ===
-      // Start with a moderate base value that varies slightly by position
-      // Use noise-based variation for natural terrain desirability
-      const noiseVal = noise2D(x * 0.1, y * 0.1, 12345);
-      let value = 25 + noiseVal * 15; // Base: 25-40
-      
-      // === DISTANCE FROM CENTER BONUS ===
-      // Tiles closer to city center are more valuable (up to +20)
-      const distFromCenter = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
-      const centerBonus = Math.max(0, 20 * (1 - distFromCenter / maxDistFromCenter));
-      value += centerBonus;
-      
-      // === WATER PROXIMITY PREMIUM ===
-      // Waterfront property is highly valuable
-      const waterBonus = calculateWaterProximityBonus(grid, x, y, size, waterTiles);
-      value += waterBonus;
-      
-      // === SERVICE COVERAGE BONUS ===
-      // Good service coverage increases desirability
-      const serviceBonus = calculateServiceBonus(services, x, y);
-      value += serviceBonus;
-      
-      // === PARK AND GREEN SPACE BONUS ===
-      // Parks and trees increase nearby land values
-      const greenBonus = calculateGreenSpaceBonus(grid, x, y, size);
-      value += greenBonus;
-      
-      // === INFRASTRUCTURE BONUS ===
-      // Road access, subway, and utilities affect value
-      const infraBonus = calculateInfrastructureBonus(grid, tile, x, y, size, services);
-      value += infraBonus;
-      
-      // === BUILDING QUALITY INFLUENCE ===
-      // High-quality nearby buildings boost value, low-quality decreases it
-      const buildingInfluence = calculateBuildingInfluence(grid, x, y, size);
-      value += buildingInfluence;
-      
-      // === POLLUTION PENALTY ===
-      // Pollution significantly decreases land value
-      const pollutionPenalty = tile.pollution * 0.4;
-      value -= pollutionPenalty;
-      
-      // === CRIME PENALTY ===
-      // Crime decreases land value (based on lack of police coverage)
-      const crimePenalty = Math.max(0, (100 - services.police[y][x]) * 0.1);
-      value -= crimePenalty;
-      
-      // === INDUSTRIAL PROXIMITY PENALTY FOR RESIDENTIAL ===
-      // Residential zones lose value when near industrial
-      if (tile.zone === 'residential') {
-        const industrialPenalty = calculateIndustrialProximityPenalty(grid, x, y, size);
-        value -= industrialPenalty;
-      }
-      
-      // === COMMERCIAL BOOST FOR HIGH-TRAFFIC AREAS ===
-      if (tile.zone === 'commercial') {
-        const trafficBonus = Math.min(15, tile.traffic * 0.3);
-        value += trafficBonus;
-      }
-      
-      // Clamp final value between 0 and 150
-      tile.landValue = Math.max(0, Math.min(150, Math.round(value)));
-    }
-  }
-}
-
-// Calculate bonus from water proximity
-function calculateWaterProximityBonus(
-  grid: Tile[][],
-  x: number,
-  y: number,
-  size: number,
-  waterTiles: Set<string>
-): number {
-  let minWaterDist = Infinity;
-  const searchRadius = LAND_VALUE_INFLUENCE.water;
-  
-  // Check immediate adjacency first (major waterfront premium)
-  const immediateAdj = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-  for (const [dx, dy] of immediateAdj) {
-    const nx = x + dx;
-    const ny = y + dy;
-    if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-      if (waterTiles.has(`${nx},${ny}`)) {
-        minWaterDist = 1;
-        break;
-      }
-    }
-  }
-  
-  // If not immediately adjacent, search wider area
-  if (minWaterDist === Infinity) {
-    for (let dy = -searchRadius; dy <= searchRadius; dy++) {
-      for (let dx = -searchRadius; dx <= searchRadius; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-          if (waterTiles.has(`${nx},${ny}`)) {
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            minWaterDist = Math.min(minWaterDist, dist);
-          }
-        }
-      }
-    }
-  }
-  
-  if (minWaterDist === Infinity) return 0;
-  
-  // Waterfront premium: immediately adjacent = +40, diminishes with distance
-  if (minWaterDist <= 1) return 40;
-  if (minWaterDist <= 2) return 30;
-  if (minWaterDist <= 4) return 20;
-  if (minWaterDist <= 6) return 10;
-  return Math.max(0, 5 * (1 - minWaterDist / searchRadius));
-}
-
-// Calculate bonus from service coverage
-function calculateServiceBonus(services: ServiceCoverage, x: number, y: number): number {
-  let bonus = 0;
-  
-  // Police coverage (safety) - up to +10
-  bonus += Math.min(10, services.police[y][x] * 0.1);
-  
-  // Fire coverage (safety) - up to +5
-  bonus += Math.min(5, services.fire[y][x] * 0.05);
-  
-  // Health coverage - up to +10
-  bonus += Math.min(10, services.health[y][x] * 0.1);
-  
-  // Education coverage - up to +12 (education is highly valued)
-  bonus += Math.min(12, services.education[y][x] * 0.12);
-  
-  // Power and water (essential utilities) - +5 each
-  if (services.power[y][x]) bonus += 5;
-  if (services.water[y][x]) bonus += 5;
-  
-  return bonus;
-}
-
-// Calculate bonus from parks and green spaces
-function calculateGreenSpaceBonus(grid: Tile[][], x: number, y: number, size: number): number {
-  let bonus = 0;
-  
-  // Check for parks and trees within influence radius
-  const parkRadius = LAND_VALUE_INFLUENCE.park;
-  const treeRadius = LAND_VALUE_INFLUENCE.tree;
-  
-  for (let dy = -parkRadius; dy <= parkRadius; dy++) {
-    for (let dx = -parkRadius; dx <= parkRadius; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
-      
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const neighbor = grid[ny][nx];
-      const buildingType = neighbor.building.type;
-      
-      // Large parks provide significant bonus
-      if (buildingType === 'park_large' && dist <= parkRadius) {
-        bonus += Math.max(0, 18 * (1 - dist / parkRadius));
-      }
-      // Small parks and recreational facilities
-      else if ((buildingType === 'park' || 
-                buildingType === 'tennis' ||
-                buildingType === 'playground_small' ||
-                buildingType === 'playground_large' ||
-                buildingType === 'swimming_pool' ||
-                buildingType === 'community_garden' ||
-                buildingType === 'pond_park') && dist <= parkRadius) {
-        bonus += Math.max(0, 10 * (1 - dist / parkRadius));
-      }
-      // Trees provide small local bonus
-      else if (buildingType === 'tree' && dist <= treeRadius) {
-        bonus += Math.max(0, 4 * (1 - dist / treeRadius));
-      }
-    }
-  }
-  
-  // Cap green space bonus
-  return Math.min(35, bonus);
-}
-
-// Calculate bonus from infrastructure
-function calculateInfrastructureBonus(
-  grid: Tile[][],
-  tile: Tile,
-  x: number,
-  y: number,
-  size: number,
-  services: ServiceCoverage
-): number {
-  let bonus = 0;
-  
-  // Road access - check if adjacent to road
-  const adjDirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-  let hasRoadAccess = false;
-  
-  for (const [dx, dy] of adjDirs) {
-    const nx = x + dx;
-    const ny = y + dy;
-    if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-      if (grid[ny][nx].building.type === 'road') {
-        hasRoadAccess = true;
-        break;
-      }
-    }
-  }
-  
-  // Road access is essential for developed land
-  if (hasRoadAccess) {
-    bonus += 8;
-  } else if (tile.zone !== 'none') {
-    // Zoned land without road access has penalty
-    bonus -= 10;
-  }
-  
-  // Subway access - premium for commercial/residential
-  if (tile.hasSubway) {
-    bonus += 12;
-  }
-  
-  // Nearby subway station premium
-  const subwayRadius = LAND_VALUE_INFLUENCE.subway;
-  for (let dy = -subwayRadius; dy <= subwayRadius; dy++) {
-    for (let dx = -subwayRadius; dx <= subwayRadius; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-        if (grid[ny][nx].building.type === 'subway_station') {
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          bonus += Math.max(0, 15 * (1 - dist / subwayRadius));
-        }
-      }
-    }
-  }
-  
-  return bonus;
-}
-
-// Calculate influence from nearby buildings
-function calculateBuildingInfluence(grid: Tile[][], x: number, y: number, size: number): number {
-  let influence = 0;
-  const radius = LAND_VALUE_INFLUENCE.highRise;
-  
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
-      
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > radius) continue;
-      
-      const neighbor = grid[ny][nx];
-      const buildingType = neighbor.building.type;
-      const falloff = 1 - dist / radius;
-      
-      // High-end buildings boost nearby values
-      if (buildingType === 'mansion') {
-        influence += 8 * falloff;
-      } else if (buildingType === 'apartment_high') {
-        influence += 5 * falloff;
-      } else if (buildingType === 'office_high') {
-        influence += 6 * falloff;
-      } else if (buildingType === 'mall') {
-        influence += 4 * falloff;
-      }
-      // Civic buildings boost values
-      else if (buildingType === 'city_hall') {
-        influence += 10 * falloff;
-      } else if (buildingType === 'museum') {
-        influence += 8 * falloff;
-      } else if (buildingType === 'stadium') {
-        influence += 6 * falloff;
-      } else if (buildingType === 'university') {
-        influence += 7 * falloff;
-      }
-      // Industrial decreases nearby residential/commercial value
-      else if (buildingType === 'factory_small' || 
-               buildingType === 'factory_medium' || 
-               buildingType === 'factory_large' ||
-               buildingType === 'warehouse') {
-        influence -= 5 * falloff;
-      }
-      // Power plants are undesirable neighbors
-      else if (buildingType === 'power_plant') {
-        influence -= 10 * falloff;
-      }
-      // Abandoned buildings decrease nearby values
-      if (neighbor.building.abandoned) {
-        influence -= 8 * falloff;
-      }
-    }
-  }
-  
-  return Math.max(-25, Math.min(25, influence));
-}
-
-// Calculate penalty for residential near industrial zones
-function calculateIndustrialProximityPenalty(grid: Tile[][], x: number, y: number, size: number): number {
-  let penalty = 0;
-  const radius = LAND_VALUE_INFLUENCE.industrial;
-  
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      if (dx === 0 && dy === 0) continue;
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
-      
-      const neighbor = grid[ny][nx];
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      
-      if (neighbor.zone === 'industrial' && 
-          neighbor.building.type !== 'grass' && 
-          neighbor.building.type !== 'empty') {
-        // Closer industrial = bigger penalty
-        penalty += Math.max(0, 12 * (1 - dist / radius));
-      }
-    }
-  }
-  
-  return Math.min(30, penalty);
-}
-
-// Calculate traffic for a tile based on nearby population and job centers
-// Traffic is highest on roads that connect residential to commercial/industrial
-function calculateTileTraffic(grid: Tile[][], x: number, y: number, size: number): number {
-  const tile = grid[y][x];
-  
-  // Non-road tiles have minimal traffic
-  if (tile.building.type !== 'road' && !tile.hasSubway) {
-    return Math.max(0, tile.traffic * 0.5); // Decay existing traffic
-  }
-  
-  let traffic = 0;
-  const radius = 12; // Search radius for population and jobs
-  
-  let nearbyPopulation = 0;
-  let nearbyJobs = 0;
-  
-  // Count population and jobs within radius
-  for (let dy = -radius; dy <= radius; dy++) {
-    for (let dx = -radius; dx <= radius; dx++) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
-      
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > radius) continue;
-      
-      const neighbor = grid[ny][nx];
-      const falloff = 1 - dist / radius;
-      
-      nearbyPopulation += neighbor.building.population * falloff;
-      nearbyJobs += neighbor.building.jobs * falloff;
-    }
-  }
-  
-  // Traffic is proportional to min(population, jobs) - representing commute flow
-  // Plus bonus for high-density areas
-  const commuteFlow = Math.min(nearbyPopulation, nearbyJobs);
-  traffic = Math.sqrt(commuteFlow) * 0.5;
-  
-  // Subway lines have higher "traffic" capacity
-  if (tile.hasSubway) {
-    traffic *= 1.3;
-  }
-  
-  // Roads near subway stations have higher traffic
-  const subwayRadius = 4;
-  for (let dy = -subwayRadius; dy <= subwayRadius; dy++) {
-    for (let dx = -subwayRadius; dx <= subwayRadius; dx++) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-        if (grid[ny][nx].building.type === 'subway_station') {
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          traffic += Math.max(0, 10 * (1 - dist / subwayRadius));
-        }
-      }
-    }
-  }
-  
-  // Smooth transition - blend with previous traffic value
-  return Math.max(0, Math.min(100, tile.traffic * 0.7 + traffic * 0.3));
 }
 
 // Building types that don't require construction (already complete when placed)
@@ -1110,12 +638,6 @@ function createAchievements(): Achievement[] {
 export function createInitialGameState(size: number = 60, cityName: string = 'New City'): GameState {
   const { grid, waterBodies } = generateTerrain(size);
   const adjacentCities = generateAdjacentCities();
-  
-  // Initialize service coverage (empty at start)
-  const services = createServiceCoverage(size);
-  
-  // Calculate initial land values based on terrain (water proximity, natural variation)
-  calculateLandValues(grid, size, services, waterBodies);
 
   return {
     grid,
@@ -1132,7 +654,7 @@ export function createInitialGameState(size: number = 60, cityName: string = 'Ne
     effectiveTaxRate: 9, // Start matching taxRate
     stats: createInitialStats(),
     budget: createInitialBudget(),
-    services,
+    services: createServiceCoverage(size),
     notifications: [],
     achievements: createAchievements(),
     advisorMessages: [],
@@ -1956,9 +1478,6 @@ export function simulateTick(state: GameState): GameState {
   // Update service coverage
   const services = calculateServiceCoverage(newGrid, size);
 
-  // Update land values dynamically based on all factors
-  calculateLandValues(newGrid, size, services, state.waterBodies);
-
   // Evolve buildings
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -2025,10 +1544,6 @@ export function simulateTick(state: GameState): GameState {
       // Update pollution from buildings
       const buildingStats = BUILDING_STATS[tile.building.type];
       tile.pollution = Math.max(0, tile.pollution * 0.95 + buildingStats?.pollution || 0);
-
-      // Update traffic - traffic flows along roads between residential and commercial/industrial
-      // Roads near populated areas and commercial centers have higher traffic
-      tile.traffic = calculateTileTraffic(newGrid, x, y, size);
 
       // Fire simulation - fires progress slowly to allow fire trucks to respond
       if (state.disastersEnabled && tile.building.onFire) {
