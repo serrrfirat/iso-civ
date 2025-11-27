@@ -245,7 +245,7 @@ const SPRITE_PACK_RED: SpritePack = {
   parksVerticalOffsets: {
     basketball_courts: -0.15,
     playground_small: -0.25,  // shifted up 0.1
-    playground_large: -1.05,  // shifted up 0.2, now 2x2
+    playground_large: -0.45,  // shifted down 0.6 tiles from -1.05
     baseball_field_small: -0.85,
     soccer_field_small: -0.20,  // shifted up slightly
     football_field: -0.85,
@@ -276,7 +276,7 @@ const SPRITE_PACK_RED: SpritePack = {
   },
   parksScales: {
     baseball_stadium: 0.81,  // 10% smaller than 0.90
-    swimming_pool: 0.95,  // scaled down 5%
+    swimming_pool: 0.90,  // scaled down 10% total (5% more from 0.95)
     soccer_field_small: 0.95,  // scaled down 5%
   },
 };
@@ -433,12 +433,12 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     factory_large: 0.7,
   },
   denseVerticalOffsets: {
-    // Dense apartment_high shifted down 0.4 tiles from previous position
-    apartment_high: -0.80, // Shifted up 0.3 tiles from -0.50
+    // Dense apartment_high shifted down 0.2 tiles from -0.80
+    apartment_high: -0.60, // Moved down 0.2 tiles from -0.80
   },
   denseScales: {
-    // Dense apartment_high scaled down 5%
-    apartment_high: 0.95,
+    // Dense apartment_high scaled down 10% total (5% more from 0.95)
+    apartment_high: 0.90,
   },
   // Parks sprite sheet configuration (same offsets/scaling approach as dense)
   parksSrc: '/assets/sprites_red_water_new_parks.png',
@@ -484,7 +484,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     // Same approach as denseVerticalOffsets - adjust as needed for proper positioning
     basketball_courts: -0.15,
     playground_small: -0.25,  // shifted up 0.1
-    playground_large: -1.05,  // shifted up 0.2, now 2x2
+    playground_large: -0.45,  // shifted down 0.6 tiles from -1.05
     baseball_field_small: -0.85,
     soccer_field_small: -0.20,  // shifted up slightly
     football_field: -0.85,
@@ -515,7 +515,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   },
   parksScales: {
     baseball_stadium: 0.81,  // 10% smaller than 0.90
-    swimming_pool: 0.95,  // scaled down 5%
+    swimming_pool: 0.90,  // scaled down 10% total (5% more from 0.95)
     soccer_field_small: 0.95,  // scaled down 5%
   },
   buildingToSprite: {
