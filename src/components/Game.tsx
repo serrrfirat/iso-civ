@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useGame } from '@/context/GameContext';
-import { Tool, TOOL_INFO, Tile, BuildingType } from '@/types/game';
+import { Tool, TOOL_INFO, Tile, BuildingType, AdjacentCity } from '@/types/game';
 import { getBuildingSize } from '@/lib/simulation';
 import {
   PlayIcon,
@@ -1618,8 +1618,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
   selectedTile: { x: number; y: number } | null; 
   setSelectedTile: (tile: { x: number; y: number } | null) => void;
 }) {
-  const { state, placeAtTile, currentSpritePack } = useGame();
-  const { grid, gridSize, selectedTool, speed } = state;
+  const { state, placeAtTile, connectToCity, currentSpritePack } = useGame();
+  const { grid, gridSize, selectedTool, speed, adjacentCities, waterBodies } = state;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const carsCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1649,6 +1649,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
   const [dragStartTile, setDragStartTile] = useState<{ x: number; y: number } | null>(null);
   const [dragEndTile, setDragEndTile] = useState<{ x: number; y: number } | null>(null);
+  const [cityConnectionDialog, setCityConnectionDialog] = useState<{ direction: 'north' | 'south' | 'east' | 'west' } | null>(null);
   const keysPressedRef = useRef<Set<string>>(new Set());
 
   // Only zoning tools show the grid/rectangle selection visualization
@@ -2767,8 +2768,44 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       ctx.fill();
     });
     
+    // Draw water body names (after everything else so they're on top)
+    if (waterBodies && waterBodies.length > 0) {
+      ctx.save();
+      ctx.font = `${Math.max(10, 12 / zoom)}px sans-serif`;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Use same viewport calculation as main rendering (accounting for DPR)
+      const viewWidth = canvasSize.width / (dpr * zoom);
+      const viewHeight = canvasSize.height / (dpr * zoom);
+      const viewLeft = -offset.x / zoom - TILE_WIDTH;
+      const viewTop = -offset.y / zoom - TILE_HEIGHT * 2;
+      const viewRight = viewWidth - offset.x / zoom + TILE_WIDTH;
+      const viewBottom = viewHeight - offset.y / zoom + TILE_HEIGHT * 2;
+      
+      for (const waterBody of waterBodies) {
+        if (waterBody.tiles.length === 0) continue;
+        
+        // Convert grid coordinates to screen coordinates (context is already translated)
+        const { screenX, screenY } = gridToScreen(waterBody.centerX, waterBody.centerY, 0, 0);
+        
+        // Only draw if visible on screen (with some padding for text)
+        if (screenX >= viewLeft - 100 && screenX <= viewRight + 100 &&
+            screenY >= viewTop - 50 && screenY <= viewBottom + 50) {
+          // Draw text with outline for better visibility, centered on tile
+          ctx.strokeText(waterBody.name, screenX + TILE_WIDTH / 2, screenY + TILE_HEIGHT / 2);
+          ctx.fillText(waterBody.name, screenX + TILE_WIDTH / 2, screenY + TILE_HEIGHT / 2);
+        }
+      }
+      
+      ctx.restore();
+    }
+    
     ctx.restore();
-  }, [grid, gridSize, offset, zoom, hoveredTile, selectedTile, overlayMode, imagesLoaded, canvasSize, dragStartTile, dragEndTile, state.services, currentSpritePack]);
+  }, [grid, gridSize, offset, zoom, hoveredTile, selectedTile, overlayMode, imagesLoaded, canvasSize, dragStartTile, dragEndTile, state.services, currentSpritePack, waterBodies]);
   
   // Animate decorative car traffic AND emergency vehicles on top of the base canvas
   useEffect(() => {
@@ -3857,9 +3894,32 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         setHoveredTile(null);
       }
     }
-  }, [isPanning, isDragging, dragStart, offset, gridSize, zoom, showsDragGrid, supportsDragPlace, dragStartTile, lastPlacedTile, placeAtTile]);
+  }, [isPanning, isDragging, dragStart, offset, gridSize, zoom, showsDragGrid, supportsDragPlace, dragStartTile, lastPlacedTile, placeAtTile, selectedTool]);
   
   const handleMouseUp = useCallback(() => {
+    // Check for road connection when dragging off edge
+    if (isDragging && selectedTool === 'road' && dragStartTile && dragEndTile) {
+      // Determine which edge we dragged off (use dragEndTile)
+      let direction: 'north' | 'south' | 'east' | 'west' | null = null;
+      if (dragEndTile.x < 0) direction = 'west';
+      else if (dragEndTile.x >= gridSize) direction = 'east';
+      else if (dragEndTile.y < 0) direction = 'north';
+      else if (dragEndTile.y >= gridSize) direction = 'south';
+      
+      if (direction) {
+        // Check if there's an unconnected city in this direction
+        const city = adjacentCities.find(c => c.direction === direction && !c.connected);
+        if (city) {
+          setCityConnectionDialog({ direction });
+          // Don't clear drag state yet - dialog will handle it
+          setIsPanning(false);
+          setIsDragging(false);
+          setLastPlacedTile(null);
+          return;
+        }
+      }
+    }
+    
     // Fill the drag rectangle when mouse is released (only for zoning tools)
     if (isDragging && dragStartTile && dragEndTile && showsDragGrid) {
       const minX = Math.min(dragStartTile.x, dragEndTile.x);
@@ -3881,7 +3941,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     setLastPlacedTile(null);
     setDragStartTile(null);
     setDragEndTile(null);
-  }, [isDragging, dragStartTile, dragEndTile, showsDragGrid, placeAtTile]);
+  }, [isDragging, dragStartTile, dragEndTile, showsDragGrid, placeAtTile, selectedTool, adjacentCities, gridSize]);
   
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -3922,6 +3982,60 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
           onClose={() => setSelectedTile(null)}
         />
       )}
+      
+      {/* City Connection Dialog */}
+      {cityConnectionDialog && (() => {
+        const city = adjacentCities.find(c => c.direction === cityConnectionDialog.direction && !c.connected);
+        if (!city) return null;
+        
+        return (
+          <Dialog open={true} onOpenChange={() => {
+            setCityConnectionDialog(null);
+            setDragStartTile(null);
+            setDragEndTile(null);
+          }}>
+            <DialogContent className="max-w-[400px]">
+              <DialogHeader>
+                <DialogTitle>Connect to City</DialogTitle>
+                <DialogDescription>
+                  You've dragged a road to the {cityConnectionDialog.direction} edge of the map. Connect to a nearby city to enable trade.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 mt-4">
+                <div className="text-sm text-muted-foreground">
+                  Connecting to {city.name} will establish a trade route, providing:
+                  <ul className="list-disc list-inside mt-2 space-y-1">
+                    <li>$5,000 one-time bonus</li>
+                    <li>$200/month additional income</li>
+                  </ul>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setCityConnectionDialog(null);
+                      setDragStartTile(null);
+                      setDragEndTile(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      connectToCity(city.id);
+                      setCityConnectionDialog(null);
+                      setDragStartTile(null);
+                      setDragEndTile(null);
+                    }}
+                  >
+                    Connect to {city.name}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
       
       {hoveredTile && selectedTool !== 'select' && TOOL_INFO[selectedTool] && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-card/90 border border-border px-4 py-2 rounded-md text-sm">

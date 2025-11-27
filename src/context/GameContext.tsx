@@ -36,6 +36,7 @@ type GameContextValue = {
   setActivePanel: (panel: GameState['activePanel']) => void;
   setBudgetFunding: (key: keyof Budget, funding: number) => void;
   placeAtTile: (x: number, y: number) => void;
+  connectToCity: (cityId: string) => void;
   setDisastersEnabled: (enabled: boolean) => void;
   newGame: (name?: string, size?: number) => void;
   loadState: (stateString: string) => boolean;
@@ -110,6 +111,13 @@ function loadGameState(): GameState | null {
         // Migrate selectedTool if it's park_medium
         if (parsed.selectedTool === 'park_medium') {
           parsed.selectedTool = 'park_large';
+        }
+        // Ensure adjacentCities and waterBodies exist for backward compatibility
+        if (!parsed.adjacentCities) {
+          parsed.adjacentCities = [];
+        }
+        if (!parsed.waterBodies) {
+          parsed.waterBodies = [];
         }
         return parsed as GameState;
       } else {
@@ -414,6 +422,42 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const connectToCity = useCallback((cityId: string) => {
+    setState((prev) => {
+      const city = prev.adjacentCities.find(c => c.id === cityId);
+      if (!city || city.connected) return prev;
+
+      // Mark city as connected and add trade income
+      const updatedCities = prev.adjacentCities.map(c =>
+        c.id === cityId ? { ...c, connected: true } : c
+      );
+
+      // Add trade income bonus (one-time bonus + monthly income)
+      const tradeBonus = 5000;
+      const tradeIncome = 200; // Monthly income from trade
+
+      return {
+        ...prev,
+        adjacentCities: updatedCities,
+        stats: {
+          ...prev.stats,
+          money: prev.stats.money + tradeBonus,
+          income: prev.stats.income + tradeIncome,
+        },
+        notifications: [
+          {
+            id: `city-connect-${Date.now()}`,
+            title: 'City Connected!',
+            description: `Trade route established with ${city.name}. +$${tradeBonus} bonus and +$${tradeIncome}/month income.`,
+            icon: 'road',
+            timestamp: Date.now(),
+          },
+          ...prev.notifications.slice(0, 9), // Keep only 10 most recent
+        ],
+      };
+    });
+  }, []);
+
   const setDisastersEnabled = useCallback((enabled: boolean) => {
     setState((prev) => ({ ...prev, disastersEnabled: enabled }));
   }, []);
@@ -443,6 +487,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           parsed.stats &&
           parsed.stats.money !== undefined &&
           parsed.stats.population !== undefined) {
+        // Ensure new fields exist for backward compatibility
+        if (!parsed.adjacentCities) {
+          parsed.adjacentCities = [];
+        }
+        if (!parsed.waterBodies) {
+          parsed.waterBodies = [];
+        }
         setState(parsed as GameState);
         return true;
       }
@@ -464,6 +515,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setActivePanel,
     setBudgetFunding,
     placeAtTile,
+    connectToCity,
     setDisastersEnabled,
     newGame,
     loadState,
