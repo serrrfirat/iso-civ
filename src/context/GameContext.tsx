@@ -43,6 +43,8 @@ type GameContextValue = {
   exportState: () => string;
   hasExistingGame: boolean;
   isSaving: boolean;
+  addMoney: (amount: number) => void;
+  addNotification: (title: string, description: string, icon: string) => void;
   // Sprite pack management
   currentSpritePack: SpritePack;
   availableSpritePacks: SpritePack[];
@@ -513,6 +515,39 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return JSON.stringify(state);
   }, [state]);
 
+  const addMoney = useCallback((amount: number) => {
+    setState((prev) => ({
+      ...prev,
+      stats: {
+        ...prev.stats,
+        money: prev.stats.money + amount,
+      },
+    }));
+  }, []);
+
+  const addNotification = useCallback((title: string, description: string, icon: string) => {
+    setState((prev) => {
+      const newNotifications = [
+        {
+          id: `cheat-${Date.now()}-${Math.random()}`,
+          title,
+          description,
+          icon,
+          timestamp: Date.now(),
+        },
+        ...prev.notifications,
+      ];
+      // Keep only recent notifications
+      while (newNotifications.length > 10) {
+        newNotifications.pop();
+      }
+      return {
+        ...prev,
+        notifications: newNotifications,
+      };
+    });
+  }, []);
+
   const value: GameContextValue = {
     state,
     setTool,
@@ -528,6 +563,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     exportState,
     hasExistingGame,
     isSaving,
+    addMoney,
+    addNotification,
     // Sprite pack management
     currentSpritePack,
     availableSpritePacks: SPRITE_PACKS,

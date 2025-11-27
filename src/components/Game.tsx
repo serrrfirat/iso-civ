@@ -50,6 +50,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useCheatCodes } from '@/hooks/useCheatCodes';
+import { VinnieDialog } from '@/components/VinnieDialog';
 
 // Isometric tile dimensions
 const TILE_WIDTH = 64;
@@ -95,6 +97,32 @@ type EmergencyVehicle = {
   flashTimer: number; // For emergency light animation
 };
 
+// Pedestrian types and destinations
+type PedestrianDestType = 'school' | 'commercial' | 'industrial' | 'park' | 'home';
+
+type Pedestrian = {
+  id: number;
+  tileX: number;
+  tileY: number;
+  direction: CarDirection;
+  progress: number;
+  speed: number;
+  age: number;
+  maxAge: number;
+  skinColor: string;
+  shirtColor: string;
+  walkOffset: number; // For walking animation
+  sidewalkSide: 'left' | 'right'; // Which side of the road they walk on
+  destType: PedestrianDestType;
+  homeX: number;
+  homeY: number;
+  destX: number;
+  destY: number;
+  returningHome: boolean;
+  path: { x: number; y: number }[];
+  pathIndex: number;
+};
+
 type DirectionMeta = {
   step: { x: number; y: number };
   vec: { dx: number; dy: number };
@@ -112,6 +140,13 @@ type WorldRenderState = {
 };
 
 const CAR_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc'];
+
+// Pedestrian appearance colors
+const PEDESTRIAN_SKIN_COLORS = ['#fdbf7e', '#e0ac69', '#c68642', '#8d5524', '#613318'];
+const PEDESTRIAN_SHIRT_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#ffffff', '#1f2937'];
+
+// Minimum zoom level to show pedestrians (zoomed in)
+const PEDESTRIAN_MIN_ZOOM = 0.5;
 
 function createDirectionMeta(step: { x: number; y: number }, vec: { dx: number; dy: number }): DirectionMeta {
   const length = Math.hypot(vec.dx, vec.dy) || 1;
@@ -1741,6 +1776,12 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
   const activeCrimesRef = useRef<Set<string>>(new Set()); // Track crimes that already have a car dispatched
   const activeCrimeIncidentsRef = useRef<Map<string, { x: number; y: number; type: 'robbery' | 'burglary' | 'disturbance' | 'traffic'; timeRemaining: number }>>(new Map()); // Persistent crime incidents
   const crimeSpawnTimerRef = useRef(0); // Timer for spawning new crime incidents
+  
+  // Pedestrian system refs
+  const pedestriansRef = useRef<Pedestrian[]>([]);
+  const pedestrianIdRef = useRef(0);
+  const pedestrianSpawnTimerRef = useRef(0);
+  
   const worldStateRef = useRef<WorldRenderState>({
     grid,
     gridSize,
@@ -1886,6 +1927,125 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     
     return false;
   }, []);
+
+  // Find residential buildings for pedestrian spawning
+  const findResidentialBuildings = useCallback((): { x: number; y: number }[] => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0) return [];
+    
+    const residentials: { x: number; y: number }[] = [];
+    const residentialTypes: BuildingType[] = ['house_small', 'house_medium', 'mansion', 'apartment_low', 'apartment_high'];
+    
+    for (let y = 0; y < currentGridSize; y++) {
+      for (let x = 0; x < currentGridSize; x++) {
+        // Include any residential building (not just populated ones)
+        if (residentialTypes.includes(currentGrid[y][x].building.type)) {
+          residentials.push({ x, y });
+        }
+      }
+    }
+    return residentials;
+  }, []);
+
+  // Find destinations for pedestrians (schools, commercial, industrial, parks)
+  const findPedestrianDestinations = useCallback((): { x: number; y: number; type: PedestrianDestType }[] => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0) return [];
+    
+    const destinations: { x: number; y: number; type: PedestrianDestType }[] = [];
+    const schoolTypes: BuildingType[] = ['school', 'university'];
+    const commercialTypes: BuildingType[] = ['shop_small', 'shop_medium', 'office_low', 'office_high', 'mall'];
+    const industrialTypes: BuildingType[] = ['factory_small', 'factory_medium', 'factory_large', 'warehouse'];
+    const parkTypes: BuildingType[] = ['park', 'park_large', 'tennis'];
+    
+    for (let y = 0; y < currentGridSize; y++) {
+      for (let x = 0; x < currentGridSize; x++) {
+        const buildingType = currentGrid[y][x].building.type;
+        if (schoolTypes.includes(buildingType)) {
+          destinations.push({ x, y, type: 'school' });
+        } else if (commercialTypes.includes(buildingType)) {
+          // Include any commercial building
+          destinations.push({ x, y, type: 'commercial' });
+        } else if (industrialTypes.includes(buildingType)) {
+          // Include any industrial building
+          destinations.push({ x, y, type: 'industrial' });
+        } else if (parkTypes.includes(buildingType)) {
+          destinations.push({ x, y, type: 'park' });
+        }
+      }
+    }
+    return destinations;
+  }, []);
+
+  // Spawn a pedestrian from a residential building to a destination
+  const spawnPedestrian = useCallback(() => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0) return false;
+    
+    const residentials = findResidentialBuildings();
+    if (residentials.length === 0) {
+      return false;
+    }
+    
+    const destinations = findPedestrianDestinations();
+    if (destinations.length === 0) {
+      return false;
+    }
+    
+    // Pick a random residential building as home
+    const home = residentials[Math.floor(Math.random() * residentials.length)];
+    
+    // Pick a random destination
+    const dest = destinations[Math.floor(Math.random() * destinations.length)];
+    
+    // Find path from home to destination via roads
+    const path = findPathOnRoads(currentGrid, currentGridSize, home.x, home.y, dest.x, dest.y);
+    if (!path || path.length === 0) {
+      return false;
+    }
+    
+    // Start at a random point along the path for better distribution
+    const startIndex = Math.floor(Math.random() * path.length);
+    const startTile = path[startIndex];
+    
+    // Determine initial direction based on next tile in path
+    let direction: CarDirection = 'south';
+    if (startIndex + 1 < path.length) {
+      const nextTile = path[startIndex + 1];
+      const dir = getDirectionToTile(startTile.x, startTile.y, nextTile.x, nextTile.y);
+      if (dir) direction = dir;
+    } else if (startIndex > 0) {
+      // At end of path, use previous tile to determine direction
+      const prevTile = path[startIndex - 1];
+      const dir = getDirectionToTile(prevTile.x, prevTile.y, startTile.x, startTile.y);
+      if (dir) direction = dir;
+    }
+    
+    pedestriansRef.current.push({
+      id: pedestrianIdRef.current++,
+      tileX: startTile.x,
+      tileY: startTile.y,
+      direction,
+      progress: Math.random(),
+      speed: 0.12 + Math.random() * 0.08, // Pedestrians are slower than cars
+      pathIndex: startIndex,
+      age: 0,
+      maxAge: 60 + Math.random() * 90, // 60-150 seconds lifespan
+      skinColor: PEDESTRIAN_SKIN_COLORS[Math.floor(Math.random() * PEDESTRIAN_SKIN_COLORS.length)],
+      shirtColor: PEDESTRIAN_SHIRT_COLORS[Math.floor(Math.random() * PEDESTRIAN_SHIRT_COLORS.length)],
+      walkOffset: Math.random() * Math.PI * 2,
+      sidewalkSide: Math.random() < 0.5 ? 'left' : 'right',
+      destType: dest.type,
+      homeX: home.x,
+      homeY: home.y,
+      destX: dest.x,
+      destY: dest.y,
+      returningHome: startIndex >= path.length - 1, // If starting at end, they're returning
+      path,
+    });
+    
+    return true;
+  }, [findResidentialBuildings, findPedestrianDestinations]);
 
   // Find all fire stations in the grid
   const findStations = useCallback((type: 'fire_station' | 'police_station'): { x: number; y: number }[] => {
@@ -2390,6 +2550,153 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
     carsRef.current = updatedCars;
   }, [spawnRandomCar]);
 
+  // Update pedestrians - only when zoomed in enough
+  const updatePedestrians = useCallback((delta: number) => {
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
+    
+    // Clear pedestrians if zoomed out
+    if (currentZoom < PEDESTRIAN_MIN_ZOOM) {
+      pedestriansRef.current = [];
+      return;
+    }
+    
+    if (!currentGrid || currentGridSize <= 0) {
+      pedestriansRef.current = [];
+      return;
+    }
+    
+    // Speed multiplier
+    const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
+    
+    // Count road tiles to scale pedestrian count
+    let roadTileCount = 0;
+    for (let y = 0; y < currentGridSize; y++) {
+      for (let x = 0; x < currentGridSize; x++) {
+        if (currentGrid[y][x].building.type === 'road') {
+          roadTileCount++;
+        }
+      }
+    }
+    
+    // Spawn many pedestrians - scale with road network size (3 pedestrians per road tile)
+    const maxPedestrians = Math.max(200, roadTileCount * 3);
+    pedestrianSpawnTimerRef.current -= delta;
+    if (pedestriansRef.current.length < maxPedestrians && pedestrianSpawnTimerRef.current <= 0) {
+      // Spawn many pedestrians at once
+      let spawnedCount = 0;
+      const spawnBatch = Math.min(50, Math.max(20, Math.floor(roadTileCount / 10)));
+      for (let i = 0; i < spawnBatch; i++) {
+        if (spawnPedestrian()) {
+          spawnedCount++;
+        }
+      }
+      pedestrianSpawnTimerRef.current = spawnedCount > 0 ? 0.02 : 0.01; // Very fast spawning
+    }
+    
+    const updatedPedestrians: Pedestrian[] = [];
+    
+    for (const ped of [...pedestriansRef.current]) {
+      let alive = true;
+      
+      // Update age
+      ped.age += delta;
+      if (ped.age > ped.maxAge) {
+        continue;
+      }
+      
+      // Update walk animation
+      ped.walkOffset += delta * 8;
+      
+      // Check if still on valid road
+      if (!isRoadTile(currentGrid, currentGridSize, ped.tileX, ped.tileY)) {
+        continue;
+      }
+      
+      // Move pedestrian along path
+      ped.progress += ped.speed * delta * speedMultiplier;
+      
+      // Handle single-tile paths (already at destination)
+      if (ped.path.length === 1 && ped.progress >= 1) {
+        if (!ped.returningHome) {
+          ped.returningHome = true;
+          const returnPath = findPathOnRoads(currentGrid, currentGridSize, ped.destX, ped.destY, ped.homeX, ped.homeY);
+          if (returnPath && returnPath.length > 0) {
+            ped.path = returnPath;
+            ped.pathIndex = 0;
+            ped.progress = 0;
+            ped.tileX = returnPath[0].x;
+            ped.tileY = returnPath[0].y;
+            if (returnPath.length > 1) {
+              const nextTile = returnPath[1];
+              const dir = getDirectionToTile(returnPath[0].x, returnPath[0].y, nextTile.x, nextTile.y);
+              if (dir) ped.direction = dir;
+            }
+          } else {
+            continue; // Remove pedestrian
+          }
+        } else {
+          continue; // Arrived home, remove
+        }
+      }
+      
+      while (ped.progress >= 1 && ped.pathIndex < ped.path.length - 1) {
+        ped.pathIndex++;
+        ped.progress -= 1;
+        
+        const currentTile = ped.path[ped.pathIndex];
+        
+        // Bounds check
+        if (currentTile.x < 0 || currentTile.x >= currentGridSize ||
+            currentTile.y < 0 || currentTile.y >= currentGridSize) {
+          alive = false;
+          break;
+        }
+        
+        ped.tileX = currentTile.x;
+        ped.tileY = currentTile.y;
+        
+        // Check if reached end of path
+        if (ped.pathIndex >= ped.path.length - 1) {
+          if (!ped.returningHome) {
+            // Arrived at destination - start returning home
+            ped.returningHome = true;
+            const returnPath = findPathOnRoads(currentGrid, currentGridSize, ped.destX, ped.destY, ped.homeX, ped.homeY);
+            if (returnPath && returnPath.length > 0) {
+              ped.path = returnPath;
+              ped.pathIndex = 0;
+              ped.progress = 0;
+              // Update direction for return trip
+              if (returnPath.length > 1) {
+                const nextTile = returnPath[1];
+                const dir = getDirectionToTile(returnPath[0].x, returnPath[0].y, nextTile.x, nextTile.y);
+                if (dir) ped.direction = dir;
+              }
+            } else {
+              alive = false;
+            }
+          } else {
+            // Arrived back home - remove pedestrian
+            alive = false;
+          }
+          break;
+        }
+        
+        // Update direction for next segment
+        if (ped.pathIndex + 1 < ped.path.length) {
+          const nextTile = ped.path[ped.pathIndex + 1];
+          const dir = getDirectionToTile(ped.tileX, ped.tileY, nextTile.x, nextTile.y);
+          if (dir) ped.direction = dir;
+        }
+      }
+      
+      if (alive) {
+        updatedPedestrians.push(ped);
+      }
+    }
+    
+    pedestriansRef.current = updatedPedestrians;
+  }, [spawnPedestrian]);
+
   const drawCars = useCallback((ctx: CanvasRenderingContext2D) => {
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     const canvas = ctx.canvas;
@@ -2497,6 +2804,154 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       // Rear
       ctx.fillStyle = '#111827';
       ctx.fillRect(-10 * scale, -4 * scale, 2.4 * scale, 8 * scale);
+      
+      ctx.restore();
+    });
+    
+    ctx.restore();
+  }, []);
+
+  // Draw pedestrians with simple SVG-style sprites
+  const drawPedestrians = useCallback((ctx: CanvasRenderingContext2D) => {
+    const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    const canvas = ctx.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Don't draw pedestrians if zoomed out
+    if (currentZoom < PEDESTRIAN_MIN_ZOOM) {
+      return;
+    }
+    
+    // Early exit if no pedestrians
+    if (!currentGrid || currentGridSize <= 0 || pedestriansRef.current.length === 0) {
+      return;
+    }
+    
+    ctx.save();
+    ctx.scale(dpr * currentZoom, dpr * currentZoom);
+    ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
+    
+    const viewWidth = canvas.width / (dpr * currentZoom);
+    const viewHeight = canvas.height / (dpr * currentZoom);
+    const viewLeft = -currentOffset.x / currentZoom - TILE_WIDTH;
+    const viewTop = -currentOffset.y / currentZoom - TILE_HEIGHT * 2;
+    const viewRight = viewWidth - currentOffset.x / currentZoom + TILE_WIDTH;
+    const viewBottom = viewHeight - currentOffset.y / currentZoom + TILE_HEIGHT * 2;
+    
+    // Helper function to check if pedestrian is behind a building
+    const isPedBehindBuilding = (pedTileX: number, pedTileY: number): boolean => {
+      const pedDepth = pedTileX + pedTileY;
+      
+      for (let dy = 0; dy <= 1; dy++) {
+        for (let dx = 0; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          
+          const checkX = pedTileX + dx;
+          const checkY = pedTileY + dy;
+          
+          if (checkX < 0 || checkY < 0 || checkX >= currentGridSize || checkY >= currentGridSize) {
+            continue;
+          }
+          
+          const tile = currentGrid[checkY]?.[checkX];
+          if (!tile) continue;
+          
+          const buildingType = tile.building.type;
+          const skipTypes: BuildingType[] = ['road', 'grass', 'empty', 'water', 'tree'];
+          if (skipTypes.includes(buildingType)) {
+            continue;
+          }
+          
+          const buildingDepth = checkX + checkY;
+          if (buildingDepth > pedDepth) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    };
+    
+    pedestriansRef.current.forEach(ped => {
+      const { screenX, screenY } = gridToScreen(ped.tileX, ped.tileY, 0, 0);
+      const centerX = screenX + TILE_WIDTH / 2;
+      const centerY = screenY + TILE_HEIGHT / 2;
+      const meta = DIRECTION_META[ped.direction];
+      
+      // Pedestrians walk on sidewalks - offset them toward the edge of the road
+      const sidewalkOffset = ped.sidewalkSide === 'left' ? -12 : 12;
+      const pedX = centerX + meta.vec.dx * ped.progress + meta.normal.nx * sidewalkOffset;
+      const pedY = centerY + meta.vec.dy * ped.progress + meta.normal.ny * sidewalkOffset;
+      
+      // Viewport culling
+      if (pedX < viewLeft - 20 || pedX > viewRight + 20 || pedY < viewTop - 40 || pedY > viewBottom + 40) {
+        return;
+      }
+      
+      // Check if pedestrian is behind a building
+      if (isPedBehindBuilding(ped.tileX, ped.tileY)) {
+        return;
+      }
+      
+      ctx.save();
+      ctx.translate(pedX, pedY);
+      
+      // Walking animation - bob up and down and sway
+      const walkBob = Math.sin(ped.walkOffset) * 0.8;
+      const walkSway = Math.sin(ped.walkOffset * 0.5) * 0.5;
+      
+      // Scale for pedestrian (smaller, more realistic)
+      const scale = 0.35;
+      
+      // Draw simple stick figure pedestrian (SVG-style)
+      // Head
+      ctx.fillStyle = ped.skinColor;
+      ctx.beginPath();
+      ctx.arc(walkSway * scale, (-12 + walkBob) * scale, 3 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Body (shirt)
+      ctx.fillStyle = ped.shirtColor;
+      ctx.beginPath();
+      ctx.ellipse(walkSway * scale, (-5 + walkBob) * scale, 2.5 * scale, 4 * scale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Legs (animated)
+      ctx.strokeStyle = '#374151';
+      ctx.lineWidth = 1.5 * scale;
+      ctx.lineCap = 'round';
+      
+      // Left leg
+      const leftLegSwing = Math.sin(ped.walkOffset) * 3;
+      ctx.beginPath();
+      ctx.moveTo(walkSway * scale, (-1 + walkBob) * scale);
+      ctx.lineTo((walkSway - 1 + leftLegSwing) * scale, (5 + walkBob) * scale);
+      ctx.stroke();
+      
+      // Right leg
+      const rightLegSwing = Math.sin(ped.walkOffset + Math.PI) * 3;
+      ctx.beginPath();
+      ctx.moveTo(walkSway * scale, (-1 + walkBob) * scale);
+      ctx.lineTo((walkSway + 1 + rightLegSwing) * scale, (5 + walkBob) * scale);
+      ctx.stroke();
+      
+      // Arms (animated)
+      ctx.strokeStyle = ped.skinColor;
+      ctx.lineWidth = 1.2 * scale;
+      
+      // Left arm
+      const leftArmSwing = Math.sin(ped.walkOffset + Math.PI) * 2;
+      ctx.beginPath();
+      ctx.moveTo((walkSway - 2) * scale, (-6 + walkBob) * scale);
+      ctx.lineTo((walkSway - 3 + leftArmSwing) * scale, (-2 + walkBob) * scale);
+      ctx.stroke();
+      
+      // Right arm
+      const rightArmSwing = Math.sin(ped.walkOffset) * 2;
+      ctx.beginPath();
+      ctx.moveTo((walkSway + 2) * scale, (-6 + walkBob) * scale);
+      ctx.lineTo((walkSway + 3 + rightArmSwing) * scale, (-2 + walkBob) * scale);
+      ctx.stroke();
       
       ctx.restore();
     });
@@ -4201,14 +4656,16 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
         spawnCrimeIncidents(delta); // Spawn new crime incidents
         updateCrimeIncidents(delta); // Update/decay crime incidents
         updateEmergencyVehicles(delta); // Update emergency vehicles!
+        updatePedestrians(delta); // Update pedestrians (zoom-gated)
       }
       drawCars(ctx);
+      drawPedestrians(ctx); // Draw pedestrians (zoom-gated)
       drawEmergencyVehicles(ctx); // Draw emergency vehicles!
     };
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians]);
   
   // Day/Night cycle lighting rendering
   useEffect(() => {
@@ -4928,10 +5385,18 @@ const OverlayModeToggle = React.memo(function OverlayModeToggle({
 });
 
 export default function Game() {
-  const { state, setTool, setActivePanel } = useGame();
+  const { state, setTool, setActivePanel, addMoney, addNotification } = useGame();
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('none');
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
   const isInitialMount = useRef(true);
+  
+  // Cheat code system
+  const {
+    triggeredCheat,
+    showVinnieDialog,
+    setShowVinnieDialog,
+    clearTriggeredCheat,
+  } = useCheatCodes();
   const initialSelectedToolRef = useRef<Tool | null>(null);
   const previousSelectedToolRef = useRef<Tool | null>(null);
   const hasCapturedInitialTool = useRef(false);
@@ -5038,7 +5503,49 @@ export default function Game() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state.activePanel, state.selectedTool, selectedTile, setActivePanel, setTool, overlayMode]);
-  
+
+  // Handle cheat code triggers
+  useEffect(() => {
+    if (!triggeredCheat) return;
+
+    switch (triggeredCheat.type) {
+      case 'konami':
+        addMoney(triggeredCheat.amount);
+        addNotification(
+          'Retro Cheat Activated!',
+          'Your accountants are confused but not complaining. You received $50,000!',
+          'trophy'
+        );
+        clearTriggeredCheat();
+        break;
+
+      case 'motherlode':
+        addMoney(triggeredCheat.amount);
+        addNotification(
+          'Motherlode!',
+          'You received $50,000. The Sims would be proud!',
+          'cash'
+        );
+        clearTriggeredCheat();
+        break;
+
+      case 'fund':
+        addMoney(triggeredCheat.amount);
+        addNotification(
+          'Emergency Funds',
+          'You received $10,000 in emergency city funding.',
+          'cash'
+        );
+        clearTriggeredCheat();
+        break;
+
+      case 'vinnie':
+        // Vinnie dialog is handled by VinnieDialog component
+        clearTriggeredCheat();
+        break;
+    }
+  }, [triggeredCheat, addMoney, addNotification, clearTriggeredCheat]);
+
   return (
     <TooltipProvider>
       <div className="w-full h-full min-h-[720px] overflow-hidden bg-background flex">
@@ -5060,6 +5567,7 @@ export default function Game() {
         {state.activePanel === 'advisors' && <AdvisorsPanel />}
         {state.activePanel === 'settings' && <SettingsPanel />}
         
+        <VinnieDialog open={showVinnieDialog} onOpenChange={setShowVinnieDialog} />
       </div>
     </TooltipProvider>
   );
