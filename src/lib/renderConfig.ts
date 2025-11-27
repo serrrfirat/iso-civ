@@ -269,7 +269,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     warehouse: -0.4,
     airport: -1.5, // Shift up a tiny bit more
     water: -0.2,
-    subway_station: -0.4,
+    subway_station: -0.2,
     fire_station: -0.2, // Shifted up to match police station
     police_station: -0.1, // Shifted down from previous position
     hospital: -0.5, // Shift up (reduced from previous)

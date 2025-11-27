@@ -665,7 +665,7 @@ function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string
 }
 
 // Canvas-based Minimap - Memoized
-const MiniMap = React.memo(function MiniMap() {
+const MiniMap = React.memo(function MiniMap({ onNavigate }: { onNavigate?: (gridX: number, gridY: number) => void }) {
   const { state } = useGame();
   const { grid, gridSize } = state;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -709,6 +709,29 @@ const MiniMap = React.memo(function MiniMap() {
       }
     }
   }, [grid, gridSize]);
+
+  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onNavigate) return;
+    
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const rect = canvas.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    
+    const size = 140;
+    const scale = size / gridSize;
+    
+    const gridX = Math.floor(clickX / scale);
+    const gridY = Math.floor(clickY / scale);
+    
+    // Clamp to valid grid coordinates
+    const clampedX = Math.max(0, Math.min(gridSize - 1, gridX));
+    const clampedY = Math.max(0, Math.min(gridSize - 1, gridY));
+    
+    onNavigate(clampedX, clampedY);
+  }, [onNavigate, gridSize]);
   
   return (
     <Card className="absolute bottom-6 right-8 p-3 shadow-lg bg-card/90 border-border/70">
@@ -719,7 +742,8 @@ const MiniMap = React.memo(function MiniMap() {
         ref={canvasRef}
         width={140}
         height={140}
-        className="block rounded-md border border-border/60"
+        className="block rounded-md border border-border/60 cursor-pointer"
+        onClick={handleClick}
       />
       <div className="mt-2 grid grid-cols-4 gap-1 text-[8px]">
         <div className="flex items-center gap-1">
@@ -1738,10 +1762,12 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 // Canvas-based Isometric Grid - HIGH PERFORMANCE
-function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: { 
-  overlayMode: OverlayMode; 
-  selectedTile: { x: number; y: number } | null; 
+function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, navigationTarget, onNavigationComplete }: {
+  overlayMode: OverlayMode;
+  selectedTile: { x: number; y: number } | null;
   setSelectedTile: (tile: { x: number; y: number } | null) => void;
+  navigationTarget?: { x: number; y: number } | null;
+  onNavigationComplete?: () => void;
 }) {
   const { state, placeAtTile, connectToCity, currentSpritePack } = useGame();
   const { grid, gridSize, selectedTool, speed, adjacentCities, waterBodies, hour } = state;
@@ -5099,7 +5125,34 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile }: {
       y: Math.max(bounds.minOffsetY, Math.min(bounds.maxOffsetY, newOffset.y)),
     };
   }, [getMapBounds, canvasSize.width, canvasSize.height]);
-  
+
+  // Handle minimap navigation - center the view on the target tile
+  useEffect(() => {
+    if (!navigationTarget) return;
+    
+    // Convert grid coordinates to screen coordinates
+    const { screenX, screenY } = gridToScreen(navigationTarget.x, navigationTarget.y, 0, 0);
+    
+    // Calculate offset to center this position on the canvas
+    const centerX = canvasSize.width / 2;
+    const centerY = canvasSize.height / 2;
+    
+    const newOffset = {
+      x: centerX - screenX * zoom,
+      y: centerY - screenY * zoom,
+    };
+    
+    // Clamp and set the new offset - this is a legitimate use case for responding to navigation requests
+    const bounds = getMapBounds(zoom, canvasSize.width, canvasSize.height);
+    setOffset({ // eslint-disable-line
+      x: Math.max(bounds.minOffsetX, Math.min(bounds.maxOffsetX, newOffset.x)),
+      y: Math.max(bounds.minOffsetY, Math.min(bounds.maxOffsetY, newOffset.y)),
+    });
+    
+    // Signal that navigation is complete
+    onNavigationComplete?.();
+  }, [navigationTarget, zoom, canvasSize.width, canvasSize.height, getMapBounds, onNavigationComplete]);
+
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isPanning) {
       const newOffset = {
@@ -5477,6 +5530,7 @@ export default function Game() {
   const { state, setTool, setActivePanel, addMoney, addNotification } = useGame();
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('none');
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
+  const [navigationTarget, setNavigationTarget] = useState<{ x: number; y: number } | null>(null);
   const isInitialMount = useRef(true);
   
   // Cheat code system
@@ -5644,9 +5698,15 @@ export default function Game() {
           <TopBar />
           <StatsPanel />
           <div className="flex-1 relative overflow-visible">
-            <CanvasIsometricGrid overlayMode={overlayMode} selectedTile={selectedTile} setSelectedTile={setSelectedTile} />
+            <CanvasIsometricGrid 
+              overlayMode={overlayMode} 
+              selectedTile={selectedTile} 
+              setSelectedTile={setSelectedTile}
+              navigationTarget={navigationTarget}
+              onNavigationComplete={() => setNavigationTarget(null)}
+            />
             <OverlayModeToggle overlayMode={overlayMode} setOverlayMode={setOverlayMode} />
-            <MiniMap />
+            <MiniMap onNavigate={(x, y) => setNavigationTarget({ x, y })} />
           </div>
         </div>
         
