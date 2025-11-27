@@ -785,9 +785,9 @@ const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: {
       const bottomRight = screenToGridForMinimap(bottomRightScreen.x, bottomRightScreen.y);
       
       // Draw the viewport as a quadrilateral (it's a diamond in isometric)
-      // Use a thin white stroke for a subtle indicator
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-      ctx.lineWidth = 1;
+      // Use a white stroke for visibility
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(topLeft.gridX * scale, topLeft.gridY * scale);
       ctx.lineTo(topRight.gridX * scale, topRight.gridY * scale);
@@ -798,7 +798,9 @@ const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: {
     }
   }, [grid, gridSize, viewport]);
 
-  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  const [isDragging, setIsDragging] = useState(false);
+  
+  const navigateToPosition = useCallback((e: React.MouseEvent<HTMLCanvasElement> | MouseEvent) => {
     if (!onNavigate) return;
     
     const canvas = canvasRef.current;
@@ -820,6 +822,34 @@ const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: {
     
     onNavigate(clampedX, clampedY);
   }, [onNavigate, gridSize]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    setIsDragging(true);
+    navigateToPosition(e);
+  }, [navigateToPosition]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isDragging) {
+      navigateToPosition(e);
+    }
+  }, [isDragging, navigateToPosition]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Handle mouse up outside the canvas
+  useEffect(() => {
+    if (isDragging) {
+      const handleGlobalMouseUp = () => setIsDragging(false);
+      window.addEventListener('mouseup', handleGlobalMouseUp);
+      return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    }
+  }, [isDragging]);
   
   return (
     <Card className="absolute bottom-6 right-8 p-3 shadow-lg bg-card/90 border-border/70">
@@ -830,8 +860,11 @@ const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: {
         ref={canvasRef}
         width={140}
         height={140}
-        className="block rounded-md border border-border/60 cursor-pointer"
-        onClick={handleClick}
+        className="block rounded-md border border-border/60 cursor-pointer select-none"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
       />
       <div className="mt-2 grid grid-cols-4 gap-1 text-[8px]">
         <div className="flex items-center gap-1">
