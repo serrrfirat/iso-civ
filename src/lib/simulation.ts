@@ -251,9 +251,9 @@ function generateOceans(grid: Tile[][], size: number, seed: number): WaterBody[]
   const edges: Array<{ side: 'north' | 'east' | 'south' | 'west'; tiles: { x: number; y: number }[] }> = [];
   
   // Ocean parameters
-  const baseDepth = Math.max(3, Math.floor(size * 0.08));
-  const depthVariation = Math.max(2, Math.floor(size * 0.05));
-  const maxDepth = Math.floor(size * 0.12);
+  const baseDepth = Math.max(4, Math.floor(size * 0.12));
+  const depthVariation = Math.max(4, Math.floor(size * 0.08));
+  const maxDepth = Math.floor(size * 0.18);
   
   // Helper to generate organic ocean section along an edge
   const generateOceanEdge = (
@@ -275,13 +275,20 @@ function generateOceans(grid: Tile[][], size: number, seed: number): WaterBody[]
         1
       );
       
-      const noiseVal = coastNoise(
-        isHorizontal ? i * 0.12 : edgePosition * 0.12,
-        isHorizontal ? edgePosition * 0.12 : i * 0.12
+      // Layer two noise frequencies for more interesting coastline
+      // Higher frequency noise for fine detail, lower for broad shape
+      const coarseNoise = coastNoise(
+        isHorizontal ? i * 0.08 : edgePosition * 0.08,
+        isHorizontal ? edgePosition * 0.08 : i * 0.08
       );
+      const fineNoise = coastNoise(
+        isHorizontal ? i * 0.25 : edgePosition * 0.25 + 500,
+        isHorizontal ? edgePosition * 0.25 + 500 : i * 0.25
+      );
+      const noiseVal = coarseNoise * 0.6 + fineNoise * 0.4;
       
       // Depth varies based on noise and fades at the ends
-      const rawDepth = baseDepth + (noiseVal - 0.5) * depthVariation * 2;
+      const rawDepth = baseDepth + (noiseVal - 0.5) * depthVariation * 2.5;
       const localDepth = Math.max(1, Math.min(Math.floor(rawDepth * edgeFade), maxDepth));
       
       // Place water tiles from edge inward
