@@ -2913,11 +2913,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             const bottomY = y + h + ((adjacentWater.south && adjacentWater.west) ? expand * 0.5 : 0);
             const leftX = x - ((adjacentWater.west && adjacentWater.north) ? expand * 0.5 : 0);
             
-            // Expand individual edges toward water neighbors
-            const topExpand = (adjacentWater.north || adjacentWater.east) ? expand * 0.3 : 0;
-            const rightExpand = (adjacentWater.east || adjacentWater.south) ? expand * 0.3 : 0;
-            const bottomExpand = (adjacentWater.south || adjacentWater.west) ? expand * 0.3 : 0;
-            const leftExpand = (adjacentWater.west || adjacentWater.north) ? expand * 0.3 : 0;
+            // Expand individual edges toward water neighbors only
+            // Each edge should only expand if THAT specific edge direction has water
+            const topExpand = (adjacentWater.north && adjacentWater.east) ? expand * 0.3 : 0;
+            const rightExpand = (adjacentWater.east && adjacentWater.south) ? expand * 0.3 : 0;
+            const bottomExpand = (adjacentWater.south && adjacentWater.west) ? expand * 0.3 : 0;
+            const leftExpand = (adjacentWater.west && adjacentWater.north) ? expand * 0.3 : 0;
             
             ctx.save();
             ctx.beginPath();
