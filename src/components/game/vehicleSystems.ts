@@ -941,48 +941,6 @@ export function useVehicleSystems(
     ctx.scale(dpr * currentZoom, dpr * currentZoom);
     ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
     
-    const viewWidth = canvas.width / (dpr * currentZoom);
-    const viewHeight = canvas.height / (dpr * currentZoom);
-    const viewLeft = -currentOffset.x / currentZoom - TILE_WIDTH;
-    const viewTop = -currentOffset.y / currentZoom - TILE_HEIGHT * 2;
-    const viewRight = viewWidth - currentOffset.x / currentZoom + TILE_WIDTH;
-    const viewBottom = viewHeight - currentOffset.y / currentZoom + TILE_HEIGHT * 2;
-    
-    const isCarBehindBuilding = (carTileX: number, carTileY: number): boolean => {
-      const carDepth = carTileX + carTileY;
-      
-      for (let dy = 0; dy <= 1; dy++) {
-        for (let dx = 0; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          
-          const checkX = carTileX + dx;
-          const checkY = carTileY + dy;
-          
-          if (checkX < 0 || checkY < 0 || checkX >= currentGridSize || checkY >= currentGridSize) {
-            continue;
-          }
-          
-          const tile = currentGrid[checkY]?.[checkX];
-          if (!tile) continue;
-          
-          const buildingType = tile.building.type;
-          
-          const skipTypes: BuildingType[] = ['road', 'grass', 'empty', 'water', 'tree'];
-          if (skipTypes.includes(buildingType)) {
-            continue;
-          }
-          
-          const buildingDepth = checkX + checkY;
-          
-          if (buildingDepth > carDepth) {
-            return true;
-          }
-        }
-      }
-      
-      return false;
-    };
-    
     carsRef.current.forEach(car => {
       const { screenX, screenY } = gridToScreen(car.tileX, car.tileY, 0, 0);
       const centerX = screenX + TILE_WIDTH / 2;
@@ -990,14 +948,6 @@ export function useVehicleSystems(
       const meta = DIRECTION_META[car.direction];
       const carX = centerX + meta.vec.dx * car.progress + meta.normal.nx * car.laneOffset;
       const carY = centerY + meta.vec.dy * car.progress + meta.normal.ny * car.laneOffset;
-      
-      if (carX < viewLeft - 40 || carX > viewRight + 40 || carY < viewTop - 60 || carY > viewBottom + 60) {
-        return;
-      }
-      
-      if (isCarBehindBuilding(car.tileX, car.tileY)) {
-        return;
-      }
       
       ctx.save();
       ctx.translate(carX, carY);
