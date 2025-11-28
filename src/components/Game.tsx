@@ -6302,35 +6302,104 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
         (activePack.parksBuildings && activePack.parksBuildings[buildingType]);
       
       if (hasTileSprite) {
-        // Special handling for water: use separate water.png image
+        // Special handling for water: use separate water.png image with blending for adjacent water tiles
         if (buildingType === 'water') {
           const waterImage = imageCache.get('/assets/water.png');
+          
+          // Check which adjacent tiles are also water for blending
+          const gridX = tile.x;
+          const gridY = tile.y;
+          const adjacentWater = {
+            north: gridX > 0 && grid[gridY]?.[gridX - 1]?.building.type === 'water',
+            east: gridY > 0 && grid[gridY - 1]?.[gridX]?.building.type === 'water',
+            south: gridX < gridSize - 1 && grid[gridY]?.[gridX + 1]?.building.type === 'water',
+            west: gridY < gridSize - 1 && grid[gridY + 1]?.[gridX]?.building.type === 'water',
+          };
+          
+          // Count adjacent water tiles - more neighbors = larger blend
+          const adjacentCount = (adjacentWater.north ? 1 : 0) + (adjacentWater.east ? 1 : 0) + 
+                               (adjacentWater.south ? 1 : 0) + (adjacentWater.west ? 1 : 0);
+          
           if (waterImage) {
             // Center the water sprite on the tile
             const tileCenterX = x + w / 2;
             const tileCenterY = y + h / 2;
             
-            // Scale to 71.5% of tile size (65% * 1.1 = 10% expansion)
-            const destWidth = w * 1.2 * 0.715;
-            const aspectRatio = (waterImage.naturalHeight || waterImage.height) / (waterImage.naturalWidth || waterImage.width);
-            const destHeight = destWidth * aspectRatio;
+            // Random subcrop of water texture based on tile position for variety
+            const imgW = waterImage.naturalWidth || waterImage.width;
+            const imgH = waterImage.naturalHeight || waterImage.height;
             
-            // Draw the water image centered on tile (can overflow/clip at map edges)
-            ctx.drawImage(
-              waterImage,
-              0, 0, waterImage.naturalWidth || waterImage.width, waterImage.naturalHeight || waterImage.height,
-              Math.round(tileCenterX - destWidth / 2), Math.round(tileCenterY - destHeight / 2),
-              Math.round(destWidth), Math.round(destHeight)
-            );
+            // Deterministic "random" offset based on tile position
+            const seedX = ((gridX * 7919 + gridY * 6271) % 1000) / 1000;
+            const seedY = ((gridX * 4177 + gridY * 9311) % 1000) / 1000;
+            
+            // Take a subcrop - use 50% of the image, offset randomly
+            const cropScale = 0.5;
+            const cropW = imgW * cropScale;
+            const cropH = imgH * cropScale;
+            const maxOffsetX = imgW - cropW;
+            const maxOffsetY = imgH - cropH;
+            const srcX = seedX * maxOffsetX;
+            const srcY = seedY * maxOffsetY;
+            
+            // Strong offset to shift toward adjacent water
+            const offsetX = ((adjacentWater.south ? 1 : 0) - (adjacentWater.north ? 1 : 0)) * w * 0.15 +
+                           ((adjacentWater.east ? 1 : 0) - (adjacentWater.west ? 1 : 0)) * w * 0.15;
+            const offsetY = ((adjacentWater.south ? 1 : 0) - (adjacentWater.north ? 1 : 0)) * h * 0.15 +
+                           ((adjacentWater.west ? 1 : 0) - (adjacentWater.east ? 1 : 0)) * h * 0.15;
+            
+            // Draw multiple passes with decreasing size and opacity for feathered edges
+            // This creates a soft blend at the edges instead of hard cuts
+            // Passes are spread far apart for wide, gradual feathering
+            const aspectRatio = cropH / cropW;
+            const passes = [
+              { scale: 3.5 + adjacentCount * 0.6, alpha: 0.15 },  // Largest, very faint outer halo
+              { scale: 2.8 + adjacentCount * 0.5, alpha: 0.25 },
+              { scale: 2.2 + adjacentCount * 0.4, alpha: 0.4 },
+              { scale: 1.6 + adjacentCount * 0.3, alpha: 0.6 },
+              { scale: 1.1 + adjacentCount * 0.15, alpha: 0.85 },
+              { scale: 0.85 + adjacentCount * 0.1, alpha: 1.0 }, // Core, fully opaque
+            ];
+            
+            const savedAlpha = ctx.globalAlpha;
+            
+            for (const pass of passes) {
+              const destWidth = w * pass.scale;
+              const destHeight = destWidth * aspectRatio;
+              
+              ctx.globalAlpha = pass.alpha;
+              ctx.drawImage(
+                waterImage,
+                srcX, srcY, cropW, cropH,
+                Math.round(tileCenterX - destWidth / 2 + offsetX),
+                Math.round(tileCenterY - destHeight / 2 + offsetY),
+                Math.round(destWidth),
+                Math.round(destHeight)
+              );
+            }
+            
+            ctx.globalAlpha = savedAlpha;
           } else {
-            // Water image not loaded yet - draw placeholder water diamond
+            // Water image not loaded yet - draw placeholder with radial gradient for soft edges
+            const blendPx = 20 + adjacentCount * 10;
+            
             const corners = {
-              top: { x: x + w / 2, y },
-              right: { x: x + w, y: y + h / 2 },
-              bottom: { x: x + w / 2, y: y + h },
-              left: { x, y: y + h / 2 },
+              top: { x: x + w / 2, y: y - (adjacentWater.north || adjacentWater.east ? blendPx : 0) },
+              right: { x: x + w + (adjacentWater.east || adjacentWater.south ? blendPx : 0), y: y + h / 2 },
+              bottom: { x: x + w / 2, y: y + h + (adjacentWater.south || adjacentWater.west ? blendPx : 0) },
+              left: { x: x - (adjacentWater.west || adjacentWater.north ? blendPx : 0), y: y + h / 2 },
             };
-            ctx.fillStyle = '#0ea5e9';
+            
+            // Create radial gradient for soft edges
+            const gradient = ctx.createRadialGradient(
+              x + w / 2, y + h / 2, 0,
+              x + w / 2, y + h / 2, w * 0.8
+            );
+            gradient.addColorStop(0, 'rgba(14, 165, 233, 1)');
+            gradient.addColorStop(0.6, 'rgba(14, 165, 233, 0.8)');
+            gradient.addColorStop(1, 'rgba(14, 165, 233, 0.2)');
+            
+            ctx.fillStyle = gradient;
             ctx.beginPath();
             ctx.moveTo(corners.top.x, corners.top.y);
             ctx.lineTo(corners.right.x, corners.right.y);
