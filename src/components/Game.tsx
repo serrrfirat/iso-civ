@@ -5788,6 +5788,35 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       return grid[gridY][gridX].building.type === 'road';
     }
     
+    // Helper function to check if a tile has a marina dock or pier (no beaches next to these)
+    // Also checks 'empty' tiles that are part of multi-tile marina buildings
+    function hasMarinaPier(gridX: number, gridY: number): boolean {
+      if (gridX < 0 || gridX >= gridSize || gridY < 0 || gridY >= gridSize) return false;
+      const buildingType = grid[gridY][gridX].building.type;
+      if (buildingType === 'marina_docks_small' || buildingType === 'pier_large') return true;
+      
+      // Check if this is an 'empty' tile that belongs to a marina (2x2 building)
+      // Marina is 2x2, so check up to 1 tile away for the origin
+      if (buildingType === 'empty') {
+        for (let dy = 0; dy <= 1; dy++) {
+          for (let dx = 0; dx <= 1; dx++) {
+            const checkX = gridX - dx;
+            const checkY = gridY - dy;
+            if (checkX >= 0 && checkY >= 0 && checkX < gridSize && checkY < gridSize) {
+              const checkType = grid[checkY][checkX].building.type;
+              if (checkType === 'marina_docks_small') {
+                // Verify this tile is within the 2x2 footprint
+                if (gridX >= checkX && gridX < checkX + 2 && gridY >= checkY && gridY < checkY + 2) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+      return false;
+    }
+    
     // Draw road with proper adjacency, markings, and sidewalks
     function drawRoad(ctx: CanvasRenderingContext2D, x: number, y: number, gridX: number, gridY: number) {
       const w = TILE_WIDTH;
@@ -6760,11 +6789,19 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
               
               drawY = drawPosY + h - destHeight + verticalPush;
               
-              // Check if building should be horizontally flipped (used for waterfront buildings like marina/pier)
+              // Check if building should be horizontally flipped
               // Some buildings are mirrored by default and the flip flag inverts that
               const defaultMirroredBuildings = ['marina_docks_small', 'pier_large'];
               const isDefaultMirrored = defaultMirroredBuildings.includes(buildingType);
-              const isFlipped = isDefaultMirrored ? !tile.building.flipped : tile.building.flipped === true;
+              
+              // Add 50% random mirroring for visual variety (deterministic based on tile position)
+              // Use a different seed than dense variants to get independent randomness
+              const mirrorSeed = (tile.x * 47 + tile.y * 83) % 100;
+              const shouldRandomMirror = mirrorSeed < 50;
+              
+              // Final flip decision: combine default mirror state, explicit flip flag, and random mirror
+              const baseFlipped = isDefaultMirrored ? !tile.building.flipped : tile.building.flipped === true;
+              const isFlipped = baseFlipped !== shouldRandomMirror; // XOR: if both true or both false, no flip; if one true, flip
               
               if (isFlipped) {
                 // Apply horizontal flip around the center of the sprite
@@ -6984,11 +7021,12 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     waterQueue.forEach(({ tile, screenX, screenY }) => {
         // Compute land adjacency for each edge (opposite of water adjacency)
         // Only consider tiles within bounds - don't draw beaches on map edges
+        // Also exclude beaches next to marina docks and piers
         const adjacentLand = {
-          north: (tile.x - 1 >= 0 && tile.x - 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x - 1, tile.y),
-          east: (tile.x >= 0 && tile.x < gridSize && tile.y - 1 >= 0 && tile.y - 1 < gridSize) && !isWater(tile.x, tile.y - 1),
-          south: (tile.x + 1 >= 0 && tile.x + 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x + 1, tile.y),
-          west: (tile.x >= 0 && tile.x < gridSize && tile.y + 1 >= 0 && tile.y + 1 < gridSize) && !isWater(tile.x, tile.y + 1),
+          north: (tile.x - 1 >= 0 && tile.x - 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x - 1, tile.y) && !hasMarinaPier(tile.x - 1, tile.y),
+          east: (tile.x >= 0 && tile.x < gridSize && tile.y - 1 >= 0 && tile.y - 1 < gridSize) && !isWater(tile.x, tile.y - 1) && !hasMarinaPier(tile.x, tile.y - 1),
+          south: (tile.x + 1 >= 0 && tile.x + 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x + 1, tile.y) && !hasMarinaPier(tile.x + 1, tile.y),
+          west: (tile.x >= 0 && tile.x < gridSize && tile.y + 1 >= 0 && tile.y + 1 < gridSize) && !isWater(tile.x, tile.y + 1) && !hasMarinaPier(tile.x, tile.y + 1),
         };
         drawBeachOnWater(ctx, screenX, screenY, adjacentLand);
       });
