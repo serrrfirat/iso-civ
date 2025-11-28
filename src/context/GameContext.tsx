@@ -28,6 +28,9 @@ import {
 
 const STORAGE_KEY = 'isocity-game-state';
 const SPRITE_PACK_STORAGE_KEY = 'isocity-sprite-pack';
+const DAY_NIGHT_MODE_STORAGE_KEY = 'isocity-day-night-mode';
+
+export type DayNightMode = 'auto' | 'day' | 'night';
 
 type GameContextValue = {
   state: GameState;
@@ -52,6 +55,10 @@ type GameContextValue = {
   currentSpritePack: SpritePack;
   availableSpritePacks: SpritePack[];
   setSpritePack: (packId: string) => void;
+  // Day/night mode override
+  dayNightMode: DayNightMode;
+  setDayNightMode: (mode: DayNightMode) => void;
+  visualHour: number; // The hour to use for rendering (respects day/night mode override)
 };
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -262,6 +269,30 @@ function saveSpritePackId(packId: string): void {
   }
 }
 
+// Load day/night mode from localStorage
+function loadDayNightMode(): DayNightMode {
+  if (typeof window === 'undefined') return 'auto';
+  try {
+    const saved = localStorage.getItem(DAY_NIGHT_MODE_STORAGE_KEY);
+    if (saved === 'auto' || saved === 'day' || saved === 'night') {
+      return saved;
+    }
+  } catch (e) {
+    console.error('Failed to load day/night mode preference:', e);
+  }
+  return 'auto';
+}
+
+// Save day/night mode to localStorage
+function saveDayNightMode(mode: DayNightMode): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(DAY_NIGHT_MODE_STORAGE_KEY, mode);
+  } catch (e) {
+    console.error('Failed to save day/night mode preference:', e);
+  }
+}
+
 export function GameProvider({ children }: { children: React.ReactNode }) {
   // Start with a default state, we'll load from localStorage after mount
   const [state, setState] = useState<GameState>(() => createInitialGameState(60, 'IsoCity'));
@@ -275,6 +306,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   // Sprite pack state
   const [currentSpritePack, setCurrentSpritePack] = useState<SpritePack>(() => getSpritePack(DEFAULT_SPRITE_PACK_ID));
   
+  // Day/night mode state
+  const [dayNightMode, setDayNightModeState] = useState<DayNightMode>('auto');
+  
   // Load game state and sprite pack from localStorage on mount (client-side only)
   useEffect(() => {
     // Load sprite pack preference
@@ -282,6 +316,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const pack = getSpritePack(savedPackId);
     setCurrentSpritePack(pack);
     setActiveSpritePack(pack);
+    
+    // Load day/night mode preference
+    const savedDayNightMode = loadDayNightMode();
+    setDayNightModeState(savedDayNightMode);
     
     // Load game state
     const saved = loadGameState();
@@ -605,6 +643,19 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     saveSpritePackId(packId);
   }, []);
 
+  const setDayNightMode = useCallback((mode: DayNightMode) => {
+    setDayNightModeState(mode);
+    saveDayNightMode(mode);
+  }, []);
+
+  // Compute the visual hour based on the day/night mode override
+  // This doesn't affect time progression, just the rendering
+  const visualHour = dayNightMode === 'auto' 
+    ? state.hour 
+    : dayNightMode === 'day' 
+      ? 12  // Noon - full daylight
+      : 22; // Night time
+
   const newGame = useCallback((name?: string, size?: number) => {
     clearGameState(); // Clear saved state when starting fresh
     const fresh = createInitialGameState(size ?? 60, name || 'IsoCity');
@@ -724,6 +775,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     currentSpritePack,
     availableSpritePacks: SPRITE_PACKS,
     setSpritePack,
+    // Day/night mode override
+    dayNightMode,
+    setDayNightMode,
+    visualHour,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

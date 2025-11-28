@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useGame } from '@/context/GameContext';
+import { useGame, DayNightMode } from '@/context/GameContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { SpriteTestPanel } from './SpriteTestPanel';
 
 export function SettingsPanel() {
-  const { state, setActivePanel, setDisastersEnabled, newGame, loadState, exportState, currentSpritePack, availableSpritePacks, setSpritePack } = useGame();
+  const { state, setActivePanel, setDisastersEnabled, newGame, loadState, exportState, currentSpritePack, availableSpritePacks, setSpritePack, dayNightMode, setDayNightMode } = useGame();
   const { disastersEnabled, cityName, gridSize } = state;
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -120,12 +121,14 @@ export function SettingsPanel() {
                         : 'border-border hover:border-muted-foreground/50 text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    <div className="w-10 h-10 rounded overflow-hidden bg-muted flex-shrink-0">
-                      <img 
+                    <div className="w-10 h-10 rounded overflow-hidden bg-muted flex-shrink-0 relative">
+                      <Image 
                         src={pack.src} 
                         alt={pack.name}
-                        className="w-full h-full object-cover object-top"
+                        fill
+                        className="object-cover object-top"
                         style={{ imageRendering: 'pixelated' }}
+                        unoptimized
                       />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -317,6 +320,39 @@ export function SettingsPanel() {
             >
               Load Example State 5
             </Button>
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={async () => {
+                const { default: exampleState6 } = await import('@/resources/example_state_6.json');
+                loadState(JSON.stringify(exampleState6));
+                setActivePanel('none');
+              }}
+            >
+              Load Example State 6
+            </Button>
+            
+            <div className="mt-4 pt-4 border-t border-border">
+              <Label>Day/Night Mode</Label>
+              <p className="text-muted-foreground text-xs mb-2">Override the time-of-day appearance without affecting time progression</p>
+              <div className="flex rounded-md border border-border overflow-hidden">
+                {(['auto', 'day', 'night'] as DayNightMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setDayNightMode(mode)}
+                    className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                      dayNightMode === mode
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {mode === 'auto' && 'Auto'}
+                    {mode === 'day' && 'Day'}
+                    {mode === 'night' && 'Night'}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>

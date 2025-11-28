@@ -243,14 +243,30 @@ export function CommandMenu() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  
+  // Handler to update search and reset selection
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    setSelectedIndex(0);
+  }, []);
+  
+  // Handler for dialog open state changes
+  const handleOpenChange = useCallback((newOpen: boolean) => {
+    setOpen(newOpen);
+    if (newOpen) {
+      setSearch('');
+      setSelectedIndex(0);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    }
+  }, []);
 
   // Register global callback to open the menu
   useEffect(() => {
-    openCommandMenuCallback = () => setOpen(true);
+    openCommandMenuCallback = () => handleOpenChange(true);
     return () => {
       openCommandMenuCallback = null;
     };
-  }, []);
+  }, [handleOpenChange]);
 
   // Filter items based on search
   const filteredItems = useMemo(() => {
@@ -293,11 +309,6 @@ export function CommandMenu() {
     return result;
   }, [groupedItems]);
 
-  // Reset selection when filter changes
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [search]);
-
   // Handle keyboard shortcut to open
   useEffect(() => {
     // Don't register on mobile
@@ -314,15 +325,6 @@ export function CommandMenu() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isMobileDevice]);
-
-  // Focus input when opening
-  useEffect(() => {
-    if (open) {
-      setSearch('');
-      setSelectedIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
-  }, [open]);
 
   // Handle item selection
   const handleSelect = useCallback((item: MenuItem) => {
@@ -372,7 +374,7 @@ export function CommandMenu() {
   if (isMobileDevice) return null;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent 
         className="p-0 gap-0 max-w-lg overflow-hidden bg-sidebar border-sidebar-border shadow-2xl"
         onKeyDown={handleKeyDown}
@@ -394,7 +396,7 @@ export function CommandMenu() {
           <Input
             ref={inputRef}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search tools, buildings, panels..."
             className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent h-12 text-sm"
           />

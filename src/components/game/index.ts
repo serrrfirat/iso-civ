@@ -10,6 +10,7 @@ export * from './gridFinders';
 export * from './renderHelpers';
 export * from './drawAircraft';
 export * from './drawPedestrians';
+export * from './trafficSystem';
 export { Sidebar } from './Sidebar';
 export { OverlayModeToggle } from './OverlayModeToggle';
 export { MiniMap } from './MiniMap';

@@ -4,7 +4,8 @@ import { CAR_COLORS, PEDESTRIAN_SKIN_COLORS, PEDESTRIAN_SHIRT_COLORS, PEDESTRIAN
 import { isRoadTile, getDirectionOptions, pickNextDirection, findPathOnRoads, getDirectionToTile, gridToScreen } from './utils';
 import { findResidentialBuildings, findPedestrianDestinations, findStations, findFires } from './gridFinders';
 import { drawPedestrians as drawPedestriansUtil } from './drawPedestrians';
-import { BuildingType } from '@/types/game';
+import { BuildingType, Tile } from '@/types/game';
+import { getTrafficLightState, canProceedThroughIntersection, TRAFFIC_LIGHT_TIMING } from './trafficSystem';
 
 export interface VehicleSystemRefs {
   carsRef: React.MutableRefObject<Car[]>;
@@ -20,6 +21,7 @@ export interface VehicleSystemRefs {
   pedestriansRef: React.MutableRefObject<Pedestrian[]>;
   pedestrianIdRef: React.MutableRefObject<number>;
   pedestrianSpawnTimerRef: React.MutableRefObject<number>;
+  trafficLightTimerRef: React.MutableRefObject<number>;
 }
 
 export interface VehicleSystemState {
@@ -55,6 +57,7 @@ export function useVehicleSystems(
     pedestriansRef,
     pedestrianIdRef,
     pedestrianSpawnTimerRef,
+    trafficLightTimerRef,
   } = refs;
 
   const { worldStateRef, gridVersionRef, cachedRoadTileCountRef, state, isMobile } = systemState;
@@ -72,6 +75,11 @@ export function useVehicleSystems(
       if (options.length === 0) continue;
       
       const direction = options[Math.floor(Math.random() * options.length)];
+      // Lane offset based on direction for proper right-hand traffic
+      // Positive offset = right side of road in direction of travel
+      const baseLaneOffset = 4 + Math.random() * 2;
+      // North and East get positive offset, South and West get negative
+      const laneSign = (direction === 'north' || direction === 'east') ? 1 : -1;
       carsRef.current.push({
         id: carIdRef.current++,
         tileX,
@@ -82,7 +90,7 @@ export function useVehicleSystems(
         age: 0,
         maxAge: 1800 + Math.random() * 2700,
         color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)],
-        laneOffset: (Math.random() < 0.5 ? -1 : 1) * (4 + Math.random() * 3),
+        laneOffset: laneSign * baseLaneOffset,
       });
       return true;
     }
@@ -537,6 +545,13 @@ export function useVehicleSystems(
     emergencyVehiclesRef.current = updatedVehicles;
   }, [worldStateRef, emergencyVehiclesRef, emergencyDispatchTimerRef, updateEmergencyDispatch, activeFiresRef, activeCrimesRef, activeCrimeIncidentsRef]);
 
+  // Helper to check if a tile is an intersection (3+ connections)
+  const isIntersection = useCallback((grid: Tile[][], gridSize: number, x: number, y: number): boolean => {
+    if (!isRoadTile(grid, gridSize, x, y)) return false;
+    const options = getDirectionOptions(grid, gridSize, x, y);
+    return options.length >= 3;
+  }, []);
+
   const updateCars = useCallback((delta: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
     if (!currentGrid || currentGridSize <= 0) {
@@ -557,6 +572,18 @@ export function useVehicleSystems(
       }
     }
     
+    // Get current traffic light state
+    const trafficTime = trafficLightTimerRef.current;
+    const lightState = getTrafficLightState(trafficTime);
+    
+    // Build spatial index of cars by tile for efficient collision detection
+    const carsByTile = new Map<string, Car[]>();
+    for (const car of carsRef.current) {
+      const key = `${car.tileX},${car.tileY}`;
+      if (!carsByTile.has(key)) carsByTile.set(key, []);
+      carsByTile.get(key)!.push(car);
+    }
+    
     const updatedCars: Car[] = [];
     for (const car of [...carsRef.current]) {
       let alive = true;
@@ -570,7 +597,59 @@ export function useVehicleSystems(
         continue;
       }
       
-      car.progress += car.speed * delta * speedMultiplier;
+      // Check if approaching an intersection with red light
+      // Only stop BEFORE entering the intersection, never while inside it
+      let shouldStop = false;
+      
+      const meta = DIRECTION_META[car.direction];
+      const nextX = car.tileX + meta.step.x;
+      const nextY = car.tileY + meta.step.y;
+      const currentIsIntersection = isIntersection(currentGrid, currentGridSize, car.tileX, car.tileY);
+      const nextIsIntersection = isIntersection(currentGrid, currentGridSize, nextX, nextY);
+      
+      // If we're NOT in an intersection and the next tile IS an intersection
+      if (!currentIsIntersection && nextIsIntersection) {
+        // Check immediately and stop well before the intersection
+        if (!canProceedThroughIntersection(car.direction, lightState)) {
+          shouldStop = true;
+        }
+      }
+      
+      // Check for car ahead - efficient spatial lookup
+      // Only check cars going the SAME direction (same lane)
+      if (!shouldStop) {
+        // Check same tile for car ahead in same lane
+        const sameTileCars = carsByTile.get(`${car.tileX},${car.tileY}`) || [];
+        for (const other of sameTileCars) {
+          if (other.id === car.id) continue;
+          // Same direction (same lane) and ahead of us
+          if (other.direction === car.direction && other.progress > car.progress) {
+            const gap = other.progress - car.progress;
+            if (gap < 0.25) {
+              shouldStop = true;
+              break;
+            }
+          }
+        }
+        
+        // Check next tile for car in same lane we might hit
+        if (!shouldStop && car.progress > 0.7) {
+          const nextTileCars = carsByTile.get(`${nextX},${nextY}`) || [];
+          for (const other of nextTileCars) {
+            // Only stop for cars going same direction (same lane)
+            if (other.direction === car.direction && other.progress < 0.3) {
+              shouldStop = true;
+              break;
+            }
+          }
+        }
+      }
+      
+      if (!shouldStop) {
+        car.progress += car.speed * delta * speedMultiplier;
+      }
+      // When stopped, just don't move - no position changes
+      
       let guard = 0;
       while (car.progress >= 1 && guard < 4) {
         guard++;
@@ -589,6 +668,12 @@ export function useVehicleSystems(
           alive = false;
           break;
         }
+        // Update lane offset when direction changes to maintain proper lane
+        if (nextDirection !== car.direction) {
+          const baseLaneOffset = 4 + Math.random() * 2;
+          const laneSign = (nextDirection === 'north' || nextDirection === 'east') ? 1 : -1;
+          car.laneOffset = laneSign * baseLaneOffset;
+        }
         car.direction = nextDirection;
       }
       
@@ -598,7 +683,7 @@ export function useVehicleSystems(
     }
     
     carsRef.current = updatedCars;
-  }, [worldStateRef, carsRef, carSpawnTimerRef, spawnRandomCar]);
+  }, [worldStateRef, carsRef, carSpawnTimerRef, spawnRandomCar, trafficLightTimerRef, isIntersection]);
 
   const updatePedestrians = useCallback((delta: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
@@ -665,7 +750,35 @@ export function useVehicleSystems(
         continue;
       }
       
-      ped.progress += ped.speed * delta * speedMultiplier;
+      // Most pedestrians respect traffic lights at intersections (based on their id)
+      // Check if approaching an intersection and should wait
+      let pedShouldWait = false;
+      const pedRespectsLights = (ped.id % 5) !== 0; // 80% respect lights (4 out of 5)
+      
+      if (pedRespectsLights && ped.pathIndex + 1 < ped.path.length && ped.progress > 0.6) {
+        const nextTile = ped.path[ped.pathIndex + 1];
+        // Check if next tile is an intersection
+        const nextNorth = isRoadTile(currentGrid, currentGridSize, nextTile.x - 1, nextTile.y);
+        const nextEast = isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y - 1);
+        const nextSouth = isRoadTile(currentGrid, currentGridSize, nextTile.x + 1, nextTile.y);
+        const nextWest = isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y + 1);
+        const isNextIntersection = [nextNorth, nextEast, nextSouth, nextWest].filter(Boolean).length >= 3;
+        
+        if (isNextIntersection) {
+          // Get traffic light state
+          const trafficTime = trafficLightTimerRef.current;
+          const lightState = getTrafficLightState(trafficTime);
+          
+          // Pedestrians wait when they can't proceed (same logic as cars)
+          if (!canProceedThroughIntersection(ped.direction, lightState)) {
+            pedShouldWait = true;
+          }
+        }
+      }
+      
+      if (!pedShouldWait) {
+        ped.progress += ped.speed * delta * speedMultiplier;
+      }
       
       if (ped.path.length === 1 && ped.progress >= 1) {
         if (!ped.returningHome) {
@@ -763,7 +876,7 @@ export function useVehicleSystems(
     }
     
     pedestriansRef.current = updatedPedestrians;
-  }, [worldStateRef, gridVersionRef, cachedRoadTileCountRef, pedestriansRef, pedestrianSpawnTimerRef, spawnPedestrian, isMobile]);
+  }, [worldStateRef, gridVersionRef, cachedRoadTileCountRef, pedestriansRef, pedestrianSpawnTimerRef, spawnPedestrian, isMobile, trafficLightTimerRef]);
 
   const drawCars = useCallback((ctx: CanvasRenderingContext2D) => {
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
@@ -842,8 +955,8 @@ export function useVehicleSystems(
       ctx.save();
       ctx.translate(carX, carY);
       ctx.rotate(meta.angle);
-      
-      const scale = 0.7;
+
+      const scale = 0.5; // 30% smaller than original
       
       ctx.fillStyle = car.color;
       ctx.beginPath();

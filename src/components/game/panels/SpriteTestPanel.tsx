@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useGame } from '@/context/GameContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,7 +8,7 @@ import { getSpriteCoords } from '@/lib/renderConfig';
 
 export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
   const { currentSpritePack } = useGame();
-  const [activeTab, setActiveTab] = useState<string>('main');
+  const [selectedTab, setSelectedTab] = useState<string>('main');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [spriteSheets, setSpriteSheets] = useState<Record<string, HTMLImageElement | null>>({
     main: null,
@@ -51,6 +51,24 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
       loadSheet(currentSpritePack.parksConstructionSrc, 'parksConstruction'),
     ]);
   }, [currentSpritePack]);
+  
+  const availableTabs = useMemo(() => [
+    { id: 'main', label: 'Main', available: !!spriteSheets.main },
+    { id: 'construction', label: 'Construction', available: !!spriteSheets.construction },
+    { id: 'abandoned', label: 'Abandoned', available: !!spriteSheets.abandoned },
+    { id: 'dense', label: 'High Density', available: !!spriteSheets.dense },
+    { id: 'modern', label: 'Modern', available: !!spriteSheets.modern },
+    { id: 'parks', label: 'Parks', available: !!spriteSheets.parks },
+    { id: 'parksConstruction', label: 'Parks Construction', available: !!spriteSheets.parksConstruction },
+  ].filter(tab => tab.available), [spriteSheets]);
+  
+  // Derive the actual active tab - fall back to first available if selected is not available
+  const activeTab = useMemo(() => {
+    if (availableTabs.length > 0 && !availableTabs.find(t => t.id === selectedTab)) {
+      return availableTabs[0].id;
+    }
+    return selectedTab;
+  }, [availableTabs, selectedTab]);
   
   // Draw sprite test grid
   useEffect(() => {
@@ -260,23 +278,6 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
     });
   }, [spriteSheets, activeTab, currentSpritePack]);
   
-  const availableTabs = [
-    { id: 'main', label: 'Main', available: !!spriteSheets.main },
-    { id: 'construction', label: 'Construction', available: !!spriteSheets.construction },
-    { id: 'abandoned', label: 'Abandoned', available: !!spriteSheets.abandoned },
-    { id: 'dense', label: 'High Density', available: !!spriteSheets.dense },
-    { id: 'modern', label: 'Modern', available: !!spriteSheets.modern },
-    { id: 'parks', label: 'Parks', available: !!spriteSheets.parks },
-    { id: 'parksConstruction', label: 'Parks Construction', available: !!spriteSheets.parksConstruction },
-  ].filter(tab => tab.available);
-  
-  // Set first available tab if current tab is not available
-  useEffect(() => {
-    if (availableTabs.length > 0 && !availableTabs.find(t => t.id === activeTab)) {
-      setActiveTab(availableTabs[0].id);
-    }
-  }, [availableTabs, activeTab]);
-  
   const currentSheetInfo = activeTab === 'main' ? currentSpritePack.src :
                           activeTab === 'construction' ? currentSpritePack.constructionSrc :
                           activeTab === 'abandoned' ? currentSpritePack.abandonedSrc :
@@ -299,7 +300,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
           </DialogDescription>
         </DialogHeader>
         
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={setSelectedTab} className="w-full">
           <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${availableTabs.length}, 1fr)` }}>
             {availableTabs.map(tab => (
               <TabsTrigger key={tab.id} value={tab.id} className="text-xs">

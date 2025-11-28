@@ -209,7 +209,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     fire_station: -0.2, // Shifted up to match police station
     police_station: -0.1, // Shifted down from previous position
     hospital: -0.5, // Shift up (reduced from previous)
-    school: -0.4, // Shift down a tiny bit
+    school: -0.35, // Shifted down 0.05 tiles from -0.4
     power_plant: -0.3, // Shift up
     park: -0.15, // Perfect position
     park_large: -0.85, // Shift up significantly (almost an entire tile)
@@ -220,6 +220,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     university: -0.55, // Shift up a tiny bit
     stadium: -1.2, // Shift up a ton
     museum: -1.0, // Shift up 1 tile
+    tree: -0.3, // Shift up 0.3 tiles
   },
   horizontalOffsets: {
     university: 0.0, // Shift right a tiny tiny bit more
@@ -357,15 +358,15 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     swimming_pool: -0.20,  // shifted up slightly
     skate_park: -0.25,  // shifted up 0.1 tiles
     mini_golf_course: -0.55,  // shifted down 0.3 tiles total
-    bleachers_field: -0.3,  // shifted up 0.1 tiles
+    bleachers_field: -0.2,  // shifted down 0.1 tiles from -0.3
     go_kart_track: -0.40,  // shifted down 0.15 tiles from -0.55
     amphitheater: -0.45,  // shifted up 0.1 tiles
     greenhouse_garden: -0.55,  // shifted down 0.3
     animal_pens_farm: -0.25,  // shifted up 0.1 tiles
     cabin_house: -0.2,
     campground: -0.15,
-    marina_docks_small: 0.05,  // 2x2 building, shifted down 0.6 tiles
-    pier_large: -0.15,  // 1x1 building now
+    marina_docks_small: -0.45,  // 2x2 building, shifted up 0.7 tiles from 0.25
+    pier_large: -0.1,  // 1x1 building, shifted down 0.1 tiles from -0.2
     roller_coaster_small: -0.50,  // shifted up 0.15 tiles from -0.35
     community_garden: -0.15,
     pond_park: -0.15,
@@ -378,6 +379,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   },
   parksScales: {
     baseball_stadium: 0.81,  // 10% smaller than 0.90
+    baseball_field_small: 0.95,  // scaled down 5%
     swimming_pool: 0.90,  // scaled down 10% total (5% more from 0.95)
     soccer_field_small: 0.95,  // scaled down 5%
     go_kart_track: 0.92,  // scaled down 8%

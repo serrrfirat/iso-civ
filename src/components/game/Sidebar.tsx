@@ -67,7 +67,7 @@ const HoverSubmenu = React.memo(function HoverSubmenu({
       });
     }
     setIsOpen(true);
-  }, [clearCloseTimeout]);
+  }, [clearCloseTimeout, forceOpenUpward]);
   
   // Triangle rule: Check if cursor is moving toward the submenu
   const isMovingTowardSubmenu = useCallback((e: React.MouseEvent) => {
