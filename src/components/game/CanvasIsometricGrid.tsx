@@ -3139,8 +3139,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // Special handling for buildings that have content bleeding from row above - shift source down to avoid capturing
               // content from the sprite above it in the sprite sheet
               if (buildingType === 'marina_docks_small') {
-                sourceY += tileHeight * 0.25; // Shift down 25% to avoid row above clipping
-                sourceH = tileHeight * 0.75; // Reduce height by 25% to avoid row below clipping
+                sourceY += tileHeight * 0.15; // Shift down 15% to avoid row above clipping (reduced from 25%)
+                sourceH = tileHeight * 0.85; // Reduce height by 15% to avoid row below clipping
               } else if (buildingType === 'pier_large') {
                 sourceY += tileHeight * 0.2; // Shift down 20% to avoid row above clipping
                 sourceH = tileHeight * 0.8; // Reduce height by 20% to avoid row below clipping
