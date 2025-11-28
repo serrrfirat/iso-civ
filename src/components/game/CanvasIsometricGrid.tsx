@@ -2397,6 +2397,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       {
         ctx.fillStyle = sidewalkColor;
         const cs = swWidth * 0.8;
+        const isFourWay = north && east && south && west;
         
         // Top corner - draw if north AND east both have roads
         if (north && east) {
@@ -2413,9 +2414,17 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         if (east && south) {
           ctx.beginPath();
           ctx.moveTo(rightCorner.x, rightCorner.y);
-          ctx.lineTo(rightCorner.x - cs, rightCorner.y - cs * 0.5);
-          ctx.lineTo(rightCorner.x - cs * 2, rightCorner.y);
-          ctx.lineTo(rightCorner.x - cs, rightCorner.y + cs * 0.5);
+          if (isFourWay) {
+            // At 4-way intersections, use rotated shape (tall/narrow)
+            ctx.lineTo(rightCorner.x - cs * 0.625, rightCorner.y - cs * 1.25);
+            ctx.lineTo(rightCorner.x - cs * 1.25, rightCorner.y);
+            ctx.lineTo(rightCorner.x - cs * 0.625, rightCorner.y + cs * 1.25);
+          } else {
+            // At T-intersections/corners, use flat shape
+            ctx.lineTo(rightCorner.x - cs, rightCorner.y - cs * 0.5);
+            ctx.lineTo(rightCorner.x - cs * 2, rightCorner.y);
+            ctx.lineTo(rightCorner.x - cs, rightCorner.y + cs * 0.5);
+          }
           ctx.closePath();
           ctx.fill();
         }
@@ -2435,9 +2444,17 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         if (west && north) {
           ctx.beginPath();
           ctx.moveTo(leftCorner.x, leftCorner.y);
-          ctx.lineTo(leftCorner.x + cs, leftCorner.y - cs * 0.5);
-          ctx.lineTo(leftCorner.x + cs * 2, leftCorner.y);
-          ctx.lineTo(leftCorner.x + cs, leftCorner.y + cs * 0.5);
+          if (isFourWay) {
+            // At 4-way intersections, use rotated shape (tall/narrow)
+            ctx.lineTo(leftCorner.x + cs * 0.625, leftCorner.y - cs * 1.25);
+            ctx.lineTo(leftCorner.x + cs * 1.25, leftCorner.y);
+            ctx.lineTo(leftCorner.x + cs * 0.625, leftCorner.y + cs * 1.25);
+          } else {
+            // At T-intersections/corners, use flat shape
+            ctx.lineTo(leftCorner.x + cs, leftCorner.y - cs * 0.5);
+            ctx.lineTo(leftCorner.x + cs * 2, leftCorner.y);
+            ctx.lineTo(leftCorner.x + cs, leftCorner.y + cs * 0.5);
+          }
           ctx.closePath();
           ctx.fill();
         }
