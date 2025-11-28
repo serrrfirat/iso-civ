@@ -1147,16 +1147,32 @@ function calculateStats(grid: Tile[][], size: number, budget: Budget, taxRate: n
   }
 
   // Calculate demand - subway network boosts commercial demand
-  // Tax rate affects demand: higher taxes reduce demand, lower taxes increase it
-  // Base tax rate is 9%, so we calculate penalty/bonus relative to that
-  // At 9% tax: no modifier. At 0% tax: +18 demand. At 20% tax: -22 demand
+  // Tax rate affects demand as BOTH a multiplier and additive modifier:
+  // - Multiplier: At 100% tax, demand is reduced to 0 regardless of other factors
+  // - Additive: Small bonus/penalty around the base rate for fine-tuning
+  // Base tax rate is 9%, so we calculate relative to that
   // Uses effectiveTaxRate (lagged) so changes don't impact demand immediately
-  const taxDemandModifier = (9 - effectiveTaxRate) * 2;
+  
+  // Tax multiplier: 1.0 at 0% tax, ~1.0 at 9% tax, 0.0 at 100% tax
+  // This ensures high taxes dramatically reduce demand regardless of other factors
+  const taxMultiplier = Math.max(0, 1 - (effectiveTaxRate - 9) / 91);
+  
+  // Small additive modifier for fine-tuning around base rate
+  // At 9% tax: 0. At 0% tax: +18. At 20% tax: -22
+  const taxAdditiveModifier = (9 - effectiveTaxRate) * 2;
   
   const subwayBonus = Math.min(20, subwayTiles * 0.5 + subwayStations * 3);
-  const residentialDemand = Math.min(100, Math.max(-100, (jobs - population * 0.7) / 18 + taxDemandModifier));
-  const commercialDemand = Math.min(100, Math.max(-100, (population * 0.3 - jobs * 0.3) / 4 + subwayBonus + taxDemandModifier * 0.8));
-  const industrialDemand = Math.min(100, Math.max(-100, (population * 0.35 - jobs * 0.3) / 2.0 + taxDemandModifier * 0.5));
+  
+  // Calculate base demands from economic factors
+  const baseResidentialDemand = (jobs - population * 0.7) / 18;
+  const baseCommercialDemand = (population * 0.3 - jobs * 0.3) / 4 + subwayBonus;
+  const baseIndustrialDemand = (population * 0.35 - jobs * 0.3) / 2.0;
+  
+  // Apply tax effect: multiply by tax factor, then add small modifier
+  // The multiplier ensures high taxes crush demand; the additive fine-tunes at normal rates
+  const residentialDemand = Math.min(100, Math.max(-100, baseResidentialDemand * taxMultiplier + taxAdditiveModifier));
+  const commercialDemand = Math.min(100, Math.max(-100, baseCommercialDemand * taxMultiplier + taxAdditiveModifier * 0.8));
+  const industrialDemand = Math.min(100, Math.max(-100, baseIndustrialDemand * taxMultiplier + taxAdditiveModifier * 0.5));
 
   // Calculate income and expenses
   const income = Math.floor(population * taxRate * 0.1 + jobs * taxRate * 0.05);
@@ -1657,9 +1673,9 @@ export function simulateTick(state: GameState): GameState {
 
   // Gradually move effectiveTaxRate toward taxRate
   // This creates a lagging effect so tax changes don't immediately impact demand
-  // Rate of change: ~0.1% per tick, so a 10% change takes ~100 ticks (~3 game days)
+  // Rate of change: 10% of difference per tick, so large changes take ~20-30 ticks (~1 game day)
   const taxRateDiff = state.taxRate - state.effectiveTaxRate;
-  const newEffectiveTaxRate = state.effectiveTaxRate + taxRateDiff * 0.02;
+  const newEffectiveTaxRate = state.effectiveTaxRate + taxRateDiff * 0.1;
 
   // Calculate stats (using lagged effectiveTaxRate for demand calculations)
   const newStats = calculateStats(newGrid, size, newBudget, state.taxRate, newEffectiveTaxRate, services);
