@@ -102,6 +102,20 @@ export interface SpritePack {
   farmsHorizontalOffsets?: Record<string, number>;
   // Per-building-type scale adjustments for FARMS sprite sheet buildings
   farmsScales?: Record<string, number>;
+  // Path to the shops sprite sheet (alternate variants for shop buildings)
+  shopsSrc?: string;
+  // Shops layout configuration (columns and rows for the shops sheet)
+  shopsCols?: number;
+  shopsRows?: number;
+  // Shops variants: maps building type to available variants in the shops sheet
+  // Each variant specifies row and column (0-indexed) in the shops sprite sheet
+  shopsVariants?: Record<string, { row: number; col: number }[]>;
+  // Per-building-type vertical offset adjustments for SHOPS sprite sheet buildings
+  shopsVerticalOffsets?: Record<string, number>;
+  // Per-building-type horizontal offset adjustments for SHOPS sprite sheet buildings
+  shopsHorizontalOffsets?: Record<string, number>;
+  // Per-building-type scale adjustments for SHOPS sprite sheet buildings
+  shopsScales?: Record<string, number>;
   // Maps building types to sprite keys in spriteOrder
   buildingToSprite: Record<string, string>;
   // Optional global scale multiplier for all sprites in this pack
@@ -411,6 +425,40 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   },
   farmsHorizontalOffsets: {},
   farmsScales: {},
+  // Shops sprite sheet configuration (variants for shop_small and shop_medium)
+  shopsSrc: '/assets/sprites_red_water_new_shops.png',
+  shopsCols: 5,
+  shopsRows: 6,
+  shopsVariants: {
+    // Shop sprites for 1x1 low-density commercial (shop_small and shop_medium)
+    // Available rows: 0, 1 (except col 0), 3 (except col 3), 4, 5 (except col 4)
+    shop_small: [
+      // Row 0 (entire row)
+      { row: 0, col: 0 }, { row: 0, col: 1 }, { row: 0, col: 2 }, { row: 0, col: 3 }, { row: 0, col: 4 },
+      // Row 1 (except col 0)
+      { row: 1, col: 1 }, { row: 1, col: 2 }, { row: 1, col: 3 }, { row: 1, col: 4 },
+      // Row 3 (except col 3)
+      { row: 3, col: 0 }, { row: 3, col: 1 },
+    ],
+    shop_medium: [
+      // Row 3 (except col 3) - continued
+      { row: 3, col: 2 }, { row: 3, col: 4 },
+      // Row 4 (entire row)
+      { row: 4, col: 0 }, { row: 4, col: 1 }, { row: 4, col: 2 }, { row: 4, col: 3 }, { row: 4, col: 4 },
+      // Row 5 (except cols 1, 3, and 4)
+      { row: 5, col: 0 }, { row: 5, col: 2 },
+    ],
+  },
+  shopsVerticalOffsets: {
+    // Shifted up 0.1 from -0.25
+    shop_small: -0.35,
+    shop_medium: -0.35,
+  },
+  shopsHorizontalOffsets: {},
+  shopsScales: {
+    shop_small: 0.90,  // Scale down 10% total
+    shop_medium: 0.90, // Scale down 10% total
+  },
   buildingToSprite: {
     house_small: 'house_small',
     house_medium: 'house_medium',
