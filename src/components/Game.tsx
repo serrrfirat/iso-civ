@@ -38,6 +38,7 @@ import {
 } from './ui/Icons';
 import { SPRITE_SHEET, getSpriteCoords, BUILDING_TO_SPRITE, SPRITE_VERTICAL_OFFSETS, SPRITE_HORIZONTAL_OFFSETS, SPRITE_ORDER, SpritePack, getActiveSpritePack } from '@/lib/renderConfig';
 import exampleState from '@/resources/example_state.json';
+import exampleState2 from '@/resources/example_state_2.json';
 
 // Import shadcn components
 import { Button } from '@/components/ui/button';
@@ -1910,6 +1911,16 @@ function SettingsPanel() {
               }}
             >
               Load Example State
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={() => {
+                loadState(JSON.stringify(exampleState2));
+                setActivePanel('none');
+              }}
+            >
+              Load Example State 2
             </Button>
           </div>
         </div>
@@ -6686,8 +6697,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
               // Use state-specific offset if available, then fall back to building-type or sprite-key offsets
               // Priority: construction > abandoned > parks > dense > building-type > sprite-key
               let extraOffset = 0;
-              if (isUnderConstruction && activePack.constructionVerticalOffsets && spriteKey && spriteKey in activePack.constructionVerticalOffsets) {
-                extraOffset = activePack.constructionVerticalOffsets[spriteKey] * h;
+              if (isUnderConstruction && activePack.constructionVerticalOffsets && buildingType in activePack.constructionVerticalOffsets) {
+                extraOffset = activePack.constructionVerticalOffsets[buildingType] * h;
               } else if (isAbandoned && activePack.abandonedVerticalOffsets && buildingType in activePack.abandonedVerticalOffsets) {
                 // Abandoned buildings may need different positioning than normal
                 extraOffset = activePack.abandonedVerticalOffsets[buildingType] * h;
