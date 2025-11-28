@@ -4425,7 +4425,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
           }
           
           // Wake particles expand and fade over time
-          const size = 2 + particle.age * 4;
+          const size = 1.2 + particle.age * 2;
           const opacity = particle.opacity * 0.5;
           
           ctx.fillStyle = `rgba(200, 220, 255, ${opacity})`;
@@ -4444,7 +4444,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       ctx.translate(boat.x, boat.y);
       ctx.rotate(boat.angle);
       
-      const scale = boat.sizeVariant === 0 ? 0.8 : 1.0;
+      const scale = boat.sizeVariant === 0 ? 0.5 : 0.65;
       ctx.scale(scale, scale);
       
       // Draw small foam/splash at stern when moving
