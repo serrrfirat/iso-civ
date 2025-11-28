@@ -214,6 +214,28 @@ export type Boat = {
   homeScreenY: number;
 };
 
+// Smog/smoke particle types for industrial factories
+export type SmogParticle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+  maxAge: number;
+  size: number;
+  opacity: number;
+};
+
+export type FactorySmog = {
+  tileX: number;
+  tileY: number;
+  screenX: number;
+  screenY: number;
+  buildingType: 'factory_medium' | 'factory_large';
+  particles: SmogParticle[];
+  spawnTimer: number;
+};
+
 // Firework types for nighttime celebrations at stadiums, amusement parks, and marinas
 export type FireworkState = 'launching' | 'exploding' | 'fading';
 

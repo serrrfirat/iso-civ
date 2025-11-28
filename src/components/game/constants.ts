@@ -29,6 +29,24 @@ export const BOAT_MIN_ZOOM = 0.3; // Minimum zoom level to show boats
 export const WAKE_MAX_AGE = 2.0; // seconds - how long wake particles last
 export const WAKE_SPAWN_INTERVAL = 0.03; // seconds between wake particles
 
+// Factory smog system constants
+export const SMOG_BUILDINGS: BuildingType[] = ['factory_medium', 'factory_large'];
+export const SMOG_PARTICLE_MAX_AGE = 8.0; // seconds - how long smog particles last
+export const SMOG_PARTICLE_MAX_AGE_MOBILE = 5.0; // seconds - shorter on mobile for performance
+export const SMOG_SPAWN_INTERVAL_MEDIUM = 0.4; // seconds between particles for medium factory
+export const SMOG_SPAWN_INTERVAL_LARGE = 0.2; // seconds between particles for large factory
+export const SMOG_SPAWN_INTERVAL_MOBILE_MULTIPLIER = 2.0; // Spawn less frequently on mobile
+export const SMOG_DRIFT_SPEED = 8; // pixels per second horizontal drift
+export const SMOG_RISE_SPEED = 12; // pixels per second upward drift
+export const SMOG_MAX_ZOOM = 1.2; // Zoom level above which smog starts to fade
+export const SMOG_FADE_ZOOM = 1.8; // Zoom level at which smog is fully invisible
+export const SMOG_BASE_OPACITY = 0.25; // Base opacity of smog particles
+export const SMOG_PARTICLE_SIZE_MIN = 8; // Minimum particle size
+export const SMOG_PARTICLE_SIZE_MAX = 20; // Maximum particle size
+export const SMOG_PARTICLE_GROWTH = 0.5; // How much particles grow per second
+export const SMOG_MAX_PARTICLES_PER_FACTORY = 25; // Maximum particles per factory to prevent memory issues
+export const SMOG_MAX_PARTICLES_PER_FACTORY_MOBILE = 12; // Lower limit on mobile
+
 // Firework system constants
 export const FIREWORK_BUILDINGS: BuildingType[] = ['baseball_stadium', 'amusement_park', 'marina_docks_small', 'pier_large'];
 export const FIREWORK_COLORS = [

@@ -83,6 +83,8 @@ import {
   Firework,
   FireworkState,
   FireworkParticle,
+  SmogParticle,
+  FactorySmog,
   DirectionMeta,
   WorldRenderState,
   OverlayMode,
@@ -114,6 +116,22 @@ import {
   FIREWORK_SPAWN_INTERVAL_MAX,
   FIREWORK_SHOW_DURATION,
   FIREWORK_SHOW_CHANCE,
+  SMOG_BUILDINGS,
+  SMOG_PARTICLE_MAX_AGE,
+  SMOG_PARTICLE_MAX_AGE_MOBILE,
+  SMOG_SPAWN_INTERVAL_MEDIUM,
+  SMOG_SPAWN_INTERVAL_LARGE,
+  SMOG_SPAWN_INTERVAL_MOBILE_MULTIPLIER,
+  SMOG_DRIFT_SPEED,
+  SMOG_RISE_SPEED,
+  SMOG_MAX_ZOOM,
+  SMOG_FADE_ZOOM,
+  SMOG_BASE_OPACITY,
+  SMOG_PARTICLE_SIZE_MIN,
+  SMOG_PARTICLE_SIZE_MAX,
+  SMOG_PARTICLE_GROWTH,
+  SMOG_MAX_PARTICLES_PER_FACTORY,
+  SMOG_MAX_PARTICLES_PER_FACTORY_MOBILE,
   DIRECTION_META,
   OPPOSITE_DIRECTION,
 } from '@/components/game/constants';
@@ -1663,6 +1681,19 @@ function AdvisorsPanel() {
 // Image cache for building sprites
 const imageCache = new Map<string, HTMLImageElement>();
 
+// Event emitter for image loading progress (to trigger re-renders)
+type ImageLoadCallback = () => void;
+const imageLoadCallbacks = new Set<ImageLoadCallback>();
+
+function onImageLoaded(callback: ImageLoadCallback): () => void {
+  imageLoadCallbacks.add(callback);
+  return () => { imageLoadCallbacks.delete(callback); };
+}
+
+function notifyImageLoaded() {
+  imageLoadCallbacks.forEach(cb => cb());
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   if (imageCache.has(src)) {
     return Promise.resolve(imageCache.get(src)!);
@@ -1672,11 +1703,124 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     const img = new Image();
     img.onload = () => {
       imageCache.set(src, img);
+      notifyImageLoaded(); // Notify listeners that a new image is available
       resolve(img);
     };
     img.onerror = reject;
     img.src = src;
   });
+}
+
+// ============================================================================
+// PLACEHOLDER BUILDING COLORS
+// ============================================================================
+// Colors for rendering buildings before sprites are loaded
+// Based on zone/category for visual consistency
+
+const PLACEHOLDER_COLORS: Record<string, { top: string; left: string; right: string; height: number }> = {
+  // Residential - greens
+  house_small: { top: '#4ade80', left: '#22c55e', right: '#86efac', height: 0.6 },
+  house_medium: { top: '#4ade80', left: '#22c55e', right: '#86efac', height: 0.8 },
+  mansion: { top: '#22c55e', left: '#16a34a', right: '#4ade80', height: 1.0 },
+  apartment_low: { top: '#22c55e', left: '#16a34a', right: '#4ade80', height: 1.2 },
+  apartment_high: { top: '#16a34a', left: '#15803d', right: '#22c55e', height: 1.8 },
+  // Commercial - blues
+  shop_small: { top: '#60a5fa', left: '#3b82f6', right: '#93c5fd', height: 0.5 },
+  shop_medium: { top: '#60a5fa', left: '#3b82f6', right: '#93c5fd', height: 0.7 },
+  office_low: { top: '#3b82f6', left: '#2563eb', right: '#60a5fa', height: 1.3 },
+  office_high: { top: '#2563eb', left: '#1d4ed8', right: '#3b82f6', height: 2.0 },
+  mall: { top: '#1d4ed8', left: '#1e40af', right: '#2563eb', height: 1.0 },
+  // Industrial - oranges/ambers
+  factory_small: { top: '#fbbf24', left: '#f59e0b', right: '#fcd34d', height: 0.6 },
+  factory_medium: { top: '#f59e0b', left: '#d97706', right: '#fbbf24', height: 0.9 },
+  factory_large: { top: '#d97706', left: '#b45309', right: '#f59e0b', height: 1.2 },
+  warehouse: { top: '#fbbf24', left: '#f59e0b', right: '#fcd34d', height: 0.7 },
+  // Services - purples/pinks
+  police_station: { top: '#818cf8', left: '#6366f1', right: '#a5b4fc', height: 0.8 },
+  fire_station: { top: '#f87171', left: '#ef4444', right: '#fca5a5', height: 0.8 },
+  hospital: { top: '#f472b6', left: '#ec4899', right: '#f9a8d4', height: 1.2 },
+  school: { top: '#c084fc', left: '#a855f7', right: '#d8b4fe', height: 0.8 },
+  university: { top: '#a855f7', left: '#9333ea', right: '#c084fc', height: 1.0 },
+  // Parks - teals
+  park: { top: '#2dd4bf', left: '#14b8a6', right: '#5eead4', height: 0.2 },
+  park_large: { top: '#14b8a6', left: '#0d9488', right: '#2dd4bf', height: 0.3 },
+  tennis: { top: '#5eead4', left: '#2dd4bf', right: '#99f6e4', height: 0.2 },
+  tree: { top: '#22c55e', left: '#16a34a', right: '#4ade80', height: 0.5 },
+  // Utilities - grays
+  power_plant: { top: '#9ca3af', left: '#6b7280', right: '#d1d5db', height: 1.0 },
+  water_tower: { top: '#60a5fa', left: '#3b82f6', right: '#93c5fd', height: 1.4 },
+  subway_station: { top: '#6b7280', left: '#4b5563', right: '#9ca3af', height: 0.5 },
+  // Special - golds
+  stadium: { top: '#fbbf24', left: '#f59e0b', right: '#fcd34d', height: 0.8 },
+  museum: { top: '#e879f9', left: '#d946ef', right: '#f0abfc', height: 0.9 },
+  airport: { top: '#9ca3af', left: '#6b7280', right: '#d1d5db', height: 0.4 },
+  space_program: { top: '#f1f5f9', left: '#e2e8f0', right: '#f8fafc', height: 1.5 },
+  city_hall: { top: '#fbbf24', left: '#f59e0b', right: '#fcd34d', height: 1.2 },
+  amusement_park: { top: '#fb7185', left: '#f43f5e', right: '#fda4af', height: 0.8 },
+  // Default for unknown/park buildings
+  default: { top: '#9ca3af', left: '#6b7280', right: '#d1d5db', height: 0.6 },
+};
+
+/**
+ * Draw a placeholder isometric building box when sprites aren't loaded yet.
+ * Uses simple colored 3D boxes that match the zone/category.
+ */
+function drawPlaceholderBuilding(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  buildingType: string,
+  tileWidth: number,
+  tileHeight: number
+): void {
+  const colors = PLACEHOLDER_COLORS[buildingType] || PLACEHOLDER_COLORS.default;
+  const boxHeight = tileHeight * colors.height;
+  
+  const w = tileWidth;
+  const h = tileHeight;
+  const cx = x + w / 2;
+  const topY = y - boxHeight;
+  
+  // Draw left face (darker)
+  ctx.fillStyle = colors.left;
+  ctx.beginPath();
+  ctx.moveTo(x, y + h / 2);
+  ctx.lineTo(cx, y + h);
+  ctx.lineTo(cx, topY + h);
+  ctx.lineTo(x, topY + h / 2);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Draw right face (lighter)
+  ctx.fillStyle = colors.right;
+  ctx.beginPath();
+  ctx.moveTo(x + w, y + h / 2);
+  ctx.lineTo(cx, y + h);
+  ctx.lineTo(cx, topY + h);
+  ctx.lineTo(x + w, topY + h / 2);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Draw top face
+  ctx.fillStyle = colors.top;
+  ctx.beginPath();
+  ctx.moveTo(cx, topY);
+  ctx.lineTo(x + w, topY + h / 2);
+  ctx.lineTo(cx, topY + h);
+  ctx.lineTo(x, topY + h / 2);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Add subtle edge lines
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(cx, topY);
+  ctx.lineTo(x + w, topY + h / 2);
+  ctx.lineTo(cx, topY + h);
+  ctx.lineTo(x, topY + h / 2);
+  ctx.closePath();
+  ctx.stroke();
 }
 
 // Canvas-based Isometric Grid - HIGH PERFORMANCE
@@ -1757,6 +1901,10 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
   const fireworkShowStartTimeRef = useRef(0);
   const fireworkLastHourRef = useRef(-1); // Track hour changes to detect night transitions
 
+  // Factory smog system refs
+  const factorySmogRef = useRef<FactorySmog[]>([]);
+  const smogLastGridVersionRef = useRef(-1); // Track when to rebuild factory list
+
   // Performance: Cache expensive grid calculations
   const cachedRoadTileCountRef = useRef<{ count: number; gridVersion: number }>({ count: 0, gridVersion: -1 });
   const cachedPopulationRef = useRef<{ count: number; gridVersion: number }>({ count: 0, gridVersion: -1 });
@@ -1773,7 +1921,10 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
   const [lastPlacedTile, setLastPlacedTile] = useState<{ x: number; y: number } | null>(null);
   const [roadDrawDirection, setRoadDrawDirection] = useState<'h' | 'v' | null>(null);
   const placedRoadTilesRef = useRef<Set<string>>(new Set());
-  const [imagesLoaded, setImagesLoaded] = useState(false);
+  // Track progressive image loading - start true to render immediately with placeholders
+  const [imagesLoaded, setImagesLoaded] = useState(true);
+  // Counter to trigger re-renders when new images become available
+  const [imageLoadVersion, setImageLoadVersion] = useState(0);
   const [canvasSize, setCanvasSize] = useState({ width: 1200, height: 800 });
   const [dragStartTile, setDragStartTile] = useState<{ x: number; y: number } | null>(null);
   const [dragEndTile, setDragEndTile] = useState<{ x: number; y: number } | null>(null);
@@ -4801,6 +4952,234 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     ctx.restore();
   }, []);
 
+  // Find all factories that should emit smog (medium and large)
+  const findSmogFactories = useCallback((): { x: number; y: number; type: 'factory_medium' | 'factory_large' }[] => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0) return [];
+    
+    const factories: { x: number; y: number; type: 'factory_medium' | 'factory_large' }[] = [];
+    for (let y = 0; y < currentGridSize; y++) {
+      for (let x = 0; x < currentGridSize; x++) {
+        const tile = currentGrid[y][x];
+        const buildingType = tile.building.type;
+        // Only include operating factories (powered, not abandoned, not under construction)
+        if ((buildingType === 'factory_medium' || buildingType === 'factory_large') &&
+            tile.building.powered &&
+            !tile.building.abandoned &&
+            tile.building.constructionProgress >= 100) {
+          factories.push({ x, y, type: buildingType });
+        }
+      }
+    }
+    return factories;
+  }, []);
+
+  // Update smog particles - spawn new particles and update existing ones
+  const updateSmog = useCallback((delta: number) => {
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
+    
+    if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
+      return;
+    }
+    
+    // Skip smog updates entirely when zoomed in enough that it won't be visible
+    if (currentZoom > SMOG_FADE_ZOOM) {
+      return;
+    }
+    
+    const speedMultiplier = [0, 1, 2, 4][currentSpeed] || 1;
+    const adjustedDelta = delta * speedMultiplier;
+    
+    // Mobile performance optimizations
+    const maxParticles = isMobile ? SMOG_MAX_PARTICLES_PER_FACTORY_MOBILE : SMOG_MAX_PARTICLES_PER_FACTORY;
+    const particleMaxAge = isMobile ? SMOG_PARTICLE_MAX_AGE_MOBILE : SMOG_PARTICLE_MAX_AGE;
+    const spawnMultiplier = isMobile ? SMOG_SPAWN_INTERVAL_MOBILE_MULTIPLIER : 1;
+    
+    // Rebuild factory list if grid has changed
+    const currentGridVersion = gridVersionRef.current;
+    if (smogLastGridVersionRef.current !== currentGridVersion) {
+      smogLastGridVersionRef.current = currentGridVersion;
+      
+      const factories = findSmogFactories();
+      
+      // Create new smog entries for factories, preserving existing particles where possible
+      const existingSmogMap = new Map<string, FactorySmog>();
+      for (const smog of factorySmogRef.current) {
+        existingSmogMap.set(`${smog.tileX},${smog.tileY}`, smog);
+      }
+      
+      factorySmogRef.current = factories.map(factory => {
+        const key = `${factory.x},${factory.y}`;
+        const existing = existingSmogMap.get(key);
+        
+        // Calculate screen position for the factory (chimney position)
+        const { screenX, screenY } = gridToScreen(factory.x, factory.y, 0, 0);
+        // Offset to chimney position (varies by factory size) - positioned near rooftop/smokestacks
+        const chimneyOffsetX = factory.type === 'factory_large' ? TILE_WIDTH * 1.2 : TILE_WIDTH * 0.6;
+        const chimneyOffsetY = factory.type === 'factory_large' ? -TILE_HEIGHT * 1.2 : -TILE_HEIGHT * 0.7;
+        
+        if (existing && existing.buildingType === factory.type) {
+          // Update screen position but keep particles
+          existing.screenX = screenX + chimneyOffsetX;
+          existing.screenY = screenY + chimneyOffsetY;
+          return existing;
+        }
+        
+        return {
+          tileX: factory.x,
+          tileY: factory.y,
+          screenX: screenX + chimneyOffsetX,
+          screenY: screenY + chimneyOffsetY,
+          buildingType: factory.type,
+          particles: [],
+          spawnTimer: Math.random(), // Randomize initial spawn timing
+        };
+      });
+    }
+    
+    // Update each factory's smog
+    for (const smog of factorySmogRef.current) {
+      // Update spawn timer with mobile multiplier
+      const baseSpawnInterval = smog.buildingType === 'factory_large' 
+        ? SMOG_SPAWN_INTERVAL_LARGE 
+        : SMOG_SPAWN_INTERVAL_MEDIUM;
+      const spawnInterval = baseSpawnInterval * spawnMultiplier;
+      
+      smog.spawnTimer += adjustedDelta;
+      
+      // Spawn new particles (only if below particle limit)
+      while (smog.spawnTimer >= spawnInterval && smog.particles.length < maxParticles) {
+        smog.spawnTimer -= spawnInterval;
+        
+        // Calculate spawn position with some randomness around the chimney
+        const spawnX = smog.screenX + (Math.random() - 0.5) * 8;
+        const spawnY = smog.screenY + (Math.random() - 0.5) * 4;
+        
+        // Random initial velocity with upward and slight horizontal drift
+        const vx = (Math.random() - 0.5) * SMOG_DRIFT_SPEED * 2;
+        const vy = -SMOG_RISE_SPEED * (0.8 + Math.random() * 0.4);
+        
+        // Random particle properties
+        const size = SMOG_PARTICLE_SIZE_MIN + Math.random() * (SMOG_PARTICLE_SIZE_MAX - SMOG_PARTICLE_SIZE_MIN);
+        const maxAge = particleMaxAge * (0.7 + Math.random() * 0.6);
+        
+        smog.particles.push({
+          x: spawnX,
+          y: spawnY,
+          vx,
+          vy,
+          age: 0,
+          maxAge,
+          size,
+          opacity: SMOG_BASE_OPACITY * (0.8 + Math.random() * 0.4),
+        });
+      }
+      
+      // Reset spawn timer if we hit the particle limit to prevent buildup
+      if (smog.particles.length >= maxParticles) {
+        smog.spawnTimer = 0;
+      }
+      
+      // Update existing particles
+      smog.particles = smog.particles.filter(particle => {
+        particle.age += adjustedDelta;
+        
+        if (particle.age >= particle.maxAge) {
+          return false; // Remove old particles
+        }
+        
+        // Update position with drift
+        particle.x += particle.vx * adjustedDelta;
+        particle.y += particle.vy * adjustedDelta;
+        
+        // Slow down horizontal drift over time
+        particle.vx *= 0.995;
+        
+        // Slow down vertical rise as particle ages
+        particle.vy *= 0.998;
+        
+        // Grow particle size over time
+        particle.size += SMOG_PARTICLE_GROWTH * adjustedDelta;
+        
+        return true;
+      });
+    }
+  }, [findSmogFactories, isMobile]);
+
+  // Draw smog particles
+  const drawSmog = useCallback((ctx: CanvasRenderingContext2D) => {
+    const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    const canvas = ctx.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Early exit if no factories or zoom is too high (smog fades when zoomed in)
+    if (!currentGrid || currentGridSize <= 0 || factorySmogRef.current.length === 0) {
+      return;
+    }
+    
+    // Calculate zoom-based opacity modifier
+    // Smog is fully visible below SMOG_MAX_ZOOM, fades between MAX and FADE, invisible above FADE
+    let zoomOpacity = 1;
+    if (currentZoom > SMOG_FADE_ZOOM) {
+      return; // Don't draw at all when fully zoomed in
+    } else if (currentZoom > SMOG_MAX_ZOOM) {
+      // Fade out between MAX and FADE zoom levels
+      zoomOpacity = 1 - (currentZoom - SMOG_MAX_ZOOM) / (SMOG_FADE_ZOOM - SMOG_MAX_ZOOM);
+    }
+    
+    ctx.save();
+    ctx.scale(dpr * currentZoom, dpr * currentZoom);
+    ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
+    
+    // Calculate viewport bounds
+    const viewWidth = canvas.width / (dpr * currentZoom);
+    const viewHeight = canvas.height / (dpr * currentZoom);
+    const viewLeft = -currentOffset.x / currentZoom - 100;
+    const viewTop = -currentOffset.y / currentZoom - 200;
+    const viewRight = viewWidth - currentOffset.x / currentZoom + 100;
+    const viewBottom = viewHeight - currentOffset.y / currentZoom + 100;
+    
+    // Draw all smog particles
+    for (const smog of factorySmogRef.current) {
+      for (const particle of smog.particles) {
+        // Skip if outside viewport
+        if (particle.x < viewLeft || particle.x > viewRight || 
+            particle.y < viewTop || particle.y > viewBottom) {
+          continue;
+        }
+        
+        // Calculate age-based opacity (fade in quickly, fade out slowly)
+        const ageRatio = particle.age / particle.maxAge;
+        let ageOpacity: number;
+        if (ageRatio < 0.1) {
+          // Quick fade in
+          ageOpacity = ageRatio / 0.1;
+        } else {
+          // Slow fade out
+          ageOpacity = 1 - ((ageRatio - 0.1) / 0.9);
+        }
+        
+        const finalOpacity = particle.opacity * ageOpacity * zoomOpacity;
+        if (finalOpacity <= 0.01) continue;
+        
+        // Draw smog particle as a soft, slightly gray circle
+        ctx.fillStyle = `rgba(100, 100, 110, ${finalOpacity})`;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Add a lighter inner glow for depth
+        const innerSize = particle.size * 0.6;
+        ctx.fillStyle = `rgba(140, 140, 150, ${finalOpacity * 0.5})`;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y - particle.size * 0.1, innerSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    ctx.restore();
+  }, []);
+
   // Draw emergency vehicles (fire trucks and police cars)
   const drawEmergencyVehicles = useCallback((ctx: CanvasRenderingContext2D) => {
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
@@ -5096,48 +5475,54 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     ctx.restore();
   }, []);
 
-  // Load sprite sheet on mount and when sprite pack changes
+  // Progressive image loading - load sprites in background, render immediately
+  // Subscribe to image load notifications to trigger re-renders as assets become available
   useEffect(() => {
-    // Load the sprite sheet with background color filtering
-    setTimeout(() => setImagesLoaded(false), 0);
-    const imagesToLoad: Promise<HTMLImageElement>[] = [
-      loadSpriteImage(currentSpritePack.src, true),
-      loadImage('/assets/water.png') // Preload water.png
-    ];
+    const unsubscribe = onImageLoaded(() => {
+      // Trigger re-render when any new image loads
+      setImageLoadVersion(v => v + 1);
+    });
+    return unsubscribe;
+  }, []);
+  
+  // Load sprite sheets on mount and when sprite pack changes
+  // This now runs in background - rendering starts immediately with placeholders
+  useEffect(() => {
+    // Load images progressively - each will trigger a re-render when ready
+    // Priority: main sprite sheet first, then water, then secondary sheets
     
-    // Also load construction sprite sheet if available
-    if (currentSpritePack.constructionSrc) {
-      imagesToLoad.push(loadSpriteImage(currentSpritePack.constructionSrc, true));
-    }
+    // High priority - main sprite sheet
+    loadSpriteImage(currentSpritePack.src, true).catch(console.error);
     
-    // Also load abandoned sprite sheet if available
-    if (currentSpritePack.abandonedSrc) {
-      imagesToLoad.push(loadSpriteImage(currentSpritePack.abandonedSrc, true));
-    }
+    // High priority - water texture
+    loadImage('/assets/water.png').catch(console.error);
     
-    // Also load dense variants sprite sheet if available
-    if (currentSpritePack.denseSrc) {
-      imagesToLoad.push(loadSpriteImage(currentSpritePack.denseSrc, true));
-    }
+    // Medium priority - load secondary sheets after a small delay
+    // This allows the main content to render first
+    const loadSecondarySheets = () => {
+      if (currentSpritePack.constructionSrc) {
+        loadSpriteImage(currentSpritePack.constructionSrc, true).catch(console.error);
+      }
+      if (currentSpritePack.abandonedSrc) {
+        loadSpriteImage(currentSpritePack.abandonedSrc, true).catch(console.error);
+      }
+      if (currentSpritePack.denseSrc) {
+        loadSpriteImage(currentSpritePack.denseSrc, true).catch(console.error);
+      }
+      if (currentSpritePack.parksSrc) {
+        loadSpriteImage(currentSpritePack.parksSrc, true).catch(console.error);
+      }
+      if (currentSpritePack.parksConstructionSrc) {
+        loadSpriteImage(currentSpritePack.parksConstructionSrc, true).catch(console.error);
+      }
+      if (currentSpritePack.farmsSrc) {
+        loadSpriteImage(currentSpritePack.farmsSrc, true).catch(console.error);
+      }
+    };
     
-    // Also load parks sprite sheet if available
-    if (currentSpritePack.parksSrc) {
-      imagesToLoad.push(loadSpriteImage(currentSpritePack.parksSrc, true));
-    }
-    
-    // Also load parks construction sprite sheet if available
-    if (currentSpritePack.parksConstructionSrc) {
-      imagesToLoad.push(loadSpriteImage(currentSpritePack.parksConstructionSrc, true));
-    }
-    
-    // Also load farms sprite sheet if available
-    if (currentSpritePack.farmsSrc) {
-      imagesToLoad.push(loadSpriteImage(currentSpritePack.farmsSrc, true));
-    }
-
-    Promise.all(imagesToLoad)
-      .then(() => setImagesLoaded(true))
-      .catch(console.error);
+    // Load secondary sheets after 50ms to prioritize first paint
+    const timer = setTimeout(loadSecondarySheets, 50);
+    return () => clearTimeout(timer);
   }, [currentSpritePack]);
   
   // Helper function to check if a tile is part of a multi-tile building footprint
@@ -5943,6 +6328,22 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
               Math.round(tileCenterX - destWidth / 2), Math.round(tileCenterY - destHeight / 2),
               Math.round(destWidth), Math.round(destHeight)
             );
+          } else {
+            // Water image not loaded yet - draw placeholder water diamond
+            const corners = {
+              top: { x: x + w / 2, y },
+              right: { x: x + w, y: y + h / 2 },
+              bottom: { x: x + w / 2, y: y + h },
+              left: { x, y: y + h / 2 },
+            };
+            ctx.fillStyle = '#0ea5e9';
+            ctx.beginPath();
+            ctx.moveTo(corners.top.x, corners.top.y);
+            ctx.lineTo(corners.right.x, corners.right.y);
+            ctx.lineTo(corners.bottom.x, corners.bottom.y);
+            ctx.lineTo(corners.left.x, corners.left.y);
+            ctx.closePath();
+            ctx.fill();
           }
         } else {
           // ===== TILE RENDERER PATH =====
@@ -6268,6 +6669,9 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
                 );
               }
             }
+          } else {
+            // Sprite sheet not loaded yet - draw placeholder building
+            drawPlaceholderBuilding(ctx, x, y, buildingType, w, h);
           }
         }
       }
@@ -6562,7 +6966,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     }
     
     ctx.restore();
-  }, [grid, gridSize, offset, zoom, hoveredTile, selectedTile, overlayMode, imagesLoaded, canvasSize, dragStartTile, dragEndTile, state.services, currentSpritePack, waterBodies, isPartOfMultiTileBuilding, isPartOfParkBuilding, showsDragGrid]);
+  }, [grid, gridSize, offset, zoom, hoveredTile, selectedTile, overlayMode, imagesLoaded, imageLoadVersion, canvasSize, dragStartTile, dragEndTile, state.services, currentSpritePack, waterBodies, isPartOfMultiTileBuilding, isPartOfParkBuilding, showsDragGrid]);
   
   // Animate decorative car traffic AND emergency vehicles on top of the base canvas
   useEffect(() => {
@@ -6603,11 +7007,13 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
         updateHelicopters(delta); // Update helicopters (hospital/airport required)
         updateBoats(delta); // Update boats (marina/pier required)
         updateFireworks(delta, hour); // Update fireworks (nighttime only)
+        updateSmog(delta); // Update factory smog particles
         navLightFlashTimerRef.current += delta * 3; // Update nav light flash timer
       }
       drawCars(ctx);
       drawPedestrians(ctx); // Draw pedestrians (zoom-gated)
       drawBoats(ctx); // Draw boats on water
+      drawSmog(ctx); // Draw factory smog (above ground, below aircraft)
       drawEmergencyVehicles(ctx); // Draw emergency vehicles!
       drawIncidentIndicators(ctx, delta); // Draw fire/crime incident indicators!
       drawHelicopters(ctx); // Draw helicopters (below planes, above ground)
@@ -6617,7 +7023,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, drawIncidentIndicators, updateFireworks, drawFireworks, hour, isMobile]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, hour, isMobile]);
   
   // Day/Night cycle lighting rendering - optimized for performance
   useEffect(() => {
