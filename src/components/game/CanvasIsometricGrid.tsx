@@ -230,6 +230,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const cachedRoadTileCountRef = useRef<{ count: number; gridVersion: number }>({ count: 0, gridVersion: -1 });
   const cachedPopulationRef = useRef<{ count: number; gridVersion: number }>({ count: 0, gridVersion: -1 });
   const gridVersionRef = useRef(0);
+  
+  // Performance: Cache road merge analysis (expensive calculation done per-road-tile)
+  const roadAnalysisCacheRef = useRef<Map<string, ReturnType<typeof analyzeMergedRoad>>>(new Map());
+  const roadAnalysisCacheVersionRef = useRef(-1);
 
   const worldStateRef = useRef<WorldRenderState>({
     grid,
@@ -258,8 +262,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   // Roads, bulldoze, and other tools support drag-to-place but don't show the grid
   const supportsDragPlace = selectedTool !== 'select';
 
-  // Use extracted building helpers
-  const { isPartOfMultiTileBuilding, findBuildingOrigin, isPartOfParkBuilding } = useBuildingHelpers(grid, gridSize);
+  // Use extracted building helpers (with pre-computed tile metadata for O(1) lookups)
+  const { isPartOfMultiTileBuilding, findBuildingOrigin, isPartOfParkBuilding, getTileMetadata } = useBuildingHelpers(grid, gridSize);
 
   // Use extracted vehicle systems
   const vehicleSystemRefs: VehicleSystemRefs = {
@@ -2063,23 +2067,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       }
     }
     
-    // Helper function to check if a tile is adjacent to water
+    // Helper function to check if a tile is adjacent to water (uses pre-computed metadata for O(1) lookup)
     function isAdjacentToWater(gridX: number, gridY: number): boolean {
-      const directions = [
-        [-1, 0], [1, 0], [0, -1], [0, 1], // cardinal directions
-        [-1, -1], [1, -1], [-1, 1], [1, 1] // diagonal directions
-      ];
-      
-      for (const [dx, dy] of directions) {
-        const nx = gridX + dx;
-        const ny = gridY + dy;
-        if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
-          if (grid[ny][nx].building.type === 'water') {
-            return true;
-          }
-        }
-      }
-      return false;
+      const metadata = getTileMetadata(gridX, gridY);
+      return metadata?.isAdjacentToWater ?? false;
     }
     
     // Helper function to check if a tile is water
@@ -2123,6 +2114,23 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       return false;
     }
     
+    // Helper to get cached road merge analysis (invalidates when grid changes)
+    function getCachedMergeInfo(gx: number, gy: number): ReturnType<typeof analyzeMergedRoad> {
+      const currentVersion = gridVersionRef.current;
+      if (roadAnalysisCacheVersionRef.current !== currentVersion) {
+        roadAnalysisCacheRef.current.clear();
+        roadAnalysisCacheVersionRef.current = currentVersion;
+      }
+      
+      const key = `${gx},${gy}`;
+      let info = roadAnalysisCacheRef.current.get(key);
+      if (!info) {
+        info = analyzeMergedRoad(grid, gridSize, gx, gy);
+        roadAnalysisCacheRef.current.set(key, info);
+      }
+      return info;
+    }
+    
     // Draw sophisticated road with merged avenues/highways, traffic lights, and proper lane directions
     function drawRoad(ctx: CanvasRenderingContext2D, x: number, y: number, gridX: number, gridY: number, currentZoom: number) {
       const w = TILE_WIDTH;
@@ -2137,8 +2145,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const west = hasRoad(gridX, gridY + 1);   // bottom-left edge
       const adj = { north, east, south, west };
       
-      // Analyze if this road is part of a merged avenue/highway
-      const mergeInfo = analyzeMergedRoad(grid, gridSize, gridX, gridY);
+      // Analyze if this road is part of a merged avenue/highway (CACHED for performance)
+      const mergeInfo = getCachedMergeInfo(gridX, gridY);
       
       // Calculate base road width based on road type
       const laneWidthRatio = mergeInfo.type === 'highway' ? 0.16 :
@@ -2728,28 +2736,16 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       let rightColor = '#5a8f4f';
       let strokeColor = '#2d4a26';
 
-      // These get grey bases: baseball_stadium, community_center, swimming_pool, office_building_small
-      const allParkTypes = ['park', 'park_large', 'tennis', 'basketball_courts', 'playground_small',
-        'playground_large', 'baseball_field_small', 'soccer_field_small', 'football_field',
-        'skate_park', 'mini_golf_course', 'bleachers_field', 'go_kart_track', 'amphitheater', 
-        'greenhouse_garden', 'animal_pens_farm', 'cabin_house', 'campground', 'marina_docks_small', 
-        'pier_large', 'roller_coaster_small', 'community_garden', 'pond_park', 'park_gate', 
-        'mountain_lodge', 'mountain_trailhead'];
-      const isPark = allParkTypes.includes(tile.building.type) ||
-                     (tile.building.type === 'empty' && isPartOfParkBuilding(tile.x, tile.y));
-      // Check if this is a building (not grass, empty, water, road, tree, or parks)
-      // Also check if it's part of a multi-tile building footprint
-      const isDirectBuilding = !isPark &&
-        tile.building.type !== 'grass' &&
-        tile.building.type !== 'empty' &&
-        tile.building.type !== 'water' &&
-        tile.building.type !== 'road' &&
-        tile.building.type !== 'tree';
-      const isPartOfBuilding = tile.building.type === 'empty' && isPartOfMultiTileBuilding(tile.x, tile.y);
-      const isBuilding = isDirectBuilding || isPartOfBuilding;
-      
-      // ALL buildings get grey/concrete base tiles (except parks which stay green)
-      const hasGreyBase = isBuilding && !isPark;
+      // PERF: Use pre-computed tile metadata for grey base check (O(1) lookup)
+      const tileRenderMetadata = getTileMetadata(tile.x, tile.y);
+      const isPark = tileRenderMetadata?.isPartOfParkBuilding || 
+                     ['park', 'park_large', 'tennis', 'basketball_courts', 'playground_small',
+                      'playground_large', 'baseball_field_small', 'soccer_field_small', 'football_field',
+                      'skate_park', 'mini_golf_course', 'bleachers_field', 'go_kart_track', 'amphitheater', 
+                      'greenhouse_garden', 'animal_pens_farm', 'cabin_house', 'campground', 'marina_docks_small', 
+                      'pier_large', 'roller_coaster_small', 'community_garden', 'pond_park', 'park_gate', 
+                      'mountain_lodge', 'mountain_trailhead'].includes(tile.building.type);
+      const hasGreyBase = tileRenderMetadata?.needsGreyBase ?? false;
       
       if (tile.building.type === 'water') {
         topColor = '#2563eb';
@@ -3578,33 +3574,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           y >= Math.min(dragStartTile.y, dragEndTile.y) &&
           y <= Math.max(dragStartTile.y, dragEndTile.y);
 
-        // Check if this tile needs a gray base tile (buildings except parks)
-        // These get grey bases: baseball_stadium, community_center, swimming_pool, office_building_small
-        const allParkTypesCheck = ['park', 'park_large', 'tennis', 'basketball_courts', 'playground_small',
-          'playground_large', 'baseball_field_small', 'soccer_field_small', 'football_field',
-          'skate_park', 'mini_golf_course', 'bleachers_field', 'go_kart_track', 'amphitheater', 
-          'greenhouse_garden', 'animal_pens_farm', 'cabin_house', 'campground', 'marina_docks_small', 
-          'pier_large', 'roller_coaster_small', 'community_garden', 'pond_park', 'park_gate', 
-          'mountain_lodge', 'mountain_trailhead'];
-        const isPark = allParkTypesCheck.includes(tile.building.type) ||
-                       (tile.building.type === 'empty' && isPartOfParkBuilding(x, y));
-        const isDirectBuilding = !isPark &&
-          tile.building.type !== 'grass' &&
-          tile.building.type !== 'empty' &&
-          tile.building.type !== 'water' &&
-          tile.building.type !== 'road' &&
-          tile.building.type !== 'tree';
-        const isPartOfBuilding = tile.building.type === 'empty' && isPartOfMultiTileBuilding(x, y);
-        const needsGreyBase = (isDirectBuilding || isPartOfBuilding) && !isPark;
-        
-        // Check if this is a tile with green base adjacent to water (needs green base drawn over water)
-        // This includes grass, empty, and tree tiles - all have green bases that could be covered by water bleed
-        const hasGreenBase = tile.building.type === 'grass' || tile.building.type === 'empty' || tile.building.type === 'tree';
-        const needsGreenBaseOverWater = hasGreenBase && isAdjacentToWater(x, y);
-        
-        // Check if this is a park that needs a green base tile
-        const needsGreenBaseForPark = (tile.building.type === 'park' || tile.building.type === 'park_large') ||
-                                      (tile.building.type === 'empty' && isPartOfParkBuilding(x, y));
+        // PERF: Use pre-computed tile metadata (O(1) lookup instead of expensive per-tile calculations)
+        const tileMetadata = getTileMetadata(x, y);
+        const needsGreyBase = tileMetadata?.needsGreyBase ?? false;
+        const needsGreenBaseOverWater = tileMetadata?.needsGreenBaseOverWater ?? false;
+        const needsGreenBaseForPark = tileMetadata?.needsGreenBaseForPark ?? false;
         
         // Draw base tile for all tiles (including water), but skip gray bases for buildings and green bases for grass/empty adjacent to water or parks
         // Highlight subway stations when subway overlay is active
@@ -3630,9 +3604,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           const depth = x + y;
           roadQueue.push({ screenX, screenY, tile, depth });
         }
-        // Check for beach tiles (grass/empty tiles adjacent to water)
+        // Check for beach tiles (grass/empty tiles adjacent to water) - use pre-computed metadata
         else if ((tile.building.type === 'grass' || tile.building.type === 'empty') &&
-                 isAdjacentToWater(x, y)) {
+                 (tileMetadata?.isAdjacentToWater ?? false)) {
           beachQueue.push({ screenX, screenY, tile, depth: x + y });
         }
         // Other buildings go to regular building queue
@@ -3808,7 +3782,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
     
     ctx.restore();
-  }, [grid, gridSize, offset, zoom, hoveredTile, selectedTile, overlayMode, imagesLoaded, imageLoadVersion, canvasSize, dragStartTile, dragEndTile, state.services, currentSpritePack, waterBodies, isPartOfMultiTileBuilding, isPartOfParkBuilding, showsDragGrid]);
+  }, [grid, gridSize, offset, zoom, hoveredTile, selectedTile, overlayMode, imagesLoaded, imageLoadVersion, canvasSize, dragStartTile, dragEndTile, state.services, currentSpritePack, waterBodies, getTileMetadata, showsDragGrid]);
   
   // Animate decorative car traffic AND emergency vehicles on top of the base canvas
   useEffect(() => {
