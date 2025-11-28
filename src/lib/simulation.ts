@@ -961,17 +961,18 @@ function evolveBuilding(grid: Tile[][], x: number, y: number, services: ServiceC
   
   // Check if building should become abandoned (oversupply situation)
   // Only happens when demand is significantly negative and building has been around a while
-  if (zoneDemandValue < -20 && building.age > 20) {
-    // Worse demand = higher chance of abandonment
-    // At demand -40, ~2% chance per tick; at demand -80, ~6% chance
-    const abandonmentChance = Math.min(0.08, Math.abs(zoneDemandValue + 20) / 1000);
-    
-    // Buildings without power/water are more likely to be abandoned
-    const utilityPenalty = (!hasPower ? 0.03 : 0) + (!hasWater ? 0.03 : 0);
-    
-    // Lower-level buildings are more likely to be abandoned
-    const levelPenalty = building.level <= 2 ? 0.02 : 0;
-    
+  // Abandonment is gradual - even at worst conditions, only ~2-3% of buildings abandon per tick
+  if (zoneDemandValue < -20 && building.age > 30) {
+    // Worse demand = higher chance of abandonment, but capped low for gradual effect
+    // At demand -40, ~0.5% chance per tick; at demand -100, ~2% chance
+    const abandonmentChance = Math.min(0.02, Math.abs(zoneDemandValue + 20) / 4000);
+
+    // Buildings without power/water are slightly more likely to be abandoned
+    const utilityPenalty = (!hasPower ? 0.005 : 0) + (!hasWater ? 0.005 : 0);
+
+    // Lower-level buildings are slightly more likely to be abandoned
+    const levelPenalty = building.level <= 2 ? 0.003 : 0;
+
     if (Math.random() < abandonmentChance + utilityPenalty + levelPenalty) {
       building.abandoned = true;
       building.population = 0;
@@ -1673,9 +1674,9 @@ export function simulateTick(state: GameState): GameState {
 
   // Gradually move effectiveTaxRate toward taxRate
   // This creates a lagging effect so tax changes don't immediately impact demand
-  // Rate of change: 10% of difference per tick, so large changes take ~20-30 ticks (~1 game day)
+  // Rate of change: 3% of difference per tick, so large changes take ~50-80 ticks (~2-3 game days)
   const taxRateDiff = state.taxRate - state.effectiveTaxRate;
-  const newEffectiveTaxRate = state.effectiveTaxRate + taxRateDiff * 0.1;
+  const newEffectiveTaxRate = state.effectiveTaxRate + taxRateDiff * 0.03;
 
   // Calculate stats (using lagged effectiveTaxRate for demand calculations)
   const newStats = calculateStats(newGrid, size, newBudget, state.taxRate, newEffectiveTaxRate, services);
