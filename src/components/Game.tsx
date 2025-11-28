@@ -2559,8 +2559,9 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
   const updatePedestrians = useCallback((delta: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
     
-    // Clear pedestrians if zoomed out
-    if (currentZoom < PEDESTRIAN_MIN_ZOOM) {
+    // Clear pedestrians if zoomed out (mobile requires higher zoom level)
+    const minZoomForPedestrians = isMobile ? 0.8 : PEDESTRIAN_MIN_ZOOM;
+    if (currentZoom < minZoomForPedestrians) {
       pedestriansRef.current = [];
       return;
     }
@@ -2591,19 +2592,26 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       cachedRoadTileCountRef.current = { count: roadTileCount, gridVersion: currentGridVersion };
     }
     
-    // Spawn pedestrians - scale with road network size (3 pedestrians per road tile)
-    const maxPedestrians = Math.max(200, roadTileCount * 3);
+    // Spawn pedestrians - scale with road network size, reduced on mobile
+    // Mobile: max 50 pedestrians, 0.8 per road tile
+    // Desktop: max 200+ pedestrians, 3 per road tile
+    const maxPedestrians = isMobile 
+      ? Math.min(50, Math.max(20, Math.floor(roadTileCount * 0.8)))
+      : Math.max(200, roadTileCount * 3);
     pedestrianSpawnTimerRef.current -= delta;
     if (pedestriansRef.current.length < maxPedestrians && pedestrianSpawnTimerRef.current <= 0) {
-      // Spawn many pedestrians at once
+      // Spawn fewer pedestrians at once on mobile
       let spawnedCount = 0;
-      const spawnBatch = Math.min(50, Math.max(20, Math.floor(roadTileCount / 10)));
+      const spawnBatch = isMobile 
+        ? Math.min(8, Math.max(3, Math.floor(roadTileCount / 25)))
+        : Math.min(50, Math.max(20, Math.floor(roadTileCount / 10)));
       for (let i = 0; i < spawnBatch; i++) {
         if (spawnPedestrian()) {
           spawnedCount++;
         }
       }
-      pedestrianSpawnTimerRef.current = spawnedCount > 0 ? 0.02 : 0.01; // Very fast spawning
+      // Slower spawn rate on mobile
+      pedestrianSpawnTimerRef.current = spawnedCount > 0 ? (isMobile ? 0.15 : 0.02) : (isMobile ? 0.08 : 0.01);
     }
     
     const updatedPedestrians: Pedestrian[] = [];
@@ -2858,8 +2866,9 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     const canvas = ctx.canvas;
     const dpr = window.devicePixelRatio || 1;
     
-    // Don't draw pedestrians if zoomed out
-    if (currentZoom < PEDESTRIAN_MIN_ZOOM) {
+    // Don't draw pedestrians if zoomed out (mobile requires higher zoom)
+    const minZoomForPedestrians = isMobile ? 0.8 : PEDESTRIAN_MIN_ZOOM;
+    if (currentZoom < minZoomForPedestrians) {
       return;
     }
     
@@ -2998,7 +3007,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     });
     
     ctx.restore();
-  }, []);
+  }, [isMobile]);
 
   // Find all airports in the city
   const findAirports = useCallback((): { x: number; y: number }[] => {
@@ -3319,23 +3328,30 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     const updatedAirplanes: Airplane[] = [];
     
     for (const plane of airplanesRef.current) {
-      // Update contrail particles
+      // Update contrail particles - shorter duration on mobile for performance
+      const contrailMaxAge = isMobile ? 0.8 : CONTRAIL_MAX_AGE;
+      const contrailSpawnInterval = isMobile ? 0.06 : CONTRAIL_SPAWN_INTERVAL;
       plane.contrail = plane.contrail
-        .map(p => ({ ...p, age: p.age + delta, opacity: Math.max(0, 1 - p.age / CONTRAIL_MAX_AGE) }))
-        .filter(p => p.age < CONTRAIL_MAX_AGE);
+        .map(p => ({ ...p, age: p.age + delta, opacity: Math.max(0, 1 - p.age / contrailMaxAge) }))
+        .filter(p => p.age < contrailMaxAge);
       
-      // Add new contrail particles at high altitude
+      // Add new contrail particles at high altitude (less frequent on mobile)
       if (plane.altitude > 0.7) {
         plane.stateProgress += delta;
-        if (plane.stateProgress >= CONTRAIL_SPAWN_INTERVAL) {
-          plane.stateProgress -= CONTRAIL_SPAWN_INTERVAL;
-          // Add two contrail particles (left and right engine)
+        if (plane.stateProgress >= contrailSpawnInterval) {
+          plane.stateProgress -= contrailSpawnInterval;
+          // Add two contrail particles (left and right engine) - single particle on mobile
           const perpAngle = plane.angle + Math.PI / 2;
           const engineOffset = 4 * (0.5 + plane.altitude * 0.5);
-          plane.contrail.push(
-            { x: plane.x + Math.cos(perpAngle) * engineOffset, y: plane.y + Math.sin(perpAngle) * engineOffset, age: 0, opacity: 1 },
-            { x: plane.x - Math.cos(perpAngle) * engineOffset, y: plane.y - Math.sin(perpAngle) * engineOffset, age: 0, opacity: 1 }
-          );
+          if (isMobile) {
+            // Single centered contrail particle on mobile
+            plane.contrail.push({ x: plane.x, y: plane.y, age: 0, opacity: 1 });
+          } else {
+            plane.contrail.push(
+              { x: plane.x + Math.cos(perpAngle) * engineOffset, y: plane.y + Math.sin(perpAngle) * engineOffset, age: 0, opacity: 1 },
+              { x: plane.x - Math.cos(perpAngle) * engineOffset, y: plane.y - Math.sin(perpAngle) * engineOffset, age: 0, opacity: 1 }
+            );
+          }
         }
       }
       
@@ -3656,10 +3672,11 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     for (const boat of boatsRef.current) {
       boat.age += delta;
       
-      // Update wake particles (similar to contrails)
+      // Update wake particles (similar to contrails) - shorter on mobile
+      const wakeMaxAge = isMobile ? 0.6 : WAKE_MAX_AGE;
       boat.wake = boat.wake
-        .map(p => ({ ...p, age: p.age + delta, opacity: Math.max(0, 1 - p.age / WAKE_MAX_AGE) }))
-        .filter(p => p.age < WAKE_MAX_AGE);
+        .map(p => ({ ...p, age: p.age + delta, opacity: Math.max(0, 1 - p.age / wakeMaxAge) }))
+        .filter(p => p.age < wakeMaxAge);
       
       // Distance to destination
       const distToDest = Math.hypot(boat.x - boat.destScreenX, boat.y - boat.destScreenY);
@@ -3829,30 +3846,42 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
         boat.x = nextX;
         boat.y = nextY;
         
-        // Add wake particles when moving
+        // Add wake particles when moving (simpler on mobile)
+        const wakeSpawnInterval = isMobile ? 0.08 : WAKE_SPAWN_INTERVAL;
         boat.wakeSpawnProgress += delta;
-        if (boat.wakeSpawnProgress >= WAKE_SPAWN_INTERVAL) {
-          boat.wakeSpawnProgress -= WAKE_SPAWN_INTERVAL;
-          
-          // Add wake particles behind the boat (two trails like plane contrails)
+        if (boat.wakeSpawnProgress >= wakeSpawnInterval) {
+          boat.wakeSpawnProgress -= wakeSpawnInterval;
+
+          // Add wake particles behind the boat
           const perpAngle = boat.angle + Math.PI / 2;
           const wakeOffset = 3;
           const behindBoat = -6; // Position behind the boat
-          
-          boat.wake.push(
-            { 
-              x: boat.x + Math.cos(boat.angle) * behindBoat + Math.cos(perpAngle) * wakeOffset, 
-              y: boat.y + Math.sin(boat.angle) * behindBoat + Math.sin(perpAngle) * wakeOffset, 
-              age: 0, 
-              opacity: 1 
-            },
-            { 
-              x: boat.x + Math.cos(boat.angle) * behindBoat - Math.cos(perpAngle) * wakeOffset, 
-              y: boat.y + Math.sin(boat.angle) * behindBoat - Math.sin(perpAngle) * wakeOffset, 
-              age: 0, 
-              opacity: 1 
-            }
-          );
+
+          if (isMobile) {
+            // Single centered wake particle on mobile
+            boat.wake.push({
+              x: boat.x + Math.cos(boat.angle) * behindBoat,
+              y: boat.y + Math.sin(boat.angle) * behindBoat,
+              age: 0,
+              opacity: 1
+            });
+          } else {
+            // Two trails like plane contrails on desktop
+            boat.wake.push(
+              {
+                x: boat.x + Math.cos(boat.angle) * behindBoat + Math.cos(perpAngle) * wakeOffset,
+                y: boat.y + Math.sin(boat.angle) * behindBoat + Math.sin(perpAngle) * wakeOffset,
+                age: 0,
+                opacity: 1
+              },
+              {
+                x: boat.x + Math.cos(boat.angle) * behindBoat - Math.cos(perpAngle) * wakeOffset,
+                y: boat.y + Math.sin(boat.angle) * behindBoat - Math.sin(perpAngle) * wakeOffset, 
+                age: 0, 
+                opacity: 1 
+              }
+            );
+          }
         }
       }
       
@@ -6133,12 +6162,6 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     ctx.fillStyle = `rgba(${ambient.r}, ${ambient.g}, ${ambient.b}, ${alpha})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // On mobile, use simplified night lighting (just the overlay, no per-tile light cutouts)
-    // This significantly improves performance by avoiding gradient creation for every tile
-    if (isMobile) {
-      return; // Simple flat overlay is enough for mobile
-    }
-    
     // Now use destination-out to "cut holes" in the darkness where lights are
     // This creates the effect of lights illuminating through the darkness
     ctx.globalCompositeOperation = 'destination-out';
@@ -7013,6 +7036,15 @@ export default function Game() {
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
+      return;
+    }
+    
+    // Select tool always resets overlay to none (user is explicitly switching to select)
+    if (state.selectedTool === 'select') {
+      setTimeout(() => {
+        setOverlayMode('none');
+      }, 0);
+      previousSelectedToolRef.current = state.selectedTool;
       return;
     }
     
