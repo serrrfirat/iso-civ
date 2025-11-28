@@ -688,7 +688,7 @@ export function useVehicleSystems(
   const updatePedestrians = useCallback((delta: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
     
-    const minZoomForPedestrians = isMobile ? 0.8 : PEDESTRIAN_MIN_ZOOM;
+    const minZoomForPedestrians = isMobile ? 0.55 : PEDESTRIAN_MIN_ZOOM;
     if (currentZoom < minZoomForPedestrians) {
       pedestriansRef.current = [];
       return;
@@ -985,7 +985,7 @@ export function useVehicleSystems(
     const canvas = ctx.canvas;
     const dpr = window.devicePixelRatio || 1;
     
-    const minZoomForPedestrians = isMobile ? 0.8 : PEDESTRIAN_MIN_ZOOM;
+    const minZoomForPedestrians = isMobile ? 0.55 : PEDESTRIAN_MIN_ZOOM;
     if (currentZoom < minZoomForPedestrians) {
       return;
     }

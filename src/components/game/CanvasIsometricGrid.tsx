@@ -2110,7 +2110,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             // Draw median divider (double yellow or planted median)
             if (mergeInfo.orientation === 'ns') {
               // Median runs NS - draw on the west edge of this tile
-              if (mergeInfo.medianType === 'plants' && currentZoom >= 0.7) {
+              if (mergeInfo.medianType === 'plants' && currentZoom >= 0.55) {
                 // Draw planted median
                 ctx.fillStyle = '#6b7280'; // Concrete base
                 const medianW = 3;
@@ -2146,7 +2146,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               }
             } else if (mergeInfo.orientation === 'ew') {
               // Median runs EW - draw on the south edge of this tile
-              if (mergeInfo.medianType === 'plants' && currentZoom >= 0.7) {
+              if (mergeInfo.medianType === 'plants' && currentZoom >= 0.55) {
                 ctx.fillStyle = '#6b7280';
                 const medianW = 3;
                 ctx.fillRect(eastEdgeX - 2, eastEdgeY - medianW, (westEdgeX - eastEdgeX) + 4, medianW * 2);
@@ -2276,7 +2276,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         }
         
         // Draw directional arrows for merged roads
-        if (mergeInfo.type !== 'single' && currentZoom >= 0.8 && mergeInfo.side !== 'center') {
+        if (mergeInfo.type !== 'single' && currentZoom >= 0.65 && mergeInfo.side !== 'center') {
           const flowDirs = getTrafficFlowDirection(mergeInfo);
           if (flowDirs.length === 1) {
             drawRoadArrow(ctx, cx, cy, flowDirs[0], currentZoom);
@@ -2303,7 +2303,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // ============================================
         // PERF: Skip traffic lights during mobile panning/zooming for better performance
         const skipTrafficLights = isMobile && (isPanningRef.current || isPinchZoomingRef.current);
-        if (isIntersection && currentZoom >= 0.6 && !skipTrafficLights) {
+        if (isIntersection && currentZoom >= 0.45 && !skipTrafficLights) {
           const trafficTime = trafficLightTimerRef.current;
           const lightState = getTrafficLightState(trafficTime);
           

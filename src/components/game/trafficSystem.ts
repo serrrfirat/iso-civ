@@ -527,7 +527,7 @@ export function drawMedian(
     ctx.stroke();
     
     // Draw plants/trees at intervals
-    if (zoom >= 0.7) {
+    if (zoom >= 0.55) {
       const plantSpacing = 8;
       const numPlants = Math.floor(len / plantSpacing);
       
@@ -804,7 +804,7 @@ export function drawMergedRoadSegment(
     }
     
     // Draw direction arrows
-    if (zoom >= 0.8 && mergeInfo.type !== 'single') {
+    if (zoom >= 0.65 && mergeInfo.type !== 'single') {
       const flowDirs = getTrafficFlowDirection(mergeInfo);
       if (flowDirs.length === 1) {
         drawRoadArrow(ctx, cx, cy, flowDirs[0], zoom);
@@ -847,7 +847,7 @@ export function drawMergedRoadSegment(
   
   // Draw traffic lights at intersections
   const connectionCount = [adj.north, adj.east, adj.south, adj.west].filter(Boolean).length;
-  if (connectionCount >= 3 && zoom >= 0.6) {
+  if (connectionCount >= 3 && zoom >= 0.45) {
     const lightState = getTrafficLightState(trafficLightTime);
     
     // Draw traffic lights at appropriate corners based on which roads exist
