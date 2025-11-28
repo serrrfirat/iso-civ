@@ -1,0 +1,310 @@
+'use client';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { useGame } from '@/context/GameContext';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { SpriteTestPanel } from './SpriteTestPanel';
+import exampleState from '@/resources/example_state.json';
+import exampleState2 from '@/resources/example_state_2.json';
+import exampleState3 from '@/resources/example_state_3.json';
+
+export function SettingsPanel() {
+  const { state, setActivePanel, setDisastersEnabled, newGame, loadState, exportState, currentSpritePack, availableSpritePacks, setSpritePack } = useGame();
+  const { disastersEnabled, cityName, gridSize } = state;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [newCityName, setNewCityName] = useState(cityName);
+  const [showNewGameConfirm, setShowNewGameConfirm] = useState(false);
+  const [importValue, setImportValue] = useState('');
+  const [exportCopied, setExportCopied] = useState(false);
+  const [importError, setImportError] = useState(false);
+  const [importSuccess, setImportSuccess] = useState(false);
+  
+  // Initialize showSpriteTest from query parameter
+  const spriteTestFromUrl = searchParams.get('spriteTest') === 'true';
+  const [showSpriteTest, setShowSpriteTest] = useState(spriteTestFromUrl);
+  const lastUrlValueRef = useRef(spriteTestFromUrl);
+  const isUpdatingFromStateRef = useRef(false);
+  
+  // Sync state with query parameter when URL changes externally
+  useEffect(() => {
+    const spriteTestParam = searchParams.get('spriteTest') === 'true';
+    // Only update if URL value actually changed and we're not updating from state
+    if (spriteTestParam !== lastUrlValueRef.current && !isUpdatingFromStateRef.current) {
+      lastUrlValueRef.current = spriteTestParam;
+      setTimeout(() => setShowSpriteTest(spriteTestParam), 0);
+    }
+  }, [searchParams]);
+  
+  // Sync query parameter when showSpriteTest changes (but avoid loops)
+  useEffect(() => {
+    const currentParam = searchParams.get('spriteTest') === 'true';
+    if (currentParam === showSpriteTest) return; // Already in sync
+    
+    isUpdatingFromStateRef.current = true;
+    lastUrlValueRef.current = showSpriteTest;
+    
+    const params = new URLSearchParams(searchParams.toString());
+    if (showSpriteTest) {
+      params.set('spriteTest', 'true');
+    } else {
+      params.delete('spriteTest');
+    }
+    const newUrl = params.toString() ? `?${params.toString()}` : window.location.pathname;
+    router.replace(newUrl, { scroll: false });
+    
+    // Reset flag after URL update
+    setTimeout(() => {
+      isUpdatingFromStateRef.current = false;
+    }, 0);
+  }, [showSpriteTest, searchParams, router]);
+  
+  const handleCopyExport = async () => {
+    const exported = exportState();
+    await navigator.clipboard.writeText(exported);
+    setExportCopied(true);
+    setTimeout(() => setExportCopied(false), 2000);
+  };
+  
+  const handleImport = () => {
+    setImportError(false);
+    setImportSuccess(false);
+    if (importValue.trim()) {
+      const success = loadState(importValue.trim());
+      if (success) {
+        setImportSuccess(true);
+        setImportValue('');
+        setTimeout(() => setImportSuccess(false), 2000);
+      } else {
+        setImportError(true);
+      }
+    }
+  };
+  
+  return (
+    <Dialog open={true} onOpenChange={() => setActivePanel('none')}>
+      <DialogContent className="max-w-[400px] max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Settings</DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-6">
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Game Settings</div>
+            
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <Label>Disasters</Label>
+                <p className="text-muted-foreground text-xs">Enable random fires and disasters</p>
+              </div>
+              <Switch
+                checked={disastersEnabled}
+                onCheckedChange={setDisastersEnabled}
+              />
+            </div>
+            
+            <div className="py-2">
+              <Label>Sprite Pack</Label>
+              <p className="text-muted-foreground text-xs mb-2">Choose building artwork style</p>
+              <div className="grid grid-cols-1 gap-2">
+                {availableSpritePacks.map((pack) => (
+                  <button
+                    key={pack.id}
+                    onClick={() => setSpritePack(pack.id)}
+                    className={`flex items-center gap-3 p-2 rounded-md border transition-colors text-left ${
+                      currentSpritePack.id === pack.id
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border hover:border-muted-foreground/50 text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <div className="w-10 h-10 rounded overflow-hidden bg-muted flex-shrink-0">
+                      <img 
+                        src={pack.src} 
+                        alt={pack.name}
+                        className="w-full h-full object-cover object-top"
+                        style={{ imageRendering: 'pixelated' }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{pack.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">{pack.src}</div>
+                    </div>
+                    {currentSpritePack.id === pack.id && (
+                      <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">City Information</div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <span>City Name</span>
+                <span className="text-foreground">{cityName}</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Grid Size</span>
+                <span className="text-foreground">{gridSize} x {gridSize}</span>
+              </div>
+              <div className="flex justify-between text-muted-foreground">
+                <span>Auto-Save</span>
+                <span className="text-green-400">Enabled</span>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Controls</div>
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <div className="flex justify-between"><span>Pan (mouse)</span><span className="text-foreground">Alt + Drag / Middle Click</span></div>
+              <div className="flex justify-between"><span>Pan (keys)</span><span className="text-foreground">W / A / S / D</span></div>
+              <div className="flex justify-between"><span>Zoom</span><span className="text-foreground">Scroll Wheel</span></div>
+              <div className="flex justify-between"><span>Place Multiple</span><span className="text-foreground">Click + Drag</span></div>
+              <div className="flex justify-between"><span>View Tile Info</span><span className="text-foreground">Select Tool + Click</span></div>
+            </div>
+          </div>
+          
+          <Separator />
+          
+          {!showNewGameConfirm ? (
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={() => setShowNewGameConfirm(true)}
+            >
+              Start New Game
+            </Button>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-muted-foreground text-sm text-center">Are you sure? This will reset all progress.</p>
+              <Input
+                value={newCityName}
+                onChange={(e) => setNewCityName(e.target.value)}
+                placeholder="New city name..."
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowNewGameConfirm(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={() => {
+                    newGame(newCityName || 'New City', gridSize);
+                    setActivePanel('none');
+                  }}
+                >
+                  Reset
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          <Separator />
+          
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Export Game</div>
+            <p className="text-muted-foreground text-xs mb-2">Copy your game state to share or backup</p>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleCopyExport}
+            >
+              {exportCopied ? '✓ Copied!' : 'Copy Game State'}
+            </Button>
+          </div>
+          
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Import Game</div>
+            <p className="text-muted-foreground text-xs mb-2">Paste a game state to load it</p>
+            <textarea
+              className="w-full h-20 bg-background border border-border rounded-md p-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder="Paste game state here..."
+              value={importValue}
+              onChange={(e) => {
+                setImportValue(e.target.value);
+                setImportError(false);
+                setImportSuccess(false);
+              }}
+            />
+            {importError && (
+              <p className="text-red-400 text-xs mt-1">Invalid game state. Please check and try again.</p>
+            )}
+            {importSuccess && (
+              <p className="text-green-400 text-xs mt-1">Game loaded successfully!</p>
+            )}
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={handleImport}
+              disabled={!importValue.trim()}
+            >
+              Load Game State
+            </Button>
+          </div>
+          
+          <div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Developer Tools</div>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowSpriteTest(true)}
+            >
+              Open Sprite Test View
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={() => {
+                loadState(JSON.stringify(exampleState));
+                setActivePanel('none');
+              }}
+            >
+              Load Example State
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={() => {
+                loadState(JSON.stringify(exampleState2));
+                setActivePanel('none');
+              }}
+            >
+              Load Example State 2
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={() => {
+                loadState(JSON.stringify(exampleState3));
+                setActivePanel('none');
+              }}
+            >
+              Load Example State 3
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+      
+      {showSpriteTest && (
+        <SpriteTestPanel onClose={() => {
+          setShowSpriteTest(false);
+          // Query param will be cleared by useEffect above
+        }} />
+      )}
+    </Dialog>
+  );
+}
