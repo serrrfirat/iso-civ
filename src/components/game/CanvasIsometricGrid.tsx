@@ -2317,6 +2317,51 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         ctx.fill();
       }
       
+      // Draw interior sidewalk corners at 4-way intersections
+      // Simple isometric diamond shapes at each corner
+      if (north && east && south && west) {
+        ctx.fillStyle = sidewalkColor;
+        
+        // Small isometric diamond size
+        const dSize = swWidth * 0.9;
+        
+        // Top corner - isometric diamond
+        ctx.beginPath();
+        ctx.moveTo(topCorner.x, topCorner.y);
+        ctx.lineTo(topCorner.x - dSize, topCorner.y + dSize * 0.5);
+        ctx.lineTo(topCorner.x, topCorner.y + dSize);
+        ctx.lineTo(topCorner.x + dSize, topCorner.y + dSize * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Right corner - isometric diamond
+        ctx.beginPath();
+        ctx.moveTo(rightCorner.x, rightCorner.y);
+        ctx.lineTo(rightCorner.x - dSize, rightCorner.y - dSize * 0.5);
+        ctx.lineTo(rightCorner.x - dSize * 2, rightCorner.y);
+        ctx.lineTo(rightCorner.x - dSize, rightCorner.y + dSize * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Bottom corner - isometric diamond
+        ctx.beginPath();
+        ctx.moveTo(bottomCorner.x, bottomCorner.y);
+        ctx.lineTo(bottomCorner.x + dSize, bottomCorner.y - dSize * 0.5);
+        ctx.lineTo(bottomCorner.x, bottomCorner.y - dSize);
+        ctx.lineTo(bottomCorner.x - dSize, bottomCorner.y - dSize * 0.5);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Left corner - isometric diamond
+        ctx.beginPath();
+        ctx.moveTo(leftCorner.x, leftCorner.y);
+        ctx.lineTo(leftCorner.x + dSize, leftCorner.y - dSize * 0.5);
+        ctx.lineTo(leftCorner.x + dSize * 2, leftCorner.y);
+        ctx.lineTo(leftCorner.x + dSize, leftCorner.y + dSize * 0.5);
+        ctx.closePath();
+        ctx.fill();
+      }
+      
       // ============================================
       // DRAW ROAD SURFACE
       // ============================================
@@ -2520,10 +2565,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             return [aN, aE, aS, aW].filter(Boolean).length >= 3;
           };
           
-          // Line stops before crosswalk area (0.65) if approaching intersection, otherwise extends
+          // Line stops before sidewalk markers if approaching intersection, otherwise extends
           const markingOverlap = 8;
           const markingStartOffset = 0;
-          const stopBeforeCrosswalk = 0.65; // Stop at 65% toward edge if approaching intersection
+          const stopBeforeCrosswalk = 0.58; // Stop at 58% toward edge - just before sidewalk corner markers
           
           if (north) {
             const adjIsIntersection = isAdjIntersection(gridX - 1, gridY);

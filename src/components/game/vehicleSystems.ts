@@ -616,12 +616,13 @@ export function useVehicleSystems(
       }
       
       // Check for car ahead - efficient spatial lookup
+      // Only check cars going the SAME direction (same lane)
       if (!shouldStop) {
-        // Check same tile for car ahead
+        // Check same tile for car ahead in same lane
         const sameTileCars = carsByTile.get(`${car.tileX},${car.tileY}`) || [];
         for (const other of sameTileCars) {
           if (other.id === car.id) continue;
-          // Same direction and ahead of us
+          // Same direction (same lane) and ahead of us
           if (other.direction === car.direction && other.progress > car.progress) {
             const gap = other.progress - car.progress;
             if (gap < 0.25) {
@@ -631,12 +632,12 @@ export function useVehicleSystems(
           }
         }
         
-        // Check next tile for car we might hit
-        if (!shouldStop && car.progress > 0.6) {
+        // Check next tile for car in same lane we might hit
+        if (!shouldStop && car.progress > 0.7) {
           const nextTileCars = carsByTile.get(`${nextX},${nextY}`) || [];
           for (const other of nextTileCars) {
-            // Car in next tile with low progress = we'd collide
-            if (other.progress < 0.4) {
+            // Only stop for cars going same direction (same lane)
+            if (other.direction === car.direction && other.progress < 0.3) {
               shouldStop = true;
               break;
             }
@@ -749,7 +750,35 @@ export function useVehicleSystems(
         continue;
       }
       
-      ped.progress += ped.speed * delta * speedMultiplier;
+      // Most pedestrians respect traffic lights at intersections (based on their id)
+      // Check if approaching an intersection and should wait
+      let pedShouldWait = false;
+      const pedRespectsLights = (ped.id % 5) !== 0; // 80% respect lights (4 out of 5)
+      
+      if (pedRespectsLights && ped.pathIndex + 1 < ped.path.length && ped.progress > 0.6) {
+        const nextTile = ped.path[ped.pathIndex + 1];
+        // Check if next tile is an intersection
+        const nextNorth = isRoadTile(currentGrid, currentGridSize, nextTile.x - 1, nextTile.y);
+        const nextEast = isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y - 1);
+        const nextSouth = isRoadTile(currentGrid, currentGridSize, nextTile.x + 1, nextTile.y);
+        const nextWest = isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y + 1);
+        const isNextIntersection = [nextNorth, nextEast, nextSouth, nextWest].filter(Boolean).length >= 3;
+        
+        if (isNextIntersection) {
+          // Get traffic light state
+          const trafficTime = trafficLightTimerRef.current;
+          const lightState = getTrafficLightState(trafficTime);
+          
+          // Pedestrians wait when they can't proceed (same logic as cars)
+          if (!canProceedThroughIntersection(ped.direction, lightState)) {
+            pedShouldWait = true;
+          }
+        }
+      }
+      
+      if (!pedShouldWait) {
+        ped.progress += ped.speed * delta * speedMultiplier;
+      }
       
       if (ped.path.length === 1 && ped.progress >= 1) {
         if (!ped.returningHome) {
@@ -926,8 +955,8 @@ export function useVehicleSystems(
       ctx.save();
       ctx.translate(carX, carY);
       ctx.rotate(meta.angle);
-      
-      const scale = 0.7;
+
+      const scale = 0.5; // 30% smaller than original
       
       ctx.fillStyle = car.color;
       ctx.beginPath();
