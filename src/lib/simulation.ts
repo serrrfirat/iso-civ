@@ -32,10 +32,16 @@ function isFarmBuilding(x: number, y: number, buildingType: string): boolean {
 }
 
 // Check if a building is a "starter" type that can operate without utilities
-// This includes farms, small houses, and small shops
+// This includes all factory_small (farms AND small factories), small houses, and small shops
+// All starter buildings represent small-scale, self-sufficient operations that don't need
+// municipal power/water infrastructure to begin operating
 function isStarterBuilding(x: number, y: number, buildingType: string): boolean {
   if (buildingType === 'house_small' || buildingType === 'shop_small') return true;
-  return isFarmBuilding(x, y, buildingType);
+  // ALL factory_small are starters - they can spawn without utilities
+  // Some will render as farms (~50%), others as small factories
+  // Both represent small-scale operations that can function off-grid
+  if (buildingType === 'factory_small') return true;
+  return false;
 }
 
 // Perlin-like noise for terrain generation
@@ -2230,7 +2236,8 @@ export function getDevelopmentBlockers(
     tile.zone === 'commercial' ? COMMERCIAL_BUILDINGS : INDUSTRIAL_BUILDINGS;
   const candidate = buildingList[0];
   
-  // Starter buildings (house_small, shop_small, farms) don't require power/water
+  // Starter buildings (house_small, shop_small, factory_small) don't require power/water
+  // They represent small-scale, self-sufficient operations
   const wouldBeStarter = isStarterBuilding(x, y, candidate);
   
   // Check power (not required for starter buildings)
