@@ -6,7 +6,7 @@
 // Background color to filter from sprite sheets
 const BACKGROUND_COLOR = { r: 255, g: 0, b: 0 };
 // Color distance threshold - pixels within this distance will be made transparent
-const COLOR_THRESHOLD = 155; // Adjust this value to be more/less aggressive
+const COLOR_THRESHOLD = 165; // Adjust this value to be more/less aggressive
 
 // Image cache for building sprites
 const imageCache = new Map<string, HTMLImageElement>();
