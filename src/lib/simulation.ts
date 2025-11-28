@@ -22,6 +22,16 @@ import {
 } from '@/types/game';
 import { generateCityName, generateWaterName } from './names';
 
+// Check if a factory_small at this position would render as a farm
+// This matches the deterministic logic in Game.tsx for farm variant selection
+function isFarmBuilding(x: number, y: number, buildingType: string): boolean {
+  if (buildingType !== 'factory_small') return false;
+  // Same seed calculation as in Game.tsx rendering
+  const seed = (x * 31 + y * 17) % 100;
+  // ~50% chance to be a farm variant (when seed < 50)
+  return seed < 50;
+}
+
 // Perlin-like noise for terrain generation
 function noise2D(x: number, y: number, seed: number = 42): number {
   const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453123;
@@ -885,13 +895,16 @@ function evolveBuilding(grid: Tile[][], x: number, y: number, services: ServiceC
   const hasPower = building.powered;
   const hasWater = building.watered;
   const landValue = tile.landValue;
+  
+  // Farms (factory_small at certain positions) don't require power/water
+  const isFarm = isFarmBuilding(x, y, building.type);
 
-  if (!hasPower || !hasWater) {
+  if (!isFarm && (!hasPower || !hasWater)) {
     return building;
   }
 
   // Progress construction if building is not yet complete
-  // Construction requires power and water to progress
+  // Construction requires power and water to progress (except farms)
   if (building.constructionProgress !== undefined && building.constructionProgress < 100) {
     // Construction speed scales with building size (larger buildings take longer)
     const constructionSpeed = getConstructionSpeed(building.type);
@@ -967,8 +980,8 @@ function evolveBuilding(grid: Tile[][], x: number, y: number, services: ServiceC
     // At demand -40, ~0.5% chance per tick; at demand -100, ~2% chance
     const abandonmentChance = Math.min(0.02, Math.abs(zoneDemandValue + 20) / 4000);
 
-    // Buildings without power/water are slightly more likely to be abandoned
-    const utilityPenalty = (!hasPower ? 0.005 : 0) + (!hasWater ? 0.005 : 0);
+    // Buildings without power/water are slightly more likely to be abandoned (except farms)
+    const utilityPenalty = isFarm ? 0 : ((!hasPower ? 0.005 : 0) + (!hasWater ? 0.005 : 0));
 
     // Lower-level buildings are slightly more likely to be abandoned
     const levelPenalty = building.level <= 2 ? 0.003 : 0;
@@ -1614,7 +1627,11 @@ export function simulateTick(state: GameState): GameState {
         const demandFactor = Math.max(0, Math.min(1, (zoneDemandForSpawn + 30) / 80));
         const spawnChance = baseSpawnChance * demandFactor;
 
-        if (roadAccess && hasPower && hasWater && Math.random() < spawnChance) {
+        // Farms (factory_small at certain positions) can spawn without power/water
+        const wouldBeFarm = tile.zone === 'industrial' && isFarmBuilding(x, y, 'factory_small');
+        const hasUtilities = hasPower && hasWater;
+        
+        if (roadAccess && (hasUtilities || wouldBeFarm) && Math.random() < spawnChance) {
           const buildingList = tile.zone === 'residential' ? RESIDENTIAL_BUILDINGS :
             tile.zone === 'commercial' ? COMMERCIAL_BUILDINGS : INDUSTRIAL_BUILDINGS;
           const candidate = buildingList[0];
@@ -2297,18 +2314,21 @@ export function getDevelopmentBlockers(
     });
   }
   
-  // Check power
+  // Farms (industrial zone at certain positions) don't require power/water
+  const wouldBeFarm = tile.zone === 'industrial' && isFarmBuilding(x, y, 'factory_small');
+  
+  // Check power (not required for farms)
   const hasPower = state.services.power[y][x];
-  if (!hasPower) {
+  if (!hasPower && !wouldBeFarm) {
     blockers.push({
       reason: 'No power',
       details: 'Build a power plant nearby to provide electricity'
     });
   }
   
-  // Check water
+  // Check water (not required for farms)
   const hasWater = state.services.water[y][x];
-  if (!hasWater) {
+  if (!hasWater && !wouldBeFarm) {
     blockers.push({
       reason: 'No water',
       details: 'Build a water tower nearby to provide water'
@@ -2352,10 +2372,11 @@ export function getDevelopmentBlockers(
   }
   
   // If no blockers found, it's just waiting for RNG
-  if (blockers.length === 0 && roadAccess && hasPower && hasWater) {
+  const hasUtilities = hasPower && hasWater;
+  if (blockers.length === 0 && roadAccess && (hasUtilities || wouldBeFarm)) {
     blockers.push({
       reason: 'Waiting for development',
-      details: 'All conditions met! Building will spawn soon (5% chance per tick)'
+      details: wouldBeFarm ? 'Farm can develop here! (5% chance per tick)' : 'All conditions met! Building will spawn soon (5% chance per tick)'
     });
   }
   
