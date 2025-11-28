@@ -3140,8 +3140,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // content from the sprite above it in the sprite sheet
               if (buildingType === 'marina_docks_small') {
                 sourceY += tileHeight * 0.25; // Shift down 25% to avoid row above clipping
+                sourceH = tileHeight * 0.75; // Reduce height by 25% to avoid row below clipping
               } else if (buildingType === 'pier_large') {
                 sourceY += tileHeight * 0.2; // Shift down 20% to avoid row above clipping
+                sourceH = tileHeight * 0.8; // Reduce height by 20% to avoid row below clipping
               } else if (buildingType === 'amphitheater') {
                 sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
               } else if (buildingType === 'go_kart_track') {
