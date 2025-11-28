@@ -298,7 +298,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     swimming_pool: -0.20,  // shifted up slightly
     skate_park: -0.25,  // shifted up 0.1 tiles
     mini_golf_course: -0.55,  // shifted down 0.3 tiles total
-    bleachers_field: -0.2,
+    bleachers_field: -0.3,  // shifted up 0.1 tiles
     go_kart_track: -0.35,  // shifted down 0.5
     amphitheater: -0.85,
     greenhouse_garden: -0.55,  // shifted down 0.3
