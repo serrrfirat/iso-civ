@@ -154,6 +154,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const isPanningRef = useRef(false); // Ref for animation loop to check panning state
+  const isPinchZoomingRef = useRef(false); // Ref for animation loop to check pinch zoom state
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredTile, setHoveredTile] = useState<{ x: number; y: number } | null>(null);
   const [hoveredIncident, setHoveredIncident] = useState<{
@@ -2300,8 +2301,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // ============================================
         // DRAW TRAFFIC LIGHTS AT INTERSECTIONS
         // ============================================
-        // PERF: Skip traffic lights during mobile panning for better performance
-        const skipTrafficLights = isMobile && isPanningRef.current;
+        // PERF: Skip traffic lights during mobile panning/zooming for better performance
+        const skipTrafficLights = isMobile && (isPanningRef.current || isPinchZoomingRef.current);
         if (isIntersection && currentZoom >= 0.6 && !skipTrafficLights) {
           const trafficTime = trafficLightTimerRef.current;
           const lightState = getTrafficLightState(trafficTime);
@@ -3491,10 +3492,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         navLightFlashTimerRef.current += delta * 3; // Update nav light flash timer
         trafficLightTimerRef.current += delta; // Update traffic light cycle timer
       }
-      // PERF: Skip drawing animated elements during mobile panning for better performance
-      const skipAnimatedElements = isMobile && isPanningRef.current;
+      // PERF: Skip drawing animated elements during mobile panning/zooming for better performance
+      const skipAnimatedElements = isMobile && (isPanningRef.current || isPinchZoomingRef.current);
       if (skipAnimatedElements) {
-        // Clear the canvas but don't draw anything - hides all animated elements while panning
+        // Clear the canvas but don't draw anything - hides all animated elements while panning/zooming
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       } else {
@@ -3521,8 +3522,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // PERF: Skip re-rendering lighting during mobile panning - just keep existing state
-    if (isMobile && isPanningRef.current) {
+    // PERF: Hide lighting during mobile panning/zooming for better performance
+    if (isMobile && (isPanningRef.current || isPinchZoomingRef.current)) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;
     }
     
@@ -4063,6 +4066,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
       setDragStart({ x: touch.clientX - offset.x, y: touch.clientY - offset.y });
       setIsPanning(true);
+      isPinchZoomingRef.current = false;
     } else if (e.touches.length === 2) {
       // Two finger touch - pinch to zoom
       const distance = getTouchDistance(e.touches[0], e.touches[1]);
@@ -4070,6 +4074,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       initialZoomRef.current = zoom;
       lastTouchCenterRef.current = getTouchCenter(e.touches[0], e.touches[1]);
       setIsPanning(false);
+      isPinchZoomingRef.current = true;
     }
   }, [offset, zoom, getTouchDistance, getTouchCenter]);
 
@@ -4160,6 +4165,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Reset all touch state
       setIsPanning(false);
       setIsDragging(false);
+      isPinchZoomingRef.current = false;
       touchStartRef.current = null;
       initialPinchDistanceRef.current = null;
       lastTouchCenterRef.current = null;
@@ -4168,6 +4174,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const touch = e.touches[0];
       setDragStart({ x: touch.clientX - offset.x, y: touch.clientY - offset.y });
       setIsPanning(true);
+      isPinchZoomingRef.current = false;
       initialPinchDistanceRef.current = null;
       lastTouchCenterRef.current = null;
     }
