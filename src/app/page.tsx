@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { GameProvider } from '@/context/GameContext';
+import { GameProvider, useGame } from '@/context/GameContext';
 import Game from '@/components/Game';
 import Image from 'next/image';
 import { useMobile } from '@/hooks/useMobile';
+import { getStateFromUrl, decompressGameState } from '@/lib/shareState';
 
 const STORAGE_KEY = 'isocity-game-state';
 
@@ -52,15 +53,81 @@ function hasSavedGame(): boolean {
   return false;
 }
 
+// Component that loads shared state from URL
+function SharedStateLoader({ onLoaded }: { onLoaded: () => void }) {
+  const { loadState } = useGame();
+  const hasLoaded = useRef(false);
+
+  useEffect(() => {
+    if (hasLoaded.current) return;
+    hasLoaded.current = true;
+
+    const compressed = getStateFromUrl();
+    if (compressed) {
+      const partialState = decompressGameState(compressed);
+      if (partialState) {
+        // Convert partial state to full JSON string for loadState
+        // We need to create a minimal valid state
+        const fullState = {
+          ...partialState,
+          tick: 0,
+          speed: 1,
+          selectedTool: 'select',
+          budget: {
+            police: { name: 'Police', funding: 100, cost: 0 },
+            fire: { name: 'Fire', funding: 100, cost: 0 },
+            health: { name: 'Health', funding: 100, cost: 0 },
+            education: { name: 'Education', funding: 100, cost: 0 },
+            transportation: { name: 'Transportation', funding: 100, cost: 0 },
+            parks: { name: 'Parks', funding: 100, cost: 0 },
+            power: { name: 'Power', funding: 100, cost: 0 },
+            water: { name: 'Water', funding: 100, cost: 0 },
+          },
+          services: {
+            police: [],
+            fire: [],
+            health: [],
+            education: [],
+            power: [],
+            water: [],
+          },
+          notifications: [],
+          advisorMessages: [],
+          history: [],
+          activePanel: 'none',
+          disastersEnabled: true,
+          waterBodies: [],
+        };
+        loadState(JSON.stringify(fullState));
+        // Clear the URL hash after loading
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }
+    onLoaded();
+  }, [loadState, onLoaded]);
+
+  return null;
+}
+
 export default function HomePage() {
   const [showGame, setShowGame] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
+  const [hasSharedState, setHasSharedState] = useState(false);
   const { isMobileDevice, isSmallScreen, orientation } = useMobile();
   const isMobile = isMobileDevice || isSmallScreen;
 
-  // Check for saved game after mount (client-side only)
+  // Check for saved game or shared state after mount (client-side only)
   useEffect(() => {
     const checkSavedGame = () => {
+      // Check for shared state in URL first
+      const compressed = getStateFromUrl();
+      if (compressed) {
+        setHasSharedState(true);
+        setShowGame(true);
+        setIsChecking(false);
+        return;
+      }
+      
       setIsChecking(false);
       if (hasSavedGame()) {
         setShowGame(true);
@@ -81,6 +148,7 @@ export default function HomePage() {
   if (showGame) {
     return (
       <GameProvider>
+        {hasSharedState && <SharedStateLoader onLoaded={() => setHasSharedState(false)} />}
         <main className="h-screen w-screen overflow-hidden">
           <Game />
         </main>

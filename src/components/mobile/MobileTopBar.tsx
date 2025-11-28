@@ -20,7 +20,10 @@ import {
   SafetyIcon,
   EnvironmentIcon,
   CloseIcon,
+  ShareIcon,
+  CheckIcon,
 } from '@/components/ui/Icons';
+import { copyShareUrl } from '@/lib/shareState';
 
 // Sun/Moon icon for time of day
 function TimeOfDayIcon({ hour }: { hour: number }) {
@@ -78,8 +81,17 @@ export function MobileTopBar({
   const { state, setSpeed, setTaxRate, isSaving, visualHour } = useGame();
   const { stats, year, month, speed, taxRate, cityName } = state;
   const [showDetails, setShowDetails] = useState(false);
+  const [shareState, setShareState] = useState<'idle' | 'copied'>('idle');
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const handleShare = async () => {
+    const success = await copyShareUrl(state);
+    if (success) {
+      setShareState('copied');
+      setTimeout(() => setShareState('idle'), 2000);
+    }
+  };
 
   return (
     <>
@@ -107,34 +119,8 @@ export function MobileTopBar({
             </button>
           </div>
 
-          {/* Center: Speed controls */}
-          <div className="flex items-center gap-0.5 bg-secondary rounded-md p-0.5">
-            {[0, 1, 2, 3].map((s) => (
-              <Button
-                key={s}
-                onClick={() => setSpeed(s as 0 | 1 | 2 | 3)}
-                variant={speed === s ? 'default' : 'ghost'}
-                size="icon"
-                className="h-7 w-7"
-              >
-                {s === 0 ? (
-                  <PauseIcon size={12} />
-                ) : s === 1 ? (
-                  <PlayIcon size={12} />
-                ) : s === 2 ? (
-                  <FastForwardIcon size={12} />
-                ) : (
-                  <div className="flex items-center -space-x-1">
-                    <PlayIcon size={8} />
-                    <PlayIcon size={8} />
-                  </div>
-                )}
-              </Button>
-            ))}
-          </div>
-
-          {/* Right: Key stats */}
-          <div className="flex items-center gap-3">
+          {/* Center: Key stats with compact speed controls */}
+          <div className="flex items-center gap-2">
             <div className="flex flex-col items-end">
               <span className="text-[9px] text-muted-foreground">Pop</span>
               <span className="text-xs font-mono font-semibold text-foreground">
@@ -147,7 +133,48 @@ export function MobileTopBar({
                 ${stats.money >= 1000000 ? `${(stats.money / 1000000).toFixed(1)}M` : stats.money >= 1000 ? `${(stats.money / 1000).toFixed(0)}k` : stats.money}
               </span>
             </div>
+            
+            {/* Compact Speed controls */}
+            <div className="flex items-center gap-0.5 bg-secondary rounded p-0.5 ml-1">
+              <Button
+                onClick={() => setSpeed(speed === 0 ? 1 : 0)}
+                variant={speed === 0 ? 'default' : 'ghost'}
+                size="icon"
+                className="h-6 w-6"
+              >
+                {speed === 0 ? <PauseIcon size={10} /> : <PlayIcon size={10} />}
+              </Button>
+              <Button
+                onClick={() => setSpeed(speed === 3 ? 1 : speed === 0 ? 2 : (speed + 1) as 1 | 2 | 3)}
+                variant={speed >= 2 ? 'default' : 'ghost'}
+                size="icon"
+                className="h-6 w-6"
+              >
+                {speed === 3 ? (
+                  <div className="flex items-center -space-x-0.5">
+                    <PlayIcon size={6} />
+                    <PlayIcon size={6} />
+                  </div>
+                ) : (
+                  <FastForwardIcon size={10} />
+                )}
+              </Button>
+            </div>
           </div>
+
+          {/* Right: Share button */}
+          <Button
+            onClick={handleShare}
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+          >
+            {shareState === 'copied' ? (
+              <CheckIcon size={14} className="text-green-500" />
+            ) : (
+              <ShareIcon size={14} />
+            )}
+          </Button>
         </div>
 
         {/* Demand indicators row */}

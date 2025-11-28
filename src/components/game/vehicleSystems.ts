@@ -81,6 +81,11 @@ export function useVehicleSystems(
       const baseLaneOffset = 4 + Math.random() * 2;
       // North and East get positive offset, South and West get negative
       const laneSign = (direction === 'north' || direction === 'east') ? 1 : -1;
+      // Cars have a limited lifespan - shorter on mobile to reduce crowding
+      const carMaxAge = isMobile 
+        ? 8 + Math.random() * 4   // 8-12 seconds on mobile
+        : 12 + Math.random() * 8; // 12-20 seconds on desktop
+      
       carsRef.current.push({
         id: carIdRef.current++,
         tileX,
@@ -89,7 +94,7 @@ export function useVehicleSystems(
         progress: Math.random() * 0.8,
         speed: (0.35 + Math.random() * 0.35) * 0.7,
         age: 0,
-        maxAge: Infinity, // Cars never time out - they only disappear if they can't find a valid road
+        maxAge: carMaxAge,
         color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)],
         laneOffset: laneSign * baseLaneOffset,
       });
@@ -97,7 +102,7 @@ export function useVehicleSystems(
     }
     
     return false;
-  }, [worldStateRef, carsRef, carIdRef]);
+  }, [worldStateRef, carsRef, carIdRef, isMobile]);
 
   const findResidentialBuildingsCallback = useCallback((): { x: number; y: number }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
@@ -590,6 +595,12 @@ export function useVehicleSystems(
     
     const updatedCars: Car[] = [];
     for (const car of [...carsRef.current]) {
+      // Update car age and remove if too old
+      car.age += delta * speedMultiplier;
+      if (car.age > car.maxAge) {
+        continue; // Car has exceeded its lifespan
+      }
+      
       // Skip update if car is somehow off the road, but keep it alive
       const onRoad = isRoadTile(currentGrid, currentGridSize, car.tileX, car.tileY);
       if (!onRoad) {
@@ -730,7 +741,7 @@ export function useVehicleSystems(
         }
       }
       
-      // Always keep the car alive - only remove if road was demolished (handled above with continue)
+      // Keep the car alive unless it exceeded maxAge (handled at top of loop)
       updatedCars.push(car);
     }
     

@@ -322,6 +322,27 @@ export function AmusementParkIcon({ size = 18, className }: IconProps) {
   );
 }
 
+export function ShareIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      {/* Share nodes */}
+      <circle {...baseStroke} cx="18" cy="5" r="3" />
+      <circle {...baseStroke} cx="6" cy="12" r="3" />
+      <circle {...baseStroke} cx="18" cy="19" r="3" />
+      {/* Connecting lines */}
+      <path {...baseStroke} d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" />
+    </svg>
+  );
+}
+
+export function CheckIcon({ size = 18, className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
+      <path {...baseStroke} d="M5 12l5 5L20 7" />
+    </svg>
+  );
+}
+
 export function SubwayIcon({ size = 18, className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className={className}>
