@@ -7354,6 +7354,14 @@ export default function Game() {
   const hasCapturedInitialTool = useRef(false);
   const currentSelectedToolRef = useRef<Tool>(state.selectedTool);
   
+  // Callback to disable overlay when utilities are placed
+  const handlePlace = useCallback((tool: Tool) => {
+    const utilityTools: Tool[] = ['power_plant', 'water_tower', 'subway_station'];
+    if (utilityTools.includes(tool)) {
+      setOverlayMode('none');
+    }
+  }, [setOverlayMode]);
+  
   // Keep currentSelectedToolRef in sync with state
   useEffect(() => {
     currentSelectedToolRef.current = state.selectedTool;
