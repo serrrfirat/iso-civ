@@ -208,7 +208,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     space_program: -0.6, // Shift down a bit
     university: -0.55, // Shift up a tiny bit
     stadium: -1.2, // Shift up a ton
-    museum: -1.5, // Shift up 1.5 tiles
+    museum: -1.0, // Shift up 1 tile
   },
   horizontalOffsets: {
     university: 0.0, // Shift right a tiny tiny bit more
