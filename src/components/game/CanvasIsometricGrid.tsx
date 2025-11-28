@@ -2391,51 +2391,55 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       ctx.closePath();
       ctx.fill();
       
-      // Interior sidewalk corners - small isometric rectangles at intersection corners
-      // Only draw if this is an intersection AND the corner has roads on both sides
-      const isInteriorIntersection = north && east && south && west;
-      if (isInteriorIntersection) {
+      // Interior sidewalk corners - small isometric diamonds at corners where two roads meet
+      // Each corner drawn independently based on its two adjacent road directions
+      {
         ctx.fillStyle = sidewalkColor;
-        
-        // Small corner size - stays within tile, doesn't overlap neighbors
         const cs = swWidth * 0.8;
         
-        // Each corner: draw small isometric parallelogram hugging the corner
-        // Top corner - small parallelogram
-        ctx.beginPath();
-        ctx.moveTo(topCorner.x, topCorner.y);
-        ctx.lineTo(topCorner.x - cs, topCorner.y + cs * 0.5);
-        ctx.lineTo(topCorner.x, topCorner.y + cs);
-        ctx.lineTo(topCorner.x + cs, topCorner.y + cs * 0.5);
-        ctx.closePath();
-        ctx.fill();
+        // Top corner - draw if north AND east both have roads
+        if (north && east) {
+          ctx.beginPath();
+          ctx.moveTo(topCorner.x, topCorner.y);
+          ctx.lineTo(topCorner.x - cs, topCorner.y + cs * 0.5);
+          ctx.lineTo(topCorner.x, topCorner.y + cs);
+          ctx.lineTo(topCorner.x + cs, topCorner.y + cs * 0.5);
+          ctx.closePath();
+          ctx.fill();
+        }
         
-        // Right corner - isometric diamond pointing left into tile
-        ctx.beginPath();
-        ctx.moveTo(rightCorner.x, rightCorner.y);
-        ctx.lineTo(rightCorner.x - cs, rightCorner.y - cs * 0.5);
-        ctx.lineTo(rightCorner.x - cs * 2, rightCorner.y);
-        ctx.lineTo(rightCorner.x - cs, rightCorner.y + cs * 0.5);
-        ctx.closePath();
-        ctx.fill();
+        // Right corner - draw if east AND south both have roads
+        if (east && south) {
+          ctx.beginPath();
+          ctx.moveTo(rightCorner.x, rightCorner.y);
+          ctx.lineTo(rightCorner.x - cs, rightCorner.y - cs * 0.5);
+          ctx.lineTo(rightCorner.x - cs * 2, rightCorner.y);
+          ctx.lineTo(rightCorner.x - cs, rightCorner.y + cs * 0.5);
+          ctx.closePath();
+          ctx.fill();
+        }
         
-        // Bottom corner - isometric diamond pointing up into tile
-        ctx.beginPath();
-        ctx.moveTo(bottomCorner.x, bottomCorner.y);
-        ctx.lineTo(bottomCorner.x + cs, bottomCorner.y - cs * 0.5);
-        ctx.lineTo(bottomCorner.x, bottomCorner.y - cs);
-        ctx.lineTo(bottomCorner.x - cs, bottomCorner.y - cs * 0.5);
-        ctx.closePath();
-        ctx.fill();
+        // Bottom corner - draw if south AND west both have roads
+        if (south && west) {
+          ctx.beginPath();
+          ctx.moveTo(bottomCorner.x, bottomCorner.y);
+          ctx.lineTo(bottomCorner.x + cs, bottomCorner.y - cs * 0.5);
+          ctx.lineTo(bottomCorner.x, bottomCorner.y - cs);
+          ctx.lineTo(bottomCorner.x - cs, bottomCorner.y - cs * 0.5);
+          ctx.closePath();
+          ctx.fill();
+        }
         
-        // Left corner - isometric diamond pointing right into tile
-        ctx.beginPath();
-        ctx.moveTo(leftCorner.x, leftCorner.y);
-        ctx.lineTo(leftCorner.x + cs, leftCorner.y - cs * 0.5);
-        ctx.lineTo(leftCorner.x + cs * 2, leftCorner.y);
-        ctx.lineTo(leftCorner.x + cs, leftCorner.y + cs * 0.5);
-        ctx.closePath();
-        ctx.fill();
+        // Left corner - draw if west AND north both have roads
+        if (west && north) {
+          ctx.beginPath();
+          ctx.moveTo(leftCorner.x, leftCorner.y);
+          ctx.lineTo(leftCorner.x + cs, leftCorner.y - cs * 0.5);
+          ctx.lineTo(leftCorner.x + cs * 2, leftCorner.y);
+          ctx.lineTo(leftCorner.x + cs, leftCorner.y + cs * 0.5);
+          ctx.closePath();
+          ctx.fill();
+        }
       }
       
       // ============================================
