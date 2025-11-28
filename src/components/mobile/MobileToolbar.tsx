@@ -5,7 +5,6 @@ import { useGame } from '@/context/GameContext';
 import { Tool, TOOL_INFO } from '@/types/game';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   CloseIcon,
   RoadIcon,
@@ -191,13 +190,13 @@ const QuickToolIcons: Partial<Record<Tool, React.ReactNode>> = {
 const toolCategories = {
   'TOOLS': ['select', 'bulldoze', 'road', 'subway'] as Tool[],
   'ZONES': ['zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone'] as Tool[],
+  'UTILITIES': ['power_plant', 'water_tower', 'subway_station'] as Tool[],
   'SERVICES': ['police_station', 'fire_station', 'hospital', 'school', 'university'] as Tool[],
   'PARKS': ['park', 'park_large', 'tennis', 'playground_small', 'playground_large', 'community_garden', 'pond_park', 'park_gate', 'greenhouse_garden'] as Tool[],
   'SPORTS': ['basketball_courts', 'soccer_field_small', 'baseball_field_small', 'football_field', 'baseball_stadium', 'swimming_pool', 'skate_park', 'bleachers_field'] as Tool[],
   'RECREATION': ['mini_golf_course', 'go_kart_track', 'amphitheater', 'roller_coaster_small', 'campground', 'cabin_house', 'mountain_lodge', 'mountain_trailhead'] as Tool[],
   'WATERFRONT': ['marina_docks_small', 'pier_large'] as Tool[],
   'COMMUNITY': ['community_center', 'animal_pens_farm', 'office_building_small'] as Tool[],
-  'UTILITIES': ['power_plant', 'water_tower', 'subway_station'] as Tool[],
   'SPECIAL': ['stadium', 'museum', 'airport', 'space_program', 'city_hall', 'amusement_park'] as Tool[],
 };
 
@@ -337,11 +336,11 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
       {showMenu && (
         <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={() => setShowMenu(false)}>
           <Card
-            className="absolute bottom-20 left-2 right-2 max-h-[70vh] overflow-hidden rounded-xl"
+            className="absolute bottom-20 left-2 right-2 max-h-[70vh] overflow-hidden rounded-xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* City Management section at top */}
-            <div className="p-3 border-b border-border">
+            <div className="p-3 border-b border-border flex-shrink-0">
               <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
                 City Management
               </div>
@@ -391,7 +390,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
 
             {/* Overlay Toggle Section */}
             {setOverlayMode && (
-              <div className="p-3 border-b border-border">
+              <div className="p-3 border-b border-border flex-shrink-0">
                 <div className="text-xs text-muted-foreground uppercase tracking-wider mb-2">
                   View Overlays
                 </div>
@@ -464,8 +463,8 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
               </div>
             )}
 
-            <ScrollArea className="h-[50vh]">
-              <div className="p-2 space-y-1">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <div className="p-2 space-y-1 pb-4">
                 {/* Category buttons */}
                 {Object.entries(toolCategories).map(([category, tools]) => (
                   <div key={category}>
@@ -516,7 +515,7 @@ export function MobileToolbar({ onOpenPanel, overlayMode = 'none', setOverlayMod
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           </Card>
         </div>
       )}
