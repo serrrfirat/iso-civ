@@ -250,6 +250,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     mansion: -0.25, // Normal is -0.35, abandoned shifted down 0.1 tiles (-0.35 + 0.1 = -0.25)
     office_high: -0.2, // Normal is -0.7, abandoned shifted down 0.5 tiles (-0.7 + 0.5 = -0.2)
     tree: -0.3, // Abandoned tree moved up 0.3 tiles
+    factory_small: -0.05, // Normal is -0.25, shifted down 0.2 tiles
   },
   abandonedScales: {
     // Abandoned factory_large needs to be scaled down 30%
