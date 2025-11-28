@@ -153,8 +153,8 @@ export const StatsPanel = React.memo(function StatsPanel() {
 // ============================================================================
 
 export const TopBar = React.memo(function TopBar() {
-  const { state, setSpeed, setTaxRate, isSaving } = useGame();
-  const { stats, year, month, day, hour, speed, taxRate, cityName } = state;
+  const { state, setSpeed, setTaxRate, isSaving, visualHour } = useGame();
+  const { stats, year, month, day, speed, taxRate, cityName } = state;
   
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const formattedDate = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}-${year}`;
@@ -178,7 +178,7 @@ export const TopBar = React.memo(function TopBar() {
                 <p>{formattedDate}</p>
               </TooltipContent>
             </Tooltip>
-            <TimeOfDayIcon hour={hour} />
+            <TimeOfDayIcon hour={visualHour} />
           </div>
         </div>
         

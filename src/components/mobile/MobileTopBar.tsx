@@ -75,8 +75,8 @@ export function MobileTopBar({
   services: { police: number[][]; fire: number[][]; health: number[][]; education: number[][]; power: boolean[][]; water: boolean[][] };
   onCloseTile: () => void;
 }) {
-  const { state, setSpeed, setTaxRate, isSaving } = useGame();
-  const { stats, year, month, hour, speed, taxRate, cityName } = state;
+  const { state, setSpeed, setTaxRate, isSaving, visualHour } = useGame();
+  const { stats, year, month, speed, taxRate, cityName } = state;
   const [showDetails, setShowDetails] = useState(false);
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -102,7 +102,7 @@ export function MobileTopBar({
               </div>
               <div className="flex items-center gap-1 text-muted-foreground text-[10px] font-mono">
                 <span>{monthNames[month - 1]} {year}</span>
-                <TimeOfDayIcon hour={hour} />
+                <TimeOfDayIcon hour={visualHour} />
               </div>
             </button>
           </div>

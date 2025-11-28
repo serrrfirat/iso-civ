@@ -151,8 +151,8 @@ export interface CanvasIsometricGridProps {
 
 // Canvas-based Isometric Grid - HIGH PERFORMANCE
 export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMobile = false, navigationTarget, onNavigationComplete, onViewportChange }: CanvasIsometricGridProps) {
-  const { state, placeAtTile, connectToCity, checkAndDiscoverCities, currentSpritePack } = useGame();
-  const { grid, gridSize, selectedTool, speed, adjacentCities, waterBodies, hour } = state;
+  const { state, placeAtTile, connectToCity, checkAndDiscoverCities, currentSpritePack, visualHour } = useGame();
+  const { grid, gridSize, selectedTool, speed, adjacentCities, waterBodies } = state;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const carsCanvasRef = useRef<HTMLCanvasElement>(null);
   const lightingCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -897,10 +897,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     };
     
     // Use extracted utility function for drawing
-    drawAirplanesUtil(ctx, airplanesRef.current, viewBounds, hour, navLightFlashTimerRef.current);
+    drawAirplanesUtil(ctx, airplanesRef.current, viewBounds, visualHour, navLightFlashTimerRef.current);
     
     ctx.restore();
-  }, [hour]);
+  }, [visualHour]);
 
   // Draw helicopters with rotor wash (uses extracted utility)
   const drawHelicopters = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -927,10 +927,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     };
     
     // Use extracted utility function for drawing
-    drawHelicoptersUtil(ctx, helicoptersRef.current, viewBounds, hour, navLightFlashTimerRef.current);
+    drawHelicoptersUtil(ctx, helicoptersRef.current, viewBounds, visualHour, navLightFlashTimerRef.current);
     
     ctx.restore();
-  }, [hour]);
+  }, [visualHour]);
 
   // Update boats - spawn, move, and manage lifecycle
   const updateBoats = useCallback((delta: number) => {
@@ -1343,8 +1343,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       ctx.closePath();
       ctx.fill();
       
-      // Navigation lights at night (hour >= 20 || hour < 6)
-      const isNight = hour >= 20 || hour < 6;
+      // Navigation lights at night (visualHour >= 20 || visualHour < 6)
+      const isNight = visualHour >= 20 || visualHour < 6;
       if (isNight) {
         // White masthead light at top of mast (always on)
         ctx.fillStyle = '#ffffff';
@@ -1377,7 +1377,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
     
     ctx.restore();
-  }, [hour]);
+  }, [visualHour]);
 
   // Find firework buildings (uses imported utility)
   const findFireworkBuildingsCallback = useCallback((): { x: number; y: number; type: BuildingType }[] => {
@@ -3773,7 +3773,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         updateAirplanes(delta); // Update airplanes (airport required)
         updateHelicopters(delta); // Update helicopters (hospital/airport required)
         updateBoats(delta); // Update boats (marina/pier required)
-        updateFireworks(delta, hour); // Update fireworks (nighttime only)
+        updateFireworks(delta, visualHour); // Update fireworks (nighttime only)
         updateSmog(delta); // Update factory smog particles
         navLightFlashTimerRef.current += delta * 3; // Update nav light flash timer
         trafficLightTimerRef.current += delta; // Update traffic light cycle timer
@@ -3791,7 +3791,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, hour, isMobile]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
   
   // Day/Night cycle lighting rendering - optimized for performance
   useEffect(() => {
@@ -3802,7 +3802,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     const dpr = window.devicePixelRatio || 1;
     
-    // Calculate darkness based on hour (0-23)
+    // Calculate darkness based on visualHour (0-23)
     // Dawn: 5-7, Day: 7-18, Dusk: 18-20, Night: 20-5
     const getDarkness = (h: number): number => {
       if (h >= 7 && h < 18) return 0; // Full daylight
@@ -3811,7 +3811,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       return 1; // Night
     };
     
-    const darkness = getDarkness(hour);
+    const darkness = getDarkness(visualHour);
     
     // Clear canvas first
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -3835,7 +3835,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         }
         return { r: 20, g: 30, b: 60 };
       };
-      const ambient = getAmbientColor(hour);
+      const ambient = getAmbientColor(visualHour);
       const alpha = darkness * 0.45; // Slightly less darkening on mobile
       ctx.fillStyle = `rgba(${ambient.r}, ${ambient.g}, ${ambient.b}, ${alpha})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -3856,7 +3856,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       return { r: 20, g: 30, b: 60 };
     };
     
-    const ambient = getAmbientColor(hour);
+    const ambient = getAmbientColor(visualHour);
     
     // Apply darkness overlay
     const alpha = darkness * 0.55;
@@ -4054,7 +4054,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     ctx.restore();
     ctx.globalCompositeOperation = 'source-over';
     
-  }, [grid, gridSize, hour, offset, zoom, canvasSize.width, canvasSize.height, isMobile]);
+  }, [grid, gridSize, visualHour, offset, zoom, canvasSize.width, canvasSize.height, isMobile]);
   
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {

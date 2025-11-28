@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useGame } from '@/context/GameContext';
+import { useGame, DayNightMode } from '@/context/GameContext';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator';
 import { SpriteTestPanel } from './SpriteTestPanel';
 
 export function SettingsPanel() {
-  const { state, setActivePanel, setDisastersEnabled, newGame, loadState, exportState, currentSpritePack, availableSpritePacks, setSpritePack } = useGame();
+  const { state, setActivePanel, setDisastersEnabled, newGame, loadState, exportState, currentSpritePack, availableSpritePacks, setSpritePack, dayNightMode, setDayNightMode } = useGame();
   const { disastersEnabled, cityName, gridSize } = state;
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -328,6 +328,28 @@ export function SettingsPanel() {
             >
               Load Example State 6
             </Button>
+            
+            <div className="mt-4 pt-4 border-t border-border">
+              <Label>Day/Night Mode</Label>
+              <p className="text-muted-foreground text-xs mb-2">Override the time-of-day appearance without affecting time progression</p>
+              <div className="flex rounded-md border border-border overflow-hidden">
+                {(['auto', 'day', 'night'] as DayNightMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setDayNightMode(mode)}
+                    className={`flex-1 px-3 py-2 text-sm font-medium transition-colors ${
+                      dayNightMode === mode
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {mode === 'auto' && 'Auto'}
+                    {mode === 'day' && 'Day'}
+                    {mode === 'night' && 'Night'}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>
