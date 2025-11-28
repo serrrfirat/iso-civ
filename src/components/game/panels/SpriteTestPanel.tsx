@@ -15,6 +15,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
     construction: null,
     abandoned: null,
     dense: null,
+    modern: null,
     parks: null,
     parksConstruction: null,
   });
@@ -45,6 +46,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
       loadSheet(currentSpritePack.constructionSrc, 'construction'),
       loadSheet(currentSpritePack.abandonedSrc, 'abandoned'),
       loadSheet(currentSpritePack.denseSrc, 'dense'),
+      loadSheet(currentSpritePack.modernSrc, 'modern'),
       loadSheet(currentSpritePack.parksSrc, 'parks'),
       loadSheet(currentSpritePack.parksConstructionSrc, 'parksConstruction'),
     ]);
@@ -127,6 +129,23 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
           const sy = variant.row * tileHeight;
           itemsToRender.push({
             label: `${buildingType} (dense ${variantIndex + 1})`,
+            coords: { sx, sy, sw: tileWidth, sh: tileHeight },
+          });
+        });
+      });
+    } else if (activeTab === 'modern' && currentSpritePack.modernSrc && currentSpritePack.modernVariants) {
+      // Modern sprite sheet - use modernVariants mapping (same layout as dense)
+      sheetCols = currentSpritePack.cols;
+      sheetRows = currentSpritePack.rows;
+      const tileWidth = Math.floor(sheetWidth / sheetCols);
+      const tileHeight = Math.floor(sheetHeight / sheetRows);
+      
+      Object.entries(currentSpritePack.modernVariants).forEach(([buildingType, variants]) => {
+        variants.forEach((variant, variantIndex) => {
+          const sx = variant.col * tileWidth;
+          const sy = variant.row * tileHeight;
+          itemsToRender.push({
+            label: `${buildingType} (modern ${variantIndex + 1})`,
             coords: { sx, sy, sw: tileWidth, sh: tileHeight },
           });
         });
@@ -246,6 +265,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
     { id: 'construction', label: 'Construction', available: !!spriteSheets.construction },
     { id: 'abandoned', label: 'Abandoned', available: !!spriteSheets.abandoned },
     { id: 'dense', label: 'High Density', available: !!spriteSheets.dense },
+    { id: 'modern', label: 'Modern', available: !!spriteSheets.modern },
     { id: 'parks', label: 'Parks', available: !!spriteSheets.parks },
     { id: 'parksConstruction', label: 'Parks Construction', available: !!spriteSheets.parksConstruction },
   ].filter(tab => tab.available);
@@ -261,6 +281,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
                           activeTab === 'construction' ? currentSpritePack.constructionSrc :
                           activeTab === 'abandoned' ? currentSpritePack.abandonedSrc :
                           activeTab === 'dense' ? currentSpritePack.denseSrc :
+                          activeTab === 'modern' ? currentSpritePack.modernSrc :
                           activeTab === 'parksConstruction' ? currentSpritePack.parksConstructionSrc :
                           currentSpritePack.parksSrc;
   

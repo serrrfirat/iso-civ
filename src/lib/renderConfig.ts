@@ -21,6 +21,11 @@ export interface SpritePack {
   // Dense variant definitions: maps building type to available variants in the dense sheet
   // Each variant specifies row and column (0-indexed) in the dense sprite sheet
   denseVariants?: Record<string, { row: number; col: number }[]>;
+  // Path to the modern variants sprite sheet (alternative sprites for modern-style high-density buildings)
+  modernSrc?: string;
+  // Modern variant definitions: maps building type to available variants in the modern sheet
+  // Each variant specifies row and column (0-indexed) in the modern sprite sheet
+  modernVariants?: Record<string, { row: number; col: number }[]>;
   // Path to the parks sprite sheet (separate sheet for park/recreation buildings)
   parksSrc?: string;
   // Path to the parks construction sprite sheet (same layout as parks, but under construction)
@@ -66,6 +71,12 @@ export interface SpritePack {
   // Per-building-type scale adjustments for DENSE variant sprites only
   // Values are multiplied with the normal scale (e.g., 0.95 = 95% of normal size)
   denseScales?: Record<string, number>;
+  // Per-building-type vertical offset adjustments for MODERN variant sprites only
+  // These override verticalOffsets when rendering modern variants
+  modernVerticalOffsets?: Record<string, number>;
+  // Per-building-type scale adjustments for MODERN variant sprites only
+  // Values are multiplied with the normal scale (e.g., 0.95 = 95% of normal size)
+  modernScales?: Record<string, number>;
   // Per-building-type vertical offset adjustments for PARKS sprite sheet buildings
   // These are used when rendering parks buildings from the parks sprite sheet
   parksVerticalOffsets?: Record<string, number>;
@@ -265,6 +276,31 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   },
   denseScales: {
     // Dense apartment_high scaled down 10% total (5% more from 0.95)
+    apartment_high: 0.90,
+  },
+  // Modern sprite sheet configuration (same layout as dense: 5 cols, 6 rows)
+  modernSrc: '/assets/sprites_red_water_new_modern.png',
+  modernVariants: {
+    // High density residential (apartment_high) - Row 1, columns 1-2 (0-indexed: row 0, cols 0-1)
+    apartment_high: [
+      { row: 0, col: 0 },
+      { row: 0, col: 1 },
+    ],
+    // High density commercial (mall) - Row 3 col 1, Row 4 cols 1, 4, 5 (0-indexed: row 2 col 0, row 3 cols 0, 3, 4)
+    mall: [
+      { row: 2, col: 0 },
+      { row: 3, col: 0 },
+      { row: 3, col: 3 },
+      { row: 3, col: 4 },
+    ],
+  },
+  modernVerticalOffsets: {
+    // Adjust these as needed for proper positioning
+    apartment_high: -0.80,
+    mall: -1.0,
+  },
+  modernScales: {
+    // Adjust these as needed for proper sizing
     apartment_high: 0.90,
   },
   // Parks sprite sheet configuration (same offsets/scaling approach as dense)
