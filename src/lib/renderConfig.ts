@@ -220,6 +220,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     university: -0.55, // Shift up a tiny bit
     stadium: -1.2, // Shift up a ton
     museum: -1.0, // Shift up 1 tile
+    tree: -0.3, // Shift up 0.3 tiles
   },
   horizontalOffsets: {
     university: 0.0, // Shift right a tiny tiny bit more
@@ -357,7 +358,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     swimming_pool: -0.20,  // shifted up slightly
     skate_park: -0.25,  // shifted up 0.1 tiles
     mini_golf_course: -0.55,  // shifted down 0.3 tiles total
-    bleachers_field: -0.3,  // shifted up 0.1 tiles
+    bleachers_field: -0.2,  // shifted down 0.1 tiles from -0.3
     go_kart_track: -0.40,  // shifted down 0.15 tiles from -0.55
     amphitheater: -0.45,  // shifted up 0.1 tiles
     greenhouse_garden: -0.55,  // shifted down 0.3

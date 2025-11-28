@@ -3152,6 +3152,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
               }
               
+              // Special handling for buildings that need more height to avoid bottom clipping
+              if (buildingType === 'bleachers_field') {
+                sourceH = tileHeight * 1.1; // Increase height by 10% to avoid bottom clipping
+              }
+              
               coords = {
                 sx: useParksBuilding.col * tileWidth,
                 sy: sourceY,
