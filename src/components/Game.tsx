@@ -2591,26 +2591,19 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       cachedRoadTileCountRef.current = { count: roadTileCount, gridVersion: currentGridVersion };
     }
     
-    // Spawn pedestrians - scale with road network size, but reduce on mobile
-    // Mobile: max 40 pedestrians, 0.5 per road tile
-    // Desktop: max 200+ pedestrians, 3 per road tile
-    const maxPedestrians = isMobile 
-      ? Math.min(40, Math.max(15, Math.floor(roadTileCount * 0.5)))
-      : Math.max(200, roadTileCount * 3);
+    // Spawn pedestrians - scale with road network size (3 pedestrians per road tile)
+    const maxPedestrians = Math.max(200, roadTileCount * 3);
     pedestrianSpawnTimerRef.current -= delta;
     if (pedestriansRef.current.length < maxPedestrians && pedestrianSpawnTimerRef.current <= 0) {
-      // Spawn fewer pedestrians at once on mobile
+      // Spawn many pedestrians at once
       let spawnedCount = 0;
-      const spawnBatch = isMobile 
-        ? Math.min(5, Math.max(2, Math.floor(roadTileCount / 30)))
-        : Math.min(50, Math.max(20, Math.floor(roadTileCount / 10)));
+      const spawnBatch = Math.min(50, Math.max(20, Math.floor(roadTileCount / 10)));
       for (let i = 0; i < spawnBatch; i++) {
         if (spawnPedestrian()) {
           spawnedCount++;
         }
       }
-      // Slower spawn rate on mobile
-      pedestrianSpawnTimerRef.current = spawnedCount > 0 ? (isMobile ? 0.2 : 0.02) : (isMobile ? 0.1 : 0.01);
+      pedestrianSpawnTimerRef.current = spawnedCount > 0 ? 0.02 : 0.01; // Very fast spawning
     }
     
     const updatedPedestrians: Pedestrian[] = [];
@@ -3226,11 +3219,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       return;
     }
 
-    // Calculate max airplanes based on population
-    // Mobile: max 8 airplanes; Desktop: 1 per 3.5k population, min 18, max 54
-    const maxAirplanes = isMobile 
-      ? Math.min(8, Math.max(3, Math.floor(totalPopulation / 7000)))
-      : Math.min(54, Math.max(18, Math.floor(totalPopulation / 3500) * 3));
+    // Calculate max airplanes based on population (1 per 3.5k population, min 18, max 54)
+    const maxAirplanes = Math.min(54, Math.max(18, Math.floor(totalPopulation / 3500) * 3));
     
     // Speed multiplier based on game speed
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 1.5 : 2;
@@ -3597,11 +3587,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       return;
     }
 
-    // Calculate max boats based on number of docks
-    // Mobile: max 5 boats, 1 per dock; Desktop: max 25, 3 per dock
-    const maxBoats = isMobile 
-      ? Math.min(5, docks.length)
-      : Math.min(25, docks.length * 3);
+    // Calculate max boats based on number of docks (3 boats per dock, max 25)
+    const maxBoats = Math.min(25, docks.length * 3);
     
     // Speed multiplier based on game speed
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 1.5 : 2;
