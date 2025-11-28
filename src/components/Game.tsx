@@ -6099,46 +6099,40 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       ctx.setLineDash([1.5, 2]);  // Smaller, more frequent dots
       ctx.lineCap = 'round';
       
-      // Marking length - extend most of the way
-      const markingLength = 0.85; // 85% of the way to edge stop
+      // Extend past tile edge to overlap with adjacent tile's marking
+      // This ensures continuous yellow lines across tile boundaries
+      const markingOverlap = 4; // pixels past edge for overlap
+      const markingStartOffset = 2; // pixels from center
       
       // North marking (toward top-left)
       if (north) {
-        const stopX = cx + (northEdgeX - cx) * edgeStop * markingLength;
-        const stopY = cy + (northEdgeY - cy) * edgeStop * markingLength;
         ctx.beginPath();
-        ctx.moveTo(cx + northDx * 2, cy + northDy * 2);
-        ctx.lineTo(stopX + northDx * 2, stopY + northDy * 2);
+        ctx.moveTo(cx + northDx * markingStartOffset, cy + northDy * markingStartOffset);
+        ctx.lineTo(northEdgeX + northDx * markingOverlap, northEdgeY + northDy * markingOverlap);
         ctx.stroke();
       }
       
       // East marking (toward top-right)
       if (east) {
-        const stopX = cx + (eastEdgeX - cx) * edgeStop * markingLength;
-        const stopY = cy + (eastEdgeY - cy) * edgeStop * markingLength;
         ctx.beginPath();
-        ctx.moveTo(cx + eastDx * 2, cy + eastDy * 2);
-        ctx.lineTo(stopX + eastDx * 2, stopY + eastDy * 2);
+        ctx.moveTo(cx + eastDx * markingStartOffset, cy + eastDy * markingStartOffset);
+        ctx.lineTo(eastEdgeX + eastDx * markingOverlap, eastEdgeY + eastDy * markingOverlap);
         ctx.stroke();
       }
       
       // South marking (toward bottom-right)
       if (south) {
-        const stopX = cx + (southEdgeX - cx) * edgeStop * markingLength;
-        const stopY = cy + (southEdgeY - cy) * edgeStop * markingLength;
         ctx.beginPath();
-        ctx.moveTo(cx + southDx * 2, cy + southDy * 2);
-        ctx.lineTo(stopX + southDx * 2, stopY + southDy * 2);
+        ctx.moveTo(cx + southDx * markingStartOffset, cy + southDy * markingStartOffset);
+        ctx.lineTo(southEdgeX + southDx * markingOverlap, southEdgeY + southDy * markingOverlap);
         ctx.stroke();
       }
       
       // West marking (toward bottom-left)
       if (west) {
-        const stopX = cx + (westEdgeX - cx) * edgeStop * markingLength;
-        const stopY = cy + (westEdgeY - cy) * edgeStop * markingLength;
         ctx.beginPath();
-        ctx.moveTo(cx + westDx * 2, cy + westDy * 2);
-        ctx.lineTo(stopX + westDx * 2, stopY + westDy * 2);
+        ctx.moveTo(cx + westDx * markingStartOffset, cy + westDy * markingStartOffset);
+        ctx.lineTo(westEdgeX + westDx * markingOverlap, westEdgeY + westDy * markingOverlap);
         ctx.stroke();
       }
       
