@@ -400,7 +400,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setTaxRate = useCallback((rate: number) => {
-    setState((prev) => ({ ...prev, taxRate: clamp(rate, 0, 50) }));
+    setState((prev) => ({ ...prev, taxRate: clamp(rate, 0, 100) }));
   }, []);
 
   const setActivePanel = useCallback(

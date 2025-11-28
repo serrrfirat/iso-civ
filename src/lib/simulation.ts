@@ -666,86 +666,105 @@ export function createInitialGameState(size: number = 60, cityName: string = 'Ne
   };
 }
 
-// Calculate service coverage from service buildings
+// Service building configuration - defined once, reused across calls
+const SERVICE_CONFIG = {
+  police_station: { range: 10, rangeSquared: 100, type: 'police' as const },
+  fire_station: { range: 14, rangeSquared: 196, type: 'fire' as const },
+  hospital: { range: 12, rangeSquared: 144, type: 'health' as const },
+  school: { range: 8, rangeSquared: 64, type: 'education' as const },
+  university: { range: 15, rangeSquared: 225, type: 'education' as const },
+  power_plant: { range: 15, rangeSquared: 225 },
+  water_tower: { range: 12, rangeSquared: 144 },
+} as const;
+
+// Building types that provide services
+const SERVICE_BUILDING_TYPES = new Set([
+  'police_station', 'fire_station', 'hospital', 'school', 'university',
+  'power_plant', 'water_tower'
+]);
+
+// Calculate service coverage from service buildings - optimized version
 function calculateServiceCoverage(grid: Tile[][], size: number): ServiceCoverage {
   const services = createServiceCoverage(size);
   
-  // Define service ranges
-  const serviceRanges: Record<string, { building: BuildingType; range: number; type: keyof ServiceCoverage }[]> = {
-    coverage: [
-      { building: 'police_station', range: 10, type: 'police' },
-      { building: 'fire_station', range: 14, type: 'fire' },
-      { building: 'hospital', range: 12, type: 'health' },
-      { building: 'school', range: 8, type: 'education' },
-      { building: 'university', range: 15, type: 'education' },
-    ],
-  };
-
-  // Calculate coverage for each service building
+  // First pass: collect all service building positions (much faster than checking every tile)
+  const serviceBuildings: Array<{ x: number; y: number; type: BuildingType }> = [];
+  
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const tile = grid[y][x];
+      const buildingType = tile.building.type;
       
-      // Skip buildings under construction - they don't provide services yet
+      // Quick check if this is a service building
+      if (!SERVICE_BUILDING_TYPES.has(buildingType)) continue;
+      
+      // Skip buildings under construction
       if (tile.building.constructionProgress !== undefined && tile.building.constructionProgress < 100) {
         continue;
       }
       
-      // Skip abandoned buildings - they don't provide services
+      // Skip abandoned buildings
       if (tile.building.abandoned) {
         continue;
       }
       
-      for (const service of serviceRanges.coverage) {
-        if (tile.building.type === service.building) {
-          // Apply coverage in a radius
-          for (let dy = -service.range; dy <= service.range; dy++) {
-            for (let dx = -service.range; dx <= service.range; dx++) {
-              const nx = x + dx;
-              const ny = y + dy;
-              if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance <= service.range) {
-                  const coverage = Math.max(0, (1 - distance / service.range) * 100);
-                  const currentCoverage = services[service.type] as number[][];
-                  currentCoverage[ny][nx] = Math.min(100, currentCoverage[ny][nx] + coverage);
-                }
-              }
-            }
+      serviceBuildings.push({ x, y, type: buildingType });
+    }
+  }
+  
+  // Second pass: apply coverage for each service building
+  for (const building of serviceBuildings) {
+    const { x, y, type } = building;
+    const config = SERVICE_CONFIG[type as keyof typeof SERVICE_CONFIG];
+    if (!config) continue;
+    
+    const range = config.range;
+    const rangeSquared = config.rangeSquared;
+    
+    // Calculate bounds to avoid checking tiles outside the grid
+    const minY = Math.max(0, y - range);
+    const maxY = Math.min(size - 1, y + range);
+    const minX = Math.max(0, x - range);
+    const maxX = Math.min(size - 1, x + range);
+    
+    // Handle power and water (boolean coverage)
+    if (type === 'power_plant') {
+      for (let ny = minY; ny <= maxY; ny++) {
+        for (let nx = minX; nx <= maxX; nx++) {
+          const dx = nx - x;
+          const dy = ny - y;
+          // Use squared distance comparison (avoid Math.sqrt)
+          if (dx * dx + dy * dy <= rangeSquared) {
+            services.power[ny][nx] = true;
           }
         }
       }
-
-      // Power coverage from power plants (using flood fill approach)
-      if (tile.building.type === 'power_plant') {
-        const powerRange = 15;
-        for (let dy = -powerRange; dy <= powerRange; dy++) {
-          for (let dx = -powerRange; dx <= powerRange; dx++) {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-              const distance = Math.sqrt(dx * dx + dy * dy);
-              if (distance <= powerRange) {
-                services.power[ny][nx] = true;
-              }
-            }
+    } else if (type === 'water_tower') {
+      for (let ny = minY; ny <= maxY; ny++) {
+        for (let nx = minX; nx <= maxX; nx++) {
+          const dx = nx - x;
+          const dy = ny - y;
+          if (dx * dx + dy * dy <= rangeSquared) {
+            services.water[ny][nx] = true;
           }
         }
       }
-
-      // Water coverage from water towers
-      if (tile.building.type === 'water_tower') {
-        const waterRange = 12;
-        for (let dy = -waterRange; dy <= waterRange; dy++) {
-          for (let dx = -waterRange; dx <= waterRange; dx++) {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx >= 0 && nx < size && ny >= 0 && ny < size) {
-              const distance = Math.sqrt(dx * dx + dy * dy);
-              if (distance <= waterRange) {
-                services.water[ny][nx] = true;
-              }
-            }
+    } else {
+      // Handle percentage-based coverage (police, fire, health, education)
+      const serviceType = (config as { type: 'police' | 'fire' | 'health' | 'education' }).type;
+      const currentCoverage = services[serviceType] as number[][];
+      
+      for (let ny = minY; ny <= maxY; ny++) {
+        for (let nx = minX; nx <= maxX; nx++) {
+          const dx = nx - x;
+          const dy = ny - y;
+          const distSquared = dx * dx + dy * dy;
+          
+          if (distSquared <= rangeSquared) {
+            // Only compute sqrt when we need the actual distance for coverage falloff
+            const distance = Math.sqrt(distSquared);
+            const coverage = Math.max(0, (1 - distance / range) * 100);
+            currentCoverage[ny][nx] = Math.min(100, currentCoverage[ny][nx] + coverage);
           }
         }
       }
@@ -1472,20 +1491,64 @@ function checkAchievements(achievements: Achievement[], stats: Stats, grid: Tile
 
 // Main simulation tick
 export function simulateTick(state: GameState): GameState {
-  const newGrid = state.grid.map(row => row.map(tile => ({ ...tile, building: { ...tile.building } })));
+  // Optimized: shallow clone rows, deep clone tiles only when modified
   const size = state.gridSize;
+  
+  // Pre-calculate service coverage once (read-only operation on original grid)
+  const services = calculateServiceCoverage(state.grid, size);
+  
+  // Track which rows have been modified to avoid unnecessary row cloning
+  const modifiedRows = new Set<number>();
+  const newGrid: Tile[][] = new Array(size);
+  
+  // Initialize with references to original rows (will clone on write)
+  for (let y = 0; y < size; y++) {
+    newGrid[y] = state.grid[y];
+  }
+  
+  // Helper to get a modifiable tile (clones row and tile on first write)
+  const getModifiableTile = (x: number, y: number): Tile => {
+    if (!modifiedRows.has(y)) {
+      // Clone the row on first modification
+      newGrid[y] = state.grid[y].map(t => ({ ...t, building: { ...t.building } }));
+      modifiedRows.add(y);
+    }
+    return newGrid[y][x];
+  };
 
-  // Update service coverage
-  const services = calculateServiceCoverage(newGrid, size);
-
-  // Evolve buildings
+  // Process all tiles
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const tile = newGrid[y][x];
+      const originalTile = state.grid[y][x];
+      const originalBuilding = originalTile.building;
+      
+      // Fast path: skip tiles that definitely won't change
+      // Water tiles and unzoned grass without pollution are static
+      if (originalBuilding.type === 'water') {
+        continue;
+      }
+      
+      // Check what updates this tile needs
+      const newPowered = services.power[y][x];
+      const newWatered = services.water[y][x];
+      const needsPowerWaterUpdate = originalBuilding.powered !== newPowered ||
+                                    originalBuilding.watered !== newWatered;
+      
+      // Unzoned grass/trees with no pollution change - skip
+      if (originalTile.zone === 'none' && 
+          (originalBuilding.type === 'grass' || originalBuilding.type === 'tree') &&
+          !needsPowerWaterUpdate &&
+          originalTile.pollution < 0.01 &&
+          (BUILDING_STATS[originalBuilding.type]?.pollution || 0) === 0) {
+        continue;
+      }
+      
+      // Get modifiable tile for this position
+      const tile = getModifiableTile(x, y);
       
       // Update utilities
-      tile.building.powered = services.power[y][x];
-      tile.building.watered = services.water[y][x];
+      tile.building.powered = newPowered;
+      tile.building.watered = newWatered;
 
       // Progress construction for non-zoned buildings (service buildings, parks, etc.)
       // Zoned buildings handle construction in evolveBuilding
@@ -1493,71 +1556,68 @@ export function simulateTick(state: GameState): GameState {
           tile.building.constructionProgress !== undefined &&
           tile.building.constructionProgress < 100 &&
           !NO_CONSTRUCTION_TYPES.includes(tile.building.type)) {
-        // Utility buildings (power plants, water towers) can construct without requiring utilities
-        // This prevents a chicken-and-egg problem where you need power to build power plants
         const isUtilityBuilding = tile.building.type === 'power_plant' || tile.building.type === 'water_tower';
         const canConstruct = isUtilityBuilding || (tile.building.powered && tile.building.watered);
         
         if (canConstruct) {
-          // Construction speed scales with building size (larger buildings take longer)
           const constructionSpeed = getConstructionSpeed(tile.building.type);
           tile.building.constructionProgress = Math.min(100, tile.building.constructionProgress + constructionSpeed);
         }
-        // While under construction, service buildings don't provide coverage
-        // (handled by checking constructionProgress in service coverage calculation)
       }
 
-      // Cleanup orphaned 'empty' tiles (from bugs in abandoned building clearing, etc.)
-      // These should be reset to grass so buildings can grow there again
+      // Cleanup orphaned 'empty' tiles
       if (tile.building.type === 'empty') {
         const origin = findBuildingOrigin(newGrid, x, y, size);
         if (!origin) {
-          // This is an orphaned 'empty' tile - reset it to grass
           tile.building = createBuilding('grass');
-          tile.building.powered = services.power[y][x];
-          tile.building.watered = services.water[y][x];
+          tile.building.powered = newPowered;
+          tile.building.watered = newWatered;
         }
       }
 
       // Check for road access and grow buildings in zones
       if (tile.zone !== 'none' && tile.building.type === 'grass') {
         const roadAccess = hasRoadAccess(newGrid, x, y, size);
-        const hasPower = services.power[y][x];
-        const hasWater = services.water[y][x];
+        const hasPower = newPowered;
+        const hasWater = newWatered;
 
         if (roadAccess && hasPower && hasWater && Math.random() < 0.05) {
-          // Spawn a new building
           const buildingList = tile.zone === 'residential' ? RESIDENTIAL_BUILDINGS :
             tile.zone === 'commercial' ? COMMERCIAL_BUILDINGS : INDUSTRIAL_BUILDINGS;
           const candidate = buildingList[0];
           const candidateSize = getBuildingSize(candidate);
-          // Use stricter spawn check that doesn't allow 'empty' tiles (prevents building overlap)
           if (canSpawnMultiTileBuilding(newGrid, x, y, candidateSize.width, candidateSize.height, tile.zone, size)) {
+            // Pre-clone all rows that will be modified by the building footprint
+            for (let dy = 0; dy < candidateSize.height && y + dy < size; dy++) {
+              if (!modifiedRows.has(y + dy)) {
+                newGrid[y + dy] = state.grid[y + dy].map(t => ({ ...t, building: { ...t.building } }));
+                modifiedRows.add(y + dy);
+              }
+            }
             applyBuildingFootprint(newGrid, x, y, candidate, tile.zone, 1, services);
           }
         }
       } else if (tile.zone !== 'none' && tile.building.type !== 'grass') {
-        // Evolve existing building, passing current demand to influence consolidation
+        // Evolve existing building - this may modify multiple tiles for multi-tile buildings
+        // The evolveBuilding function handles its own row modifications internally
         newGrid[y][x].building = evolveBuilding(newGrid, x, y, services, state.stats.demand);
       }
 
       // Update pollution from buildings
       const buildingStats = BUILDING_STATS[tile.building.type];
-      tile.pollution = Math.max(0, tile.pollution * 0.95 + buildingStats?.pollution || 0);
+      tile.pollution = Math.max(0, tile.pollution * 0.95 + (buildingStats?.pollution || 0));
 
-      // Fire simulation - fires progress slowly to allow fire trucks to respond
+      // Fire simulation
       if (state.disastersEnabled && tile.building.onFire) {
         const fireCoverage = services.fire[y][x];
-        const fightingChance = fireCoverage / 300; // Reduced from 200 - harder to extinguish without trucks
+        const fightingChance = fireCoverage / 300;
         
         if (Math.random() < fightingChance) {
           tile.building.onFire = false;
           tile.building.fireProgress = 0;
         } else {
-          // Fire spreads slowly - takes ~100 ticks to destroy a building
-          tile.building.fireProgress += 1;
+          tile.building.fireProgress += 2/3; // Reduced from 1 to make fires last ~50% longer
           if (tile.building.fireProgress >= 100) {
-            // Building destroyed
             tile.building = createBuilding('grass');
             tile.zone = 'none';
           }

@@ -289,7 +289,7 @@ const TopBar = React.memo(function TopBar() {
             value={[taxRate]}
             onValueChange={(value) => setTaxRate(value[0])}
             min={0}
-            max={50}
+            max={100}
             step={1}
             className="w-16"
           />
@@ -365,14 +365,31 @@ function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 }
 
-// Canvas-based Minimap - Memoized
+// Canvas-based Minimap - Memoized with throttled grid rendering
 const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: { 
   onNavigate?: (gridX: number, gridY: number) => void;
   viewport?: { offset: { x: number; y: number }; zoom: number; canvasSize: { width: number; height: number } } | null;
 }) {
   const { state } = useGame();
-  const { grid, gridSize } = state;
+  const { grid, gridSize, tick } = state;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const gridImageRef = useRef<ImageData | null>(null);
+  const lastGridRenderTickRef = useRef(-1);
+  
+  // Pre-compute color map for faster lookups
+  const serviceBuildings = useMemo(() => new Set([
+    'police_station', 'fire_station', 'hospital', 'school', 'university'
+  ]), []);
+  
+  const parkBuildings = useMemo(() => new Set([
+    'park', 'park_large', 'tennis', 'basketball_courts', 'playground_small', 
+    'playground_large', 'baseball_field_small', 'soccer_field_small', 'football_field', 
+    'baseball_stadium', 'community_center', 'swimming_pool', 'skate_park', 
+    'mini_golf_course', 'bleachers_field', 'go_kart_track', 'amphitheater', 
+    'greenhouse_garden', 'animal_pens_farm', 'cabin_house', 'campground',
+    'marina_docks_small', 'pier_large', 'roller_coaster_small', 'community_garden',
+    'pond_park', 'park_gate', 'mountain_lodge', 'mountain_trailhead', 'office_building_small'
+  ]), []);
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -384,53 +401,55 @@ const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: {
     const size = 140;
     const scale = size / gridSize;
     
-    ctx.fillStyle = '#0b1723';
-    ctx.fillRect(0, 0, size, size);
+    // Only re-render grid portion every 10 ticks (or on first render)
+    // This significantly reduces CPU usage while keeping minimap responsive
+    const shouldRenderGrid = lastGridRenderTickRef.current === -1 || 
+                             tick - lastGridRenderTickRef.current >= 10;
     
-    for (let y = 0; y < gridSize; y++) {
-      for (let x = 0; x < gridSize; x++) {
-        const tile = grid[y][x];
-        let color = '#2d5a3d';
-        
-        if (tile.building.type === 'water') color = '#0ea5e9';
-        else if (tile.building.type === 'road') color = '#6b7280';
-        else if (tile.building.type === 'tree') color = '#166534';
-        else if (tile.zone === 'residential' && tile.building.type !== 'grass') color = '#22c55e';
-        else if (tile.zone === 'residential') color = '#14532d';
-        else if (tile.zone === 'commercial' && tile.building.type !== 'grass') color = '#38bdf8';
-        else if (tile.zone === 'commercial') color = '#1d4ed8';
-        else if (tile.zone === 'industrial' && tile.building.type !== 'grass') color = '#f59e0b';
-        else if (tile.zone === 'industrial') color = '#b45309';
-        else if (['police_station', 'fire_station', 'hospital', 'school', 'university'].includes(tile.building.type)) {
-          color = '#c084fc';
-        } else if (tile.building.type === 'power_plant') color = '#f97316';
-        else if (tile.building.type === 'water_tower') color = '#06b6d4';
-        else if (tile.building.type === 'park' || tile.building.type === 'park_large' || tile.building.type === 'tennis' ||
-          ['basketball_courts', 'playground_small', 'playground_large', 'baseball_field_small', 
-           'soccer_field_small', 'football_field', 'baseball_stadium', 'community_center',
-           'swimming_pool', 'skate_park', 'mini_golf_course', 'bleachers_field', 'go_kart_track',
-           'amphitheater', 'greenhouse_garden', 'animal_pens_farm', 'cabin_house', 'campground',
-           'marina_docks_small', 'pier_large', 'roller_coaster_small', 'community_garden',
-           'pond_park', 'park_gate', 'mountain_lodge', 'mountain_trailhead', 'office_building_small'].includes(tile.building.type)) color = '#84cc16';
-        else if (tile.building.onFire) color = '#ef4444';
-        
-        ctx.fillStyle = color;
-        ctx.fillRect(x * scale, y * scale, Math.ceil(scale), Math.ceil(scale));
+    if (shouldRenderGrid) {
+      lastGridRenderTickRef.current = tick;
+      
+      ctx.fillStyle = '#0b1723';
+      ctx.fillRect(0, 0, size, size);
+      
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          const tile = grid[y][x];
+          const buildingType = tile.building.type;
+          let color = '#2d5a3d';
+          
+          // Prioritized color checks using Set for common cases
+          if (buildingType === 'water') color = '#0ea5e9';
+          else if (buildingType === 'road') color = '#6b7280';
+          else if (buildingType === 'tree') color = '#166534';
+          else if (tile.building.onFire) color = '#ef4444';
+          else if (tile.zone === 'residential' && buildingType !== 'grass') color = '#22c55e';
+          else if (tile.zone === 'residential') color = '#14532d';
+          else if (tile.zone === 'commercial' && buildingType !== 'grass') color = '#38bdf8';
+          else if (tile.zone === 'commercial') color = '#1d4ed8';
+          else if (tile.zone === 'industrial' && buildingType !== 'grass') color = '#f59e0b';
+          else if (tile.zone === 'industrial') color = '#b45309';
+          else if (serviceBuildings.has(buildingType)) color = '#c084fc';
+          else if (buildingType === 'power_plant') color = '#f97316';
+          else if (buildingType === 'water_tower') color = '#06b6d4';
+          else if (parkBuildings.has(buildingType)) color = '#84cc16';
+          
+          ctx.fillStyle = color;
+          ctx.fillRect(x * scale, y * scale, Math.ceil(scale), Math.ceil(scale));
+        }
       }
+      
+      // Save the grid portion for quick viewport-only updates
+      gridImageRef.current = ctx.getImageData(0, 0, size, size);
+    } else if (gridImageRef.current) {
+      // Restore cached grid image, then just draw viewport
+      ctx.putImageData(gridImageRef.current, 0, 0);
     }
     
-    // Draw viewport rectangle
+    // Draw viewport rectangle (always updated)
     if (viewport) {
       const { offset, zoom, canvasSize } = viewport;
       
-      // Calculate the corners of the viewport in screen space
-      // Then convert to grid coordinates
-      const topLeftScreen = { x: 0, y: 0 };
-      const topRightScreen = { x: canvasSize.width, y: 0 };
-      const bottomLeftScreen = { x: 0, y: canvasSize.height };
-      const bottomRightScreen = { x: canvasSize.width, y: canvasSize.height };
-      
-      // Convert screen corners to grid coordinates
       const screenToGridForMinimap = (screenX: number, screenY: number) => {
         const adjustedX = (screenX - offset.x) / zoom;
         const adjustedY = (screenY - offset.y) / zoom;
@@ -439,13 +458,11 @@ const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: {
         return { gridX, gridY };
       };
       
-      const topLeft = screenToGridForMinimap(topLeftScreen.x, topLeftScreen.y);
-      const topRight = screenToGridForMinimap(topRightScreen.x, topRightScreen.y);
-      const bottomLeft = screenToGridForMinimap(bottomLeftScreen.x, bottomLeftScreen.y);
-      const bottomRight = screenToGridForMinimap(bottomRightScreen.x, bottomRightScreen.y);
+      const topLeft = screenToGridForMinimap(0, 0);
+      const topRight = screenToGridForMinimap(canvasSize.width, 0);
+      const bottomLeft = screenToGridForMinimap(0, canvasSize.height);
+      const bottomRight = screenToGridForMinimap(canvasSize.width, canvasSize.height);
       
-      // Draw the viewport as a quadrilateral (it's a diamond in isometric)
-      // Use a white stroke for visibility
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -456,7 +473,7 @@ const MiniMap = React.memo(function MiniMap({ onNavigate, viewport }: {
       ctx.closePath();
       ctx.stroke();
     }
-  }, [grid, gridSize, viewport]);
+  }, [grid, gridSize, viewport, tick, serviceBuildings, parkBuildings]);
 
   const [isDragging, setIsDragging] = useState(false);
   
@@ -1772,6 +1789,9 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
   const boatsRef = useRef<Boat[]>([]);
   const boatIdRef = useRef(0);
   const boatSpawnTimerRef = useRef(0);
+
+  // Navigation light flash timer for planes/helicopters/boats at night
+  const navLightFlashTimerRef = useRef(0);
 
   // Firework system refs
   const fireworksRef = useRef<Firework[]>([]);
@@ -3811,11 +3831,52 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       ctx.ellipse(-2, 8, 4, 2, 0, 0, Math.PI * 2);
       ctx.fill();
       
+      // Navigation lights at night (hour >= 20 || hour < 6)
+      const isNight = hour >= 20 || hour < 6;
+      if (isNight) {
+        const flashTimer = navLightFlashTimerRef.current;
+        const strobeOn = Math.sin(flashTimer * 8) > 0.85; // Sharp, brief flash
+        
+        // Red nav light on port (left) wingtip
+        ctx.fillStyle = '#ff3333';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(-10, -17, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Green nav light on starboard (right) wingtip
+        ctx.fillStyle = '#33ff33';
+        ctx.shadowColor = '#00ff00';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(-10, 17, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // White strobe/anti-collision light on tail (flashing) - BRIGHT
+        if (strobeOn) {
+          // Draw multiple layers for intense brightness
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = '#ffffff';
+          ctx.shadowBlur = 35;
+          ctx.beginPath();
+          ctx.arc(-18, 0, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+          // Inner bright core
+          ctx.shadowBlur = 20;
+          ctx.beginPath();
+          ctx.arc(-18, 0, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        ctx.shadowBlur = 0;
+      }
+      
       ctx.restore();
     }
     
     ctx.restore();
-  }, []);
+  }, [hour]);
 
   // Draw helicopters with rotor wash
   const drawHelicopters = useCallback((ctx: CanvasRenderingContext2D) => {
@@ -3937,6 +3998,47 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       ctx.lineTo(2, -4);
       ctx.stroke();
       
+      // Navigation lights at night (hour >= 20 || hour < 6)
+      const isNight = hour >= 20 || hour < 6;
+      if (isNight) {
+        const flashTimer = navLightFlashTimerRef.current;
+        const strobeOn = Math.sin(flashTimer * 8) > 0.82; // Sharp, brief flash
+        
+        // Red nav light on port (left) side
+        ctx.fillStyle = '#ff3333';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(0, 5, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Green nav light on starboard (right) side
+        ctx.fillStyle = '#33ff33';
+        ctx.shadowColor = '#00ff00';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(0, -5, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Red anti-collision beacon on tail (flashing) - BRIGHT
+        if (strobeOn) {
+          // Draw multiple layers for intense brightness
+          ctx.fillStyle = '#ff4444';
+          ctx.shadowColor = '#ff0000';
+          ctx.shadowBlur = 25;
+          ctx.beginPath();
+          ctx.arc(-14, 0, 2, 0, Math.PI * 2);
+          ctx.fill();
+          // Inner bright core
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.arc(-14, 0, 1, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        
+        ctx.shadowBlur = 0;
+      }
+      
       ctx.restore();
       
       // Draw main rotor (drawn separately so it's always on top)
@@ -3973,7 +4075,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     }
     
     ctx.restore();
-  }, []);
+  }, [hour]);
 
   // Update boats - spawn, move, and manage lifecycle
   const updateBoats = useCallback((delta: number) => {
@@ -4408,11 +4510,41 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       ctx.closePath();
       ctx.fill();
       
+      // Navigation lights at night (hour >= 20 || hour < 6)
+      const isNight = hour >= 20 || hour < 6;
+      if (isNight) {
+        // White masthead light at top of mast (always on)
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#ffffcc';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(2, -9, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Red port light (left side)
+        ctx.fillStyle = '#ff3333';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(-6, 2, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Green starboard light (right side)
+        ctx.fillStyle = '#33ff33';
+        ctx.shadowColor = '#00ff00';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(-6, -2, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.shadowBlur = 0;
+      }
+      
       ctx.restore();
     }
     
     ctx.restore();
-  }, []);
+  }, [hour]);
 
   // Find all buildings that can have fireworks
   const findFireworkBuildings = useCallback((): { x: number; y: number; type: BuildingType }[] => {
@@ -6491,6 +6623,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
         updateHelicopters(delta); // Update helicopters (hospital/airport required)
         updateBoats(delta); // Update boats (marina/pier required)
         updateFireworks(delta, hour); // Update fireworks (nighttime only)
+        navLightFlashTimerRef.current += delta * 3; // Update nav light flash timer
       }
       drawCars(ctx);
       drawPedestrians(ctx); // Draw pedestrians (zoom-gated)
@@ -6506,7 +6639,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     return () => cancelAnimationFrame(animationFrameId);
   }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, drawIncidentIndicators, updateFireworks, drawFireworks, hour, isMobile]);
   
-  // Day/Night cycle lighting rendering
+  // Day/Night cycle lighting rendering - optimized for performance
   useEffect(() => {
     const canvas = lightingCanvasRef.current;
     if (!canvas) return;
@@ -6524,54 +6657,59 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       return 1; // Night
     };
     
-    // Get ambient color based on time
-    const getAmbientColor = (h: number): { r: number; g: number; b: number } => {
-      if (h >= 7 && h < 18) return { r: 255, g: 255, b: 255 }; // Daylight
-      if (h >= 5 && h < 7) { // Dawn - warm orange tint
-        const t = (h - 5) / 2;
-        return { 
-          r: Math.round(60 + 40 * t),
-          g: Math.round(40 + 30 * t),
-          b: Math.round(70 + 20 * t)
-        };
-      }
-      if (h >= 18 && h < 20) { // Dusk - warm purple tint  
-        const t = (h - 18) / 2;
-        return { 
-          r: Math.round(100 - 40 * t),
-          g: Math.round(70 - 30 * t),
-          b: Math.round(90 - 20 * t)
-        };
-      }
-      // Night - deep blue tint
-      return { r: 20, g: 30, b: 60 };
-    };
-    
     const darkness = getDarkness(hour);
-    const ambient = getAmbientColor(hour);
     
-    // Clear canvas
+    // Clear canvas first
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // If it's full daylight, just clear and return
+    // If it's full daylight, just clear and return (early exit)
     if (darkness <= 0.01) return;
     
-    // Apply darkness overlay (semi-transparent dark layer)
-    const alpha = darkness * 0.55; // Maximum 55% darkening at night
+    // On mobile, use simplified lighting (just the overlay, skip individual lights)
+    // This significantly reduces CPU usage on mobile devices
+    if (isMobile && darkness > 0) {
+      const getAmbientColor = (h: number): { r: number; g: number; b: number } => {
+        if (h >= 7 && h < 18) return { r: 255, g: 255, b: 255 };
+        if (h >= 5 && h < 7) {
+          const t = (h - 5) / 2;
+          return { r: Math.round(60 + 40 * t), g: Math.round(40 + 30 * t), b: Math.round(70 + 20 * t) };
+        }
+        if (h >= 18 && h < 20) {
+          const t = (h - 18) / 2;
+          return { r: Math.round(100 - 40 * t), g: Math.round(70 - 30 * t), b: Math.round(90 - 20 * t) };
+        }
+        return { r: 20, g: 30, b: 60 };
+      };
+      const ambient = getAmbientColor(hour);
+      const alpha = darkness * 0.45; // Slightly less darkening on mobile
+      ctx.fillStyle = `rgba(${ambient.r}, ${ambient.g}, ${ambient.b}, ${alpha})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+    
+    // Get ambient color based on time
+    const getAmbientColor = (h: number): { r: number; g: number; b: number } => {
+      if (h >= 7 && h < 18) return { r: 255, g: 255, b: 255 };
+      if (h >= 5 && h < 7) {
+        const t = (h - 5) / 2;
+        return { r: Math.round(60 + 40 * t), g: Math.round(40 + 30 * t), b: Math.round(70 + 20 * t) };
+      }
+      if (h >= 18 && h < 20) {
+        const t = (h - 18) / 2;
+        return { r: Math.round(100 - 40 * t), g: Math.round(70 - 30 * t), b: Math.round(90 - 20 * t) };
+      }
+      return { r: 20, g: 30, b: 60 };
+    };
+    
+    const ambient = getAmbientColor(hour);
+    
+    // Apply darkness overlay
+    const alpha = darkness * 0.55;
     ctx.fillStyle = `rgba(${ambient.r}, ${ambient.g}, ${ambient.b}, ${alpha})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Now use destination-out to "cut holes" in the darkness where lights are
-    // This creates the effect of lights illuminating through the darkness
-    ctx.globalCompositeOperation = 'destination-out';
-    
-    // Apply zoom and offset transformation
-    ctx.save();
-    ctx.scale(dpr * zoom, dpr * zoom);
-    ctx.translate(offset.x / zoom, offset.y / zoom);
-    
-    // Calculate viewport bounds
+    // Calculate viewport bounds once
     const viewWidth = canvas.width / (dpr * zoom);
     const viewHeight = canvas.height / (dpr * zoom);
     const viewLeft = -offset.x / zoom - TILE_WIDTH * 2;
@@ -6579,20 +6717,41 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     const viewRight = viewWidth - offset.x / zoom + TILE_WIDTH * 2;
     const viewBottom = viewHeight - offset.y / zoom + TILE_HEIGHT * 4;
     
+    // Calculate grid bounds to only iterate visible tiles
+    // Convert viewport bounds to approximate grid coordinates
+    const minGridY = Math.max(0, Math.floor((viewTop / TILE_HEIGHT) - gridSize / 2));
+    const maxGridY = Math.min(gridSize - 1, Math.ceil((viewBottom / TILE_HEIGHT) + gridSize / 2));
+    const minGridX = Math.max(0, Math.floor((viewLeft / TILE_WIDTH) + gridSize / 2));
+    const maxGridX = Math.min(gridSize - 1, Math.ceil((viewRight / TILE_WIDTH) + gridSize / 2));
+    
     const gridToScreen = (gx: number, gy: number) => ({
       screenX: (gx - gy) * TILE_WIDTH / 2,
       screenY: (gx + gy) * TILE_HEIGHT / 2,
     });
     
-    // Light intensity scales with darkness - lights punch through more at full night
     const lightIntensity = Math.min(1, darkness * 1.2);
     
-    // Draw light cutouts for each tile
-    for (let y = 0; y < gridSize; y++) {
-      for (let x = 0; x < gridSize; x++) {
+    // Pre-calculate pseudo-random function
+    const pseudoRandom = (seed: number, n: number) => {
+      const s = Math.sin(seed + n * 12.9898) * 43758.5453;
+      return s - Math.floor(s);
+    };
+    
+    // Set for building types that are not lit
+    const nonLitTypes = new Set(['grass', 'empty', 'water', 'road', 'tree', 'park', 'park_large', 'tennis']);
+    const residentialTypes = new Set(['house_small', 'house_medium', 'mansion', 'apartment_low', 'apartment_high']);
+    const commercialTypes = new Set(['shop_small', 'shop_medium', 'office_low', 'office_high', 'mall']);
+    
+    // Collect light sources in a single pass through visible tiles
+    const lightCutouts: Array<{x: number, y: number, type: 'road' | 'building', buildingType?: string, seed?: number}> = [];
+    const coloredGlows: Array<{x: number, y: number, type: string}> = [];
+    
+    // Single pass through visible tiles to collect light sources
+    for (let y = minGridY; y <= maxGridY; y++) {
+      for (let x = minGridX; x <= maxGridX; x++) {
         const { screenX, screenY } = gridToScreen(x, y);
         
-        // Skip tiles outside viewport
+        // Viewport culling
         if (screenX + TILE_WIDTH < viewLeft || screenX > viewRight ||
             screenY + TILE_HEIGHT * 3 < viewTop || screenY > viewBottom) {
           continue;
@@ -6600,169 +6759,139 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
         
         const tile = grid[y][x];
         const buildingType = tile.building.type;
-        const tileCenterX = screenX + TILE_WIDTH / 2;
-        const tileCenterY = screenY + TILE_HEIGHT / 2;
         
-        // Street lights on roads - cut circles of light through darkness
         if (buildingType === 'road') {
-          const lightRadius = 28;
-          const gradient = ctx.createRadialGradient(
-            tileCenterX, tileCenterY, 0,
-            tileCenterX, tileCenterY, lightRadius
-          );
-          gradient.addColorStop(0, `rgba(255, 255, 255, ${0.7 * lightIntensity})`);
-          gradient.addColorStop(0.4, `rgba(255, 255, 255, ${0.35 * lightIntensity})`);
-          gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          lightCutouts.push({ x, y, type: 'road' });
+          coloredGlows.push({ x, y, type: 'road' });
+        } else if (!nonLitTypes.has(buildingType) && tile.building.powered) {
+          lightCutouts.push({ x, y, type: 'building', buildingType, seed: x * 1000 + y });
           
+          // Check for special colored glows
+          if (buildingType === 'hospital' || buildingType === 'fire_station' || 
+              buildingType === 'police_station' || buildingType === 'power_plant') {
+            coloredGlows.push({ x, y, type: buildingType });
+          }
+        }
+      }
+    }
+    
+    // Draw light cutouts (destination-out)
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.save();
+    ctx.scale(dpr * zoom, dpr * zoom);
+    ctx.translate(offset.x / zoom, offset.y / zoom);
+    
+    for (const light of lightCutouts) {
+      const { screenX, screenY } = gridToScreen(light.x, light.y);
+      const tileCenterX = screenX + TILE_WIDTH / 2;
+      const tileCenterY = screenY + TILE_HEIGHT / 2;
+      
+      if (light.type === 'road') {
+        const lightRadius = 28;
+        const gradient = ctx.createRadialGradient(tileCenterX, tileCenterY, 0, tileCenterX, tileCenterY, lightRadius);
+        gradient.addColorStop(0, `rgba(255, 255, 255, ${0.7 * lightIntensity})`);
+        gradient.addColorStop(0.4, `rgba(255, 255, 255, ${0.35 * lightIntensity})`);
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(tileCenterX, tileCenterY, lightRadius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (light.type === 'building' && light.buildingType && light.seed !== undefined) {
+        const buildingType = light.buildingType;
+        const isResidential = residentialTypes.has(buildingType);
+        const isCommercial = commercialTypes.has(buildingType);
+        const glowStrength = isCommercial ? 0.85 : isResidential ? 0.6 : 0.7;
+        
+        let numWindows = 2;
+        if (buildingType.includes('medium') || buildingType.includes('low')) numWindows = 3;
+        if (buildingType.includes('high') || buildingType === 'mall') numWindows = 5;
+        if (buildingType === 'mansion' || buildingType === 'office_high') numWindows = 4;
+        
+        const windowSize = 5;
+        const buildingHeight = -18;
+        
+        for (let i = 0; i < numWindows; i++) {
+          const isLit = pseudoRandom(light.seed, i) < (isResidential ? 0.55 : 0.75);
+          if (!isLit) continue;
+          
+          const wx = tileCenterX + (pseudoRandom(light.seed, i + 10) - 0.5) * 22;
+          const wy = tileCenterY + buildingHeight + (pseudoRandom(light.seed, i + 20) - 0.5) * 16;
+          
+          const gradient = ctx.createRadialGradient(wx, wy, 0, wx, wy, windowSize * 2.5);
+          gradient.addColorStop(0, `rgba(255, 255, 255, ${glowStrength * lightIntensity})`);
+          gradient.addColorStop(0.5, `rgba(255, 255, 255, ${glowStrength * 0.4 * lightIntensity})`);
+          gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
           ctx.fillStyle = gradient;
           ctx.beginPath();
-          ctx.arc(tileCenterX, tileCenterY, lightRadius, 0, Math.PI * 2);
+          ctx.arc(wx, wy, windowSize * 2.5, 0, Math.PI * 2);
           ctx.fill();
         }
         
-        // Building windows glow at night - cut through darkness
-        const isBuilding = 
-          buildingType !== 'grass' && 
-          buildingType !== 'empty' && 
-          buildingType !== 'water' && 
-          buildingType !== 'road' && 
-          buildingType !== 'tree' &&
-          buildingType !== 'park' &&
-          buildingType !== 'park_large' &&
-          buildingType !== 'tennis';
-        
-        if (isBuilding && tile.building.powered) {
-          // Different buildings get different light intensities
-          const isResidential = ['house_small', 'house_medium', 'mansion', 'apartment_low', 'apartment_high'].includes(buildingType);
-          const isCommercial = ['shop_small', 'shop_medium', 'office_low', 'office_high', 'mall'].includes(buildingType);
-          
-          // Stronger glow for commercial (they stay lit), dimmer for residential
-          const glowStrength = isCommercial ? 0.85 : isResidential ? 0.6 : 0.7;
-          
-          // Number of window lights based on building size
-          let numWindows = 2;
-          if (buildingType?.includes('medium') || buildingType?.includes('low')) numWindows = 3;
-          if (buildingType?.includes('high') || buildingType === 'mall') numWindows = 5;
-          if (buildingType === 'mansion' || buildingType === 'office_high') numWindows = 4;
-          
-          // Draw window light cutouts
-          const windowSize = 5;
-          const buildingHeight = -18;
-          
-          // Use deterministic pseudo-random based on tile position
-          const seed = x * 1000 + y;
-          const pseudoRandom = (n: number) => {
-            const s = Math.sin(seed + n * 12.9898) * 43758.5453;
-            return s - Math.floor(s);
-          };
-          
-          for (let i = 0; i < numWindows; i++) {
-            // Some windows are lit, some aren't
-            const isLit = pseudoRandom(i) < (isResidential ? 0.55 : 0.75);
-            if (!isLit) continue;
-            
-            const wx = tileCenterX + (pseudoRandom(i + 10) - 0.5) * 22;
-            const wy = tileCenterY + buildingHeight + (pseudoRandom(i + 20) - 0.5) * 16;
-            
-            // Radial gradient to cut through darkness
-            const gradient = ctx.createRadialGradient(wx, wy, 0, wx, wy, windowSize * 2.5);
-            gradient.addColorStop(0, `rgba(255, 255, 255, ${glowStrength * lightIntensity})`);
-            gradient.addColorStop(0.5, `rgba(255, 255, 255, ${glowStrength * 0.4 * lightIntensity})`);
-            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-            
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.arc(wx, wy, windowSize * 2.5, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          
-          // Building casts light on the ground
-          const groundGlow = ctx.createRadialGradient(
-            tileCenterX, tileCenterY + TILE_HEIGHT / 4, 0,
-            tileCenterX, tileCenterY + TILE_HEIGHT / 4, TILE_WIDTH * 0.6
-          );
-          groundGlow.addColorStop(0, `rgba(255, 255, 255, ${0.25 * lightIntensity})`);
-          groundGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
-          
-          ctx.fillStyle = groundGlow;
-          ctx.beginPath();
-          ctx.ellipse(tileCenterX, tileCenterY + TILE_HEIGHT / 4, TILE_WIDTH * 0.6, TILE_HEIGHT / 2.5, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        // Ground glow
+        const groundGlow = ctx.createRadialGradient(
+          tileCenterX, tileCenterY + TILE_HEIGHT / 4, 0,
+          tileCenterX, tileCenterY + TILE_HEIGHT / 4, TILE_WIDTH * 0.6
+        );
+        groundGlow.addColorStop(0, `rgba(255, 255, 255, ${0.25 * lightIntensity})`);
+        groundGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = groundGlow;
+        ctx.beginPath();
+        ctx.ellipse(tileCenterX, tileCenterY + TILE_HEIGHT / 4, TILE_WIDTH * 0.6, TILE_HEIGHT / 2.5, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
     
     ctx.restore();
     
-    // Now add colored light glows on TOP using source-over
+    // Draw colored glows (source-over)
     ctx.globalCompositeOperation = 'source-over';
     ctx.save();
     ctx.scale(dpr * zoom, dpr * zoom);
     ctx.translate(offset.x / zoom, offset.y / zoom);
     
-    // Add colored glow for special buildings (emergency services, etc.)
-    for (let y = 0; y < gridSize; y++) {
-      for (let x = 0; x < gridSize; x++) {
-        const { screenX, screenY } = gridToScreen(x, y);
+    for (const glow of coloredGlows) {
+      const { screenX, screenY } = gridToScreen(glow.x, glow.y);
+      const tileCenterX = screenX + TILE_WIDTH / 2;
+      const tileCenterY = screenY + TILE_HEIGHT / 2;
+      
+      if (glow.type === 'road') {
+        const gradient = ctx.createRadialGradient(tileCenterX, tileCenterY, 0, tileCenterX, tileCenterY, 20);
+        gradient.addColorStop(0, `rgba(255, 210, 130, ${0.25 * lightIntensity})`);
+        gradient.addColorStop(0.5, `rgba(255, 190, 100, ${0.1 * lightIntensity})`);
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(tileCenterX, tileCenterY, 20, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        let glowColor: { r: number; g: number; b: number } | null = null;
+        let glowRadius = 20;
         
-        if (screenX + TILE_WIDTH < viewLeft || screenX > viewRight ||
-            screenY + TILE_HEIGHT * 3 < viewTop || screenY > viewBottom) {
-          continue;
+        if (glow.type === 'hospital') {
+          glowColor = { r: 255, g: 80, b: 80 };
+          glowRadius = 25;
+        } else if (glow.type === 'fire_station') {
+          glowColor = { r: 255, g: 100, b: 50 };
+          glowRadius = 22;
+        } else if (glow.type === 'police_station') {
+          glowColor = { r: 60, g: 140, b: 255 };
+          glowRadius = 22;
+        } else if (glow.type === 'power_plant') {
+          glowColor = { r: 255, g: 200, b: 50 };
+          glowRadius = 30;
         }
         
-        const tile = grid[y][x];
-        const buildingType = tile.building.type;
-        const tileCenterX = screenX + TILE_WIDTH / 2;
-        const tileCenterY = screenY + TILE_HEIGHT / 2;
-        
-        // Special colored glows for emergency services
-        if (tile.building.powered) {
-          let glowColor: { r: number; g: number; b: number } | null = null;
-          let glowRadius = 20;
-          
-          if (buildingType === 'hospital') {
-            glowColor = { r: 255, g: 80, b: 80 }; // Red cross glow
-            glowRadius = 25;
-          } else if (buildingType === 'fire_station') {
-            glowColor = { r: 255, g: 100, b: 50 }; // Orange-red glow
-            glowRadius = 22;
-          } else if (buildingType === 'police_station') {
-            glowColor = { r: 60, g: 140, b: 255 }; // Blue glow
-            glowRadius = 22;
-          } else if (buildingType === 'power_plant') {
-            glowColor = { r: 255, g: 200, b: 50 }; // Yellow industrial glow
-            glowRadius = 30;
-          }
-          
-          if (glowColor) {
-            const gradient = ctx.createRadialGradient(
-              tileCenterX, tileCenterY - 15, 0,
-              tileCenterX, tileCenterY - 15, glowRadius
-            );
-            gradient.addColorStop(0, `rgba(${glowColor.r}, ${glowColor.g}, ${glowColor.b}, ${0.5 * lightIntensity})`);
-            gradient.addColorStop(0.5, `rgba(${glowColor.r}, ${glowColor.g}, ${glowColor.b}, ${0.2 * lightIntensity})`);
-            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.arc(tileCenterX, tileCenterY - 15, glowRadius, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-        
-        // Street light warm glow overlay
-        if (buildingType === 'road') {
+        if (glowColor) {
           const gradient = ctx.createRadialGradient(
-            tileCenterX, tileCenterY, 0,
-            tileCenterX, tileCenterY, 20
+            tileCenterX, tileCenterY - 15, 0,
+            tileCenterX, tileCenterY - 15, glowRadius
           );
-          gradient.addColorStop(0, `rgba(255, 210, 130, ${0.25 * lightIntensity})`);
-          gradient.addColorStop(0.5, `rgba(255, 190, 100, ${0.1 * lightIntensity})`);
+          gradient.addColorStop(0, `rgba(${glowColor.r}, ${glowColor.g}, ${glowColor.b}, ${0.5 * lightIntensity})`);
+          gradient.addColorStop(0.5, `rgba(${glowColor.r}, ${glowColor.g}, ${glowColor.b}, ${0.2 * lightIntensity})`);
           gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          
           ctx.fillStyle = gradient;
           ctx.beginPath();
-          ctx.arc(tileCenterX, tileCenterY, 20, 0, Math.PI * 2);
+          ctx.arc(tileCenterX, tileCenterY - 15, glowRadius, 0, Math.PI * 2);
           ctx.fill();
         }
       }

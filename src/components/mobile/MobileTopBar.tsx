@@ -328,13 +328,13 @@ export function MobileTopBar({
                 value={[taxRate]}
                 onValueChange={(value) => setTaxRate(value[0])}
                 min={0}
-                max={20}
+                max={100}
                 step={1}
                 className="w-full"
               />
               <div className="flex justify-between mt-1 text-[10px] text-muted-foreground">
                 <span>0%</span>
-                <span>20%</span>
+                <span>100%</span>
               </div>
             </div>
           </Card>
