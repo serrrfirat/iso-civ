@@ -3493,7 +3493,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       }
       // PERF: Skip drawing animated elements during mobile panning for better performance
       const skipAnimatedElements = isMobile && isPanningRef.current;
-      if (!skipAnimatedElements) {
+      if (skipAnimatedElements) {
+        // Clear the canvas but don't draw anything - hides all animated elements while panning
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      } else {
         drawCars(ctx);
         drawPedestrians(ctx); // Draw pedestrians (zoom-gated)
         drawBoats(ctx); // Draw boats on water
@@ -3516,6 +3520,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    
+    // PERF: Skip re-rendering lighting during mobile panning - just keep existing state
+    if (isMobile && isPanningRef.current) {
+      return;
+    }
     
     const dpr = window.devicePixelRatio || 1;
     
@@ -3752,7 +3761,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     ctx.restore();
     ctx.globalCompositeOperation = 'source-over';
     
-  }, [grid, gridSize, visualHour, offset, zoom, canvasSize.width, canvasSize.height, isMobile]);
+  }, [grid, gridSize, visualHour, offset, zoom, canvasSize.width, canvasSize.height, isMobile, isPanning]);
   
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
