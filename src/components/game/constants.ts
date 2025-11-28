@@ -1,8 +1,8 @@
 import { BuildingType } from '@/types/game';
 import { CarDirection, DirectionMeta, TILE_WIDTH, TILE_HEIGHT } from './types';
 
-// Vehicle colors
-export const CAR_COLORS = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#c084fc'];
+// Vehicle colors (duller/muted versions)
+export const CAR_COLORS = ['#d97777', '#d4a01f', '#2ba67a', '#4d84c8', '#9a6ac9'];
 
 // Pedestrian appearance colors
 export const PEDESTRIAN_SKIN_COLORS = ['#fdbf7e', '#e0ac69', '#c68642', '#8d5524', '#613318'];
