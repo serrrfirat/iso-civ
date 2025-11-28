@@ -2,8 +2,10 @@
 
 import React, { useState } from 'react';
 import { useGame } from '@/context/GameContext';
+import { Tile } from '@/types/game';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -17,6 +19,7 @@ import {
   EducationIcon,
   SafetyIcon,
   EnvironmentIcon,
+  CloseIcon,
 } from '@/components/ui/Icons';
 
 // Sun/Moon icon for time of day
@@ -63,7 +66,15 @@ function DemandBar({ label, demand, color }: { label: string; demand: number; co
   );
 }
 
-export function MobileTopBar() {
+export function MobileTopBar({ 
+  selectedTile, 
+  services, 
+  onCloseTile 
+}: { 
+  selectedTile: Tile | null;
+  services: { police: number[][]; fire: number[][]; health: number[][]; education: number[][]; power: boolean[][]; water: boolean[][] };
+  onCloseTile: () => void;
+}) {
   const { state, setSpeed, setTaxRate, isSaving } = useGame();
   const { stats, year, month, hour, speed, taxRate, cityName } = state;
   const [showDetails, setShowDetails] = useState(false);
@@ -158,6 +169,85 @@ export function MobileTopBar() {
             </span>
           </div>
         </div>
+
+        {/* Tile Info Row - Mobile Only */}
+        {selectedTile && (
+          <div className="border-t border-sidebar-border/50 bg-gradient-to-b from-secondary/60 to-secondary/20 px-3 py-2">
+            {/* Header row */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${
+                  selectedTile.zone === 'residential' ? 'bg-green-500' :
+                  selectedTile.zone === 'commercial' ? 'bg-blue-500' :
+                  selectedTile.zone === 'industrial' ? 'bg-amber-500' : 'bg-muted-foreground/40'
+                }`} />
+                <span className="text-xs font-medium text-foreground capitalize">
+                  {selectedTile.building.type === 'empty' 
+                    ? (selectedTile.zone === 'none' ? 'Empty Lot' : `${selectedTile.zone} Zone`)
+                    : selectedTile.building.type.replace(/_/g, ' ')}
+                </span>
+                {selectedTile.building.level > 0 && (
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    Lv.{selectedTile.building.level}
+                  </span>
+                )}
+              </div>
+              <button 
+                onClick={onCloseTile} 
+                className="text-muted-foreground hover:text-foreground transition-colors p-1 -m-1"
+              >
+                <CloseIcon size={14} />
+              </button>
+            </div>
+            
+            {/* Stats row */}
+            <div className="flex items-center gap-4 text-[10px]">
+              {/* Population & Jobs */}
+              {(selectedTile.building.population > 0 || selectedTile.building.jobs > 0) && (
+                <div className="flex items-center gap-3">
+                  {selectedTile.building.population > 0 && (
+                    <div className="flex items-center gap-1">
+                      <PopulationIcon size={10} className="text-muted-foreground" />
+                      <span className="text-foreground font-mono">{selectedTile.building.population}</span>
+                    </div>
+                  )}
+                  {selectedTile.building.jobs > 0 && (
+                    <div className="flex items-center gap-1">
+                      <span className="text-muted-foreground">💼</span>
+                      <span className="text-foreground font-mono">{selectedTile.building.jobs}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Utilities */}
+              <div className="flex items-center gap-1.5">
+                <span className={`text-xs ${selectedTile.building.powered ? 'text-yellow-400' : 'text-muted-foreground/40'}`}>⚡</span>
+                <span className={`text-xs ${selectedTile.building.watered ? 'text-cyan-400' : 'text-muted-foreground/40'}`}>💧</span>
+              </div>
+              
+              {/* Land value */}
+              <div className="flex items-center gap-1 text-muted-foreground">
+                <MoneyIcon size={10} />
+                <span className="font-mono text-foreground">{selectedTile.landValue}</span>
+              </div>
+              
+              {/* Pollution indicator */}
+              {selectedTile.pollution > 0 && (
+                <div className="flex items-center gap-1">
+                  <div className={`w-1.5 h-1.5 rounded-full ${
+                    selectedTile.pollution > 50 ? 'bg-red-500' : 
+                    selectedTile.pollution > 25 ? 'bg-amber-500' : 'bg-green-500'
+                  }`} />
+                  <span className={`font-mono ${
+                    selectedTile.pollution > 50 ? 'text-red-400' : 
+                    selectedTile.pollution > 25 ? 'text-amber-400' : 'text-green-400'
+                  }`}>{Math.round(selectedTile.pollution)}%</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Expanded Details Panel */}

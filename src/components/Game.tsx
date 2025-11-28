@@ -6835,7 +6835,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
         style={{ mixBlendMode: 'multiply' }}
       />
       
-      {selectedTile && selectedTool === 'select' && (
+      {selectedTile && selectedTool === 'select' && !isMobile && (
         <TileInfoPanel
           tile={grid[selectedTile.y][selectedTile.x]}
           services={state.services}
@@ -7355,7 +7355,11 @@ export default function Game() {
       <TooltipProvider>
         <div className="w-full h-full overflow-hidden bg-background flex flex-col">
           {/* Mobile Top Bar */}
-          <MobileTopBar />
+          <MobileTopBar 
+            selectedTile={selectedTile && state.selectedTool === 'select' ? state.grid[selectedTile.y][selectedTile.x] : null}
+            services={state.services}
+            onCloseTile={() => setSelectedTile(null)}
+          />
           
           {/* Main canvas area - fills remaining space, with padding for top/bottom bars */}
           <div className="flex-1 relative overflow-hidden" style={{ paddingTop: '72px', paddingBottom: '76px' }}>

@@ -210,12 +210,13 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     apartment_high: -0.60, // Shifted down ~0.4 tiles from -1.0
   },
   constructionVerticalOffsets: {
-    water_tower: 0.0, // Construction water tower shifted down 0.5 tiles from normal (-0.5 + 0.5 = 0.0)
+    water_tower: -0.1, // Construction water tower shifted up 0.1 tiles
     apartment_high: -0.4, // Construction apartment_high shifted up 3 tiles from previous (2.6 - 3.0 = -0.4)
-    apartment_low: -0.2, // Construction apartment_low shifted up 0.5 tiles from previous (0.3 - 0.5 = -0.2)
+    apartment_low: -0.5, // Construction apartment_low shifted up 0.5 tiles from previous (0.3 - 0.5 = -0.2), moved up 0.3 tiles
     mall: -1.0, // Construction mall shifted up 0.8 tiles from previous (-0.2 - 0.8 = -1.0)
-    office_high: -0.2, // Construction office_high shifted up 0.5 tiles from previous (0.3 - 0.5 = -0.2)
+    office_high: -0.5, // Construction office_high shifted up 0.5 tiles from previous (0.3 - 0.5 = -0.2), moved up 0.3 tiles
     office_low: -0.4, // Construction office_low shifted down 0.1 tiles from previous (-0.5 + 0.1 = -0.4)
+    hospital: -0.7, // Construction hospital shifted up 0.8 tiles
   },
   constructionScales: {
     mall: 0.92, // Construction mall scaled down 8%
@@ -302,7 +303,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     mini_golf_course: -0.55,  // shifted down 0.3 tiles total
     bleachers_field: -0.3,  // shifted up 0.1 tiles
     go_kart_track: -0.35,  // shifted down 0.5
-    amphitheater: -0.85,
+    amphitheater: -0.45,  // shifted up 0.1 tiles
     greenhouse_garden: -0.55,  // shifted down 0.3
     animal_pens_farm: -0.25,  // shifted up 0.1 tiles
     cabin_house: -0.2,
@@ -314,7 +315,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     pond_park: -0.15,
     park_gate: -0.15,
     mountain_lodge: -0.85,
-    mountain_trailhead: -1.5,  // now 3x3
+    mountain_trailhead: -1.0,  // 3x3, shifted down 0.5 tiles
   },
   parksHorizontalOffsets: {
     // swimming_pool: centered (no offset)
@@ -323,6 +324,8 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     baseball_stadium: 0.81,  // 10% smaller than 0.90
     swimming_pool: 0.90,  // scaled down 10% total (5% more from 0.95)
     soccer_field_small: 0.95,  // scaled down 5%
+    go_kart_track: 0.92,  // scaled down 8%
+    amphitheater: 0.90,  // scaled down 10%
   },
   buildingToSprite: {
     house_small: 'house_small',
