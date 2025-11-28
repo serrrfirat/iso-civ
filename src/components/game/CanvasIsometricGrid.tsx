@@ -2503,40 +2503,92 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           }
         }
         
-        // Draw yellow center dashes for single roads (not merged)
-        if (mergeInfo.type === 'single' && !isIntersection) {
+        // Draw yellow center dashes for ALL roads (including intersections)
+        {
           ctx.strokeStyle = ROAD_COLORS.CENTER_LINE;
           ctx.lineWidth = 0.8;
           ctx.setLineDash([1.5, 2]);
           ctx.lineCap = 'round';
           
-          // Increased overlap to eliminate gaps between tiles
+          // Helper to check if adjacent tile is an intersection
+          const isAdjIntersection = (adjX: number, adjY: number): boolean => {
+            if (!hasRoad(adjX, adjY)) return false;
+            const aN = hasRoad(adjX - 1, adjY);
+            const aE = hasRoad(adjX, adjY - 1);
+            const aS = hasRoad(adjX + 1, adjY);
+            const aW = hasRoad(adjX, adjY + 1);
+            return [aN, aE, aS, aW].filter(Boolean).length >= 3;
+          };
+          
+          // Line stops before crosswalk area (0.65) if approaching intersection, otherwise extends
           const markingOverlap = 8;
           const markingStartOffset = 0;
+          const stopBeforeCrosswalk = 0.65; // Stop at 65% toward edge if approaching intersection
           
           if (north) {
-            ctx.beginPath();
-            ctx.moveTo(cx + northDx * markingStartOffset, cy + northDy * markingStartOffset);
-            ctx.lineTo(northEdgeX + northDx * markingOverlap, northEdgeY + northDy * markingOverlap);
-            ctx.stroke();
+            const adjIsIntersection = isAdjIntersection(gridX - 1, gridY);
+            if (adjIsIntersection) {
+              // Stop before crosswalk
+              const stopX = cx + (northEdgeX - cx) * stopBeforeCrosswalk;
+              const stopY = cy + (northEdgeY - cy) * stopBeforeCrosswalk;
+              ctx.beginPath();
+              ctx.moveTo(cx + northDx * markingStartOffset, cy + northDy * markingStartOffset);
+              ctx.lineTo(stopX, stopY);
+              ctx.stroke();
+            } else {
+              ctx.beginPath();
+              ctx.moveTo(cx + northDx * markingStartOffset, cy + northDy * markingStartOffset);
+              ctx.lineTo(northEdgeX + northDx * markingOverlap, northEdgeY + northDy * markingOverlap);
+              ctx.stroke();
+            }
           }
           if (east) {
-            ctx.beginPath();
-            ctx.moveTo(cx + eastDx * markingStartOffset, cy + eastDy * markingStartOffset);
-            ctx.lineTo(eastEdgeX + eastDx * markingOverlap, eastEdgeY + eastDy * markingOverlap);
-            ctx.stroke();
+            const adjIsIntersection = isAdjIntersection(gridX, gridY - 1);
+            if (adjIsIntersection) {
+              const stopX = cx + (eastEdgeX - cx) * stopBeforeCrosswalk;
+              const stopY = cy + (eastEdgeY - cy) * stopBeforeCrosswalk;
+              ctx.beginPath();
+              ctx.moveTo(cx + eastDx * markingStartOffset, cy + eastDy * markingStartOffset);
+              ctx.lineTo(stopX, stopY);
+              ctx.stroke();
+            } else {
+              ctx.beginPath();
+              ctx.moveTo(cx + eastDx * markingStartOffset, cy + eastDy * markingStartOffset);
+              ctx.lineTo(eastEdgeX + eastDx * markingOverlap, eastEdgeY + eastDy * markingOverlap);
+              ctx.stroke();
+            }
           }
           if (south) {
-            ctx.beginPath();
-            ctx.moveTo(cx + southDx * markingStartOffset, cy + southDy * markingStartOffset);
-            ctx.lineTo(southEdgeX + southDx * markingOverlap, southEdgeY + southDy * markingOverlap);
-            ctx.stroke();
+            const adjIsIntersection = isAdjIntersection(gridX + 1, gridY);
+            if (adjIsIntersection) {
+              const stopX = cx + (southEdgeX - cx) * stopBeforeCrosswalk;
+              const stopY = cy + (southEdgeY - cy) * stopBeforeCrosswalk;
+              ctx.beginPath();
+              ctx.moveTo(cx + southDx * markingStartOffset, cy + southDy * markingStartOffset);
+              ctx.lineTo(stopX, stopY);
+              ctx.stroke();
+            } else {
+              ctx.beginPath();
+              ctx.moveTo(cx + southDx * markingStartOffset, cy + southDy * markingStartOffset);
+              ctx.lineTo(southEdgeX + southDx * markingOverlap, southEdgeY + southDy * markingOverlap);
+              ctx.stroke();
+            }
           }
           if (west) {
-            ctx.beginPath();
-            ctx.moveTo(cx + westDx * markingStartOffset, cy + westDy * markingStartOffset);
-            ctx.lineTo(westEdgeX + westDx * markingOverlap, westEdgeY + westDy * markingOverlap);
-            ctx.stroke();
+            const adjIsIntersection = isAdjIntersection(gridX, gridY + 1);
+            if (adjIsIntersection) {
+              const stopX = cx + (westEdgeX - cx) * stopBeforeCrosswalk;
+              const stopY = cy + (westEdgeY - cy) * stopBeforeCrosswalk;
+              ctx.beginPath();
+              ctx.moveTo(cx + westDx * markingStartOffset, cy + westDy * markingStartOffset);
+              ctx.lineTo(stopX, stopY);
+              ctx.stroke();
+            } else {
+              ctx.beginPath();
+              ctx.moveTo(cx + westDx * markingStartOffset, cy + westDy * markingStartOffset);
+              ctx.lineTo(westEdgeX + westDx * markingOverlap, westEdgeY + westDy * markingOverlap);
+              ctx.stroke();
+            }
           }
           
           ctx.setLineDash([]);
@@ -2552,10 +2604,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         }
         
         // ============================================
-        // DRAW CROSSWALKS (on non-intersection tiles adjacent to intersections)
+        // DRAW CROSSWALKS (on tiles adjacent to real intersections with traffic lights)
         // ============================================
         // Real crosswalks: stripes run PARALLEL to traffic, spaced ACROSS the road width
-        if (!isIntersection && currentZoom >= 0.75 && mergeInfo.type === 'single') {
+        if (currentZoom >= 0.75) {
           const isAdjacentIntersection = (adjX: number, adjY: number): boolean => {
             if (!hasRoad(adjX, adjY)) return false;
             const adjNorth = hasRoad(adjX - 1, adjY);
@@ -2572,7 +2624,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           
           if (northAdj || eastAdj || southAdj || westAdj) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.lineWidth = 0.8;
+            ctx.lineWidth = 0.7;
             ctx.setLineDash([]);
             
             // Tile edge directions for perpendicular spacing
@@ -2587,7 +2639,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             const crosswalkPos = 0.85; // Position along road (toward intersection)
             const stripeLen = roadW * 0.22; // Short stripes parallel to traffic
             const numStripes = 10;
-            const stripeSpacing = roadW * 0.35; // Half spacing for double stripes
+            const stripeSpacing = roadW * 0.30; // 15% smaller spacing
             
             // Helper to draw crosswalk for a road direction
             const drawCrosswalk = (

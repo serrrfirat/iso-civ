@@ -646,9 +646,8 @@ export function useVehicleSystems(
       
       if (!shouldStop) {
         car.progress += car.speed * delta * speedMultiplier;
-      } else {
-        // Hard stop - don't creep forward
       }
+      // When stopped, just don't move - no position changes
       
       let guard = 0;
       while (car.progress >= 1 && guard < 4) {
