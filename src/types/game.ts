@@ -329,6 +329,7 @@ export interface GameState {
   disastersEnabled: boolean;
   adjacentCities: AdjacentCity[];
   waterBodies: WaterBody[];
+  gameVersion: number; // Increments when a new game starts - used to clear transient state like vehicles
 }
 
 // Building evolution paths based on zone and level

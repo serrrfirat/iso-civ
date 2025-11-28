@@ -148,7 +148,7 @@ export interface CanvasIsometricGridProps {
 // Canvas-based Isometric Grid - HIGH PERFORMANCE
 export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMobile = false, navigationTarget, onNavigationComplete, onViewportChange }: CanvasIsometricGridProps) {
   const { state, placeAtTile, connectToCity, checkAndDiscoverCities, currentSpritePack, visualHour } = useGame();
-  const { grid, gridSize, selectedTool, speed, adjacentCities, waterBodies } = state;
+  const { grid, gridSize, selectedTool, speed, adjacentCities, waterBodies, gameVersion } = state;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null); // PERF: Separate canvas for hover/selection highlights
   const carsCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -355,6 +355,52 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   useEffect(() => {
     worldStateRef.current.canvasSize = canvasSize;
   }, [canvasSize]);
+
+  // Clear all vehicles/entities when game version changes (new game, load state, etc.)
+  useEffect(() => {
+    // Clear all vehicle refs
+    carsRef.current = [];
+    carIdRef.current = 0;
+    carSpawnTimerRef.current = 0;
+    emergencyVehiclesRef.current = [];
+    emergencyVehicleIdRef.current = 0;
+    emergencyDispatchTimerRef.current = 0;
+    activeFiresRef.current.clear();
+    activeCrimesRef.current.clear();
+    activeCrimeIncidentsRef.current.clear();
+    crimeSpawnTimerRef.current = 0;
+    
+    // Clear pedestrians
+    pedestriansRef.current = [];
+    pedestrianIdRef.current = 0;
+    pedestrianSpawnTimerRef.current = 0;
+    
+    // Clear aircraft
+    airplanesRef.current = [];
+    airplaneIdRef.current = 0;
+    airplaneSpawnTimerRef.current = 0;
+    helicoptersRef.current = [];
+    helicopterIdRef.current = 0;
+    helicopterSpawnTimerRef.current = 0;
+    
+    // Clear boats
+    boatsRef.current = [];
+    boatIdRef.current = 0;
+    boatSpawnTimerRef.current = 0;
+    
+    // Clear fireworks
+    fireworksRef.current = [];
+    fireworkIdRef.current = 0;
+    fireworkSpawnTimerRef.current = 0;
+    fireworkShowActiveRef.current = false;
+    
+    // Clear factory smog
+    factorySmogRef.current = [];
+    smogLastGridVersionRef.current = -1;
+    
+    // Reset traffic light timer
+    trafficLightTimerRef.current = 0;
+  }, [gameVersion]);
 
   // Sync isPanning state to ref for animation loop access
   useEffect(() => {

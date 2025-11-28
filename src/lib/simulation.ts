@@ -807,6 +807,7 @@ export function createInitialGameState(size: number = DEFAULT_GRID_SIZE, cityNam
     disastersEnabled: true,
     adjacentCities,
     waterBodies,
+    gameVersion: 0,
   };
 }
 

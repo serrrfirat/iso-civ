@@ -193,6 +193,10 @@ function loadGameState(): GameState | null {
             }
           }
         }
+        // Ensure gameVersion exists for backward compatibility
+        if (parsed.gameVersion === undefined) {
+          parsed.gameVersion = 0;
+        }
         return parsed as GameState;
       } else {
         localStorage.removeItem(STORAGE_KEY);
@@ -662,7 +666,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const newGame = useCallback((name?: string, size?: number) => {
     clearGameState(); // Clear saved state when starting fresh
     const fresh = createInitialGameState(size ?? DEFAULT_GRID_SIZE, name || 'IsoCity');
-    setState(fresh);
+    // Increment gameVersion from current state to ensure vehicles/entities are cleared
+    setState((prev) => ({
+      ...fresh,
+      gameVersion: (prev.gameVersion ?? 0) + 1,
+    }));
   }, []);
 
   const loadState = useCallback((stateString: string): boolean => {
@@ -709,7 +717,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
             }
           }
         }
-        setState(parsed as GameState);
+        // Increment gameVersion to clear vehicles/entities when loading a new state
+        setState((prev) => ({
+          ...(parsed as GameState),
+          gameVersion: (prev.gameVersion ?? 0) + 1,
+        }));
         return true;
       }
       return false;
@@ -725,7 +737,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const generateRandomCity = useCallback(() => {
     clearGameState(); // Clear saved state when generating a new city
     const randomCity = generateRandomAdvancedCity(DEFAULT_GRID_SIZE);
-    setState(randomCity);
+    // Increment gameVersion to ensure vehicles/entities are cleared
+    setState((prev) => ({
+      ...randomCity,
+      gameVersion: (prev.gameVersion ?? 0) + 1,
+    }));
   }, []);
 
   const addMoney = useCallback((amount: number) => {
