@@ -37,7 +37,7 @@ const HoverSubmenu = React.memo(function HoverSubmenu({
   
   const hasSelectedTool = tools.includes(selectedTool);
   const SUBMENU_GAP = 12; // Gap between sidebar and submenu
-  const SUBMENU_MAX_HEIGHT = 280; // Approximate max height of submenu
+  const SUBMENU_MAX_HEIGHT = 220; // Approximate max height of submenu
   
   const clearCloseTimeout = useCallback(() => {
     if (timeoutRef.current) {
@@ -184,7 +184,7 @@ const HoverSubmenu = React.memo(function HoverSubmenu({
           <div className="px-3 py-2 border-b border-sidebar-border/50 bg-muted/30">
             <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">{label}</span>
           </div>
-          <div className="p-1.5 flex flex-col gap-0.5 max-h-64 overflow-y-auto">
+          <div className="p-1.5 flex flex-col gap-0.5 max-h-48 overflow-y-auto">
             {tools.map(tool => {
               const info = TOOL_INFO[tool];
               if (!info) return null;

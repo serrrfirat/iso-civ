@@ -60,6 +60,52 @@ export type Airplane = {
   color: string;
 };
 
+// Helicopter types for hospital/airport transport
+export type HelicopterState = 'flying' | 'hovering' | 'landing' | 'taking_off';
+
+export type RotorWashParticle = {
+  x: number;
+  y: number;
+  age: number;
+  opacity: number;
+};
+
+export type Helicopter = {
+  id: number;
+  // Screen position (isometric coordinates)
+  x: number;
+  y: number;
+  // Flight direction in radians
+  angle: number;
+  // Current state
+  state: HelicopterState;
+  // Speed (pixels per second in screen space)
+  speed: number;
+  // Altitude (0 = ground, 0.5 = cruising for helicopters)
+  altitude: number;
+  // Target altitude for transitions
+  targetAltitude: number;
+  // Origin heliport (hospital, airport, police, or mall) tile coordinates
+  originX: number;
+  originY: number;
+  originType: 'hospital' | 'airport' | 'police' | 'mall';
+  // Destination heliport tile coordinates
+  destX: number;
+  destY: number;
+  destType: 'hospital' | 'airport' | 'police' | 'mall';
+  // Destination screen position
+  destScreenX: number;
+  destScreenY: number;
+  // Progress for state transitions
+  stateProgress: number;
+  // Rotor wash/exhaust particles (small contrails)
+  rotorWash: RotorWashParticle[];
+  // Rotor animation angle
+  rotorAngle: number;
+  // Helicopter color/style
+  color: string;
+};
+
 // Emergency vehicle types
 export type EmergencyVehicleType = 'fire_truck' | 'police_car';
 export type EmergencyVehicleState = 'dispatching' | 'responding' | 'returning';

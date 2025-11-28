@@ -17,6 +17,12 @@ export const AIRPLANE_COLORS = ['#ffffff', '#1e40af', '#dc2626', '#059669', '#7c
 export const CONTRAIL_MAX_AGE = 3.0; // seconds
 export const CONTRAIL_SPAWN_INTERVAL = 0.02; // seconds between contrail particles
 
+// Helicopter system constants
+export const HELICOPTER_MIN_POPULATION = 3000; // Minimum population required for helicopter activity
+export const HELICOPTER_COLORS = ['#dc2626', '#ffffff', '#1e3a8a', '#f97316', '#059669']; // Red cross, white, navy, orange, green
+export const ROTOR_WASH_MAX_AGE = 1.2; // seconds - shorter than plane contrails
+export const ROTOR_WASH_SPAWN_INTERVAL = 0.04; // seconds between rotor wash particles
+
 // Boat system constants
 export const BOAT_COLORS = ['#ffffff', '#1e3a5f', '#8b4513', '#2f4f4f', '#c41e3a', '#1e90ff']; // Various boat hull colors
 export const BOAT_MIN_ZOOM = 0.3; // Minimum zoom level to show boats

@@ -74,6 +74,9 @@ export interface SpritePack {
   // Per-building-type scale adjustments for PARKS sprite sheet buildings
   // Values are multiplied with the normal scale (e.g., 0.95 = 95% of normal size)
   parksScales?: Record<string, number>;
+  // Per-building-type vertical offset adjustments for PARKS CONSTRUCTION sprites only
+  // These override parksVerticalOffsets when rendering parks buildings under construction
+  parksConstructionVerticalOffsets?: Record<string, number>;
   // Maps building types to sprite keys in spriteOrder
   buildingToSprite: Record<string, string>;
   // Optional global scale multiplier for all sprites in this pack
@@ -206,7 +209,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     // 3x3 mall needs to shift up ~1 tile
     mall: -1.0,
     // 2x2 residential apartments need shifting up
-    apartment_low: -1.0,
+    apartment_low: -0.6,  // shifted down 0.4 from -1.0
     apartment_high: -0.60, // Shifted down ~0.4 tiles from -1.0
   },
   constructionVerticalOffsets: {
@@ -292,7 +295,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     basketball_courts: -0.15,
     playground_small: -0.25,  // shifted up 0.1
     playground_large: -0.45,  // shifted down 0.6 tiles from -1.05
-    baseball_field_small: -0.85,
+    baseball_field_small: -0.55,  // shifted down 0.3 from -0.85
     soccer_field_small: -0.20,  // shifted up slightly
     football_field: -0.85,
     baseball_stadium: -1.5,  // adjusted for scale, moved up 0.5 tiles
@@ -314,7 +317,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     community_garden: -0.15,
     pond_park: -0.15,
     park_gate: -0.15,
-    mountain_lodge: -0.85,
+    mountain_lodge: -0.55,  // shifted down 0.3 from -0.85
     mountain_trailhead: -1.0,  // 3x3, shifted down 0.5 tiles
   },
   parksHorizontalOffsets: {
@@ -326,6 +329,10 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     soccer_field_small: 0.95,  // scaled down 5%
     go_kart_track: 0.92,  // scaled down 8%
     amphitheater: 0.90,  // scaled down 10%
+  },
+  parksConstructionVerticalOffsets: {
+    baseball_field_small: -0.55,  // shifted down 0.3 from normal -0.85
+    mountain_lodge: -0.55,  // shifted down 0.3 from normal -0.85
   },
   buildingToSprite: {
     house_small: 'house_small',

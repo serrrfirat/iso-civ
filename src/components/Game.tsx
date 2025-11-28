@@ -67,6 +67,9 @@ import {
   Airplane,
   AirplaneState,
   ContrailParticle,
+  Helicopter,
+  HelicopterState,
+  RotorWashParticle,
   EmergencyVehicle,
   EmergencyVehicleType,
   EmergencyVehicleState,
@@ -92,6 +95,10 @@ import {
   AIRPLANE_COLORS,
   CONTRAIL_MAX_AGE,
   CONTRAIL_SPAWN_INTERVAL,
+  HELICOPTER_MIN_POPULATION,
+  HELICOPTER_COLORS,
+  ROTOR_WASH_MAX_AGE,
+  ROTOR_WASH_SPAWN_INTERVAL,
   BOAT_COLORS,
   BOAT_MIN_ZOOM,
   WAKE_MAX_AGE,
@@ -1756,6 +1763,11 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
   const airplaneIdRef = useRef(0);
   const airplaneSpawnTimerRef = useRef(0);
 
+  // Helicopter system refs
+  const helicoptersRef = useRef<Helicopter[]>([]);
+  const helicopterIdRef = useRef(0);
+  const helicopterSpawnTimerRef = useRef(0);
+
   // Boat system refs
   const boatsRef = useRef<Boat[]>([]);
   const boatIdRef = useRef(0);
@@ -3027,6 +3039,34 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     return airports;
   }, []);
 
+  // Find all heliports (hospitals, airports, police stations, and non-dense malls) in the city
+  const findHeliports = useCallback((): { x: number; y: number; type: 'hospital' | 'airport' | 'police' | 'mall'; size: number }[] => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    if (!currentGrid || currentGridSize <= 0) return [];
+    
+    const heliports: { x: number; y: number; type: 'hospital' | 'airport' | 'police' | 'mall'; size: number }[] = [];
+    for (let y = 0; y < currentGridSize; y++) {
+      for (let x = 0; x < currentGridSize; x++) {
+        const buildingType = currentGrid[y][x].building.type;
+        if (buildingType === 'hospital') {
+          heliports.push({ x, y, type: 'hospital', size: 2 }); // Hospital is 2x2
+        } else if (buildingType === 'airport') {
+          heliports.push({ x, y, type: 'airport', size: 4 }); // Airport is 4x4
+        } else if (buildingType === 'police_station') {
+          heliports.push({ x, y, type: 'police', size: 1 }); // Police station is 1x1
+        } else if (buildingType === 'mall') {
+          // Only malls using the basic commercial sprite (not dense variants) can have heliports
+          // Dense variants are selected when seed < 50, so we want seed >= 50 (non-dense)
+          const seed = (x * 31 + y * 17) % 100;
+          if (seed >= 50) {
+            heliports.push({ x, y, type: 'mall', size: 3 }); // Mall is 3x3
+          }
+        }
+      }
+    }
+    return heliports;
+  }, []);
+
   // Find all marinas and piers in the city (boat spawn/destination points)
   const findMarinasAndPiers = useCallback((): { x: number; y: number; type: 'marina' | 'pier' }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
@@ -3432,6 +3472,201 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
     airplanesRef.current = updatedAirplanes;
   }, [findAirports, isMobile]);
 
+  // Update helicopters - spawn, move between hospitals/airports, and manage lifecycle
+  const updateHelicopters = useCallback((delta: number) => {
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
+    
+    if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
+      return;
+    }
+
+    // Find heliports
+    const heliports = findHeliports();
+    
+    // Get cached population count
+    const currentGridVersion = gridVersionRef.current;
+    let totalPopulation: number;
+    if (cachedPopulationRef.current.gridVersion === currentGridVersion) {
+      totalPopulation = cachedPopulationRef.current.count;
+    } else {
+      // Recalculate and cache
+      totalPopulation = 0;
+      for (let y = 0; y < currentGridSize; y++) {
+        for (let x = 0; x < currentGridSize; x++) {
+          totalPopulation += currentGrid[y][x].building.population || 0;
+        }
+      }
+      cachedPopulationRef.current = { count: totalPopulation, gridVersion: currentGridVersion };
+    }
+
+    // No helicopters if fewer than 2 heliports or insufficient population
+    if (heliports.length < 2 || totalPopulation < HELICOPTER_MIN_POPULATION) {
+      helicoptersRef.current = [];
+      return;
+    }
+
+    // Calculate max helicopters based on heliports and population (1 per 1k population, min 6, max 60)
+    // Also scale with number of heliports available
+    const populationBased = Math.floor(totalPopulation / 1000);
+    const heliportBased = Math.floor(heliports.length * 2.5);
+    const maxHelicopters = Math.min(60, Math.max(6, Math.min(populationBased, heliportBased)));
+    
+    // Speed multiplier based on game speed
+    const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 1.5 : 2;
+
+    // Spawn timer
+    helicopterSpawnTimerRef.current -= delta;
+    if (helicoptersRef.current.length < maxHelicopters && helicopterSpawnTimerRef.current <= 0) {
+      // Pick a random origin heliport
+      const originIndex = Math.floor(Math.random() * heliports.length);
+      const origin = heliports[originIndex];
+      
+      // Pick a different destination heliport
+      const otherHeliports = heliports.filter((_, i) => i !== originIndex);
+      if (otherHeliports.length > 0) {
+        const dest = otherHeliports[Math.floor(Math.random() * otherHeliports.length)];
+        
+        // Convert origin tile to screen coordinates
+        const { screenX: originScreenX, screenY: originScreenY } = gridToScreen(origin.x, origin.y, 0, 0);
+        const originCenterX = originScreenX + TILE_WIDTH * origin.size / 2;
+        const originCenterY = originScreenY + TILE_HEIGHT * origin.size / 2;
+        
+        // Convert destination tile to screen coordinates
+        const { screenX: destScreenX, screenY: destScreenY } = gridToScreen(dest.x, dest.y, 0, 0);
+        const destCenterX = destScreenX + TILE_WIDTH * dest.size / 2;
+        const destCenterY = destScreenY + TILE_HEIGHT * dest.size / 2;
+        
+        // Calculate angle to destination
+        const angleToDestination = Math.atan2(destCenterY - originCenterY, destCenterX - originCenterX);
+        
+        helicoptersRef.current.push({
+          id: helicopterIdRef.current++,
+          x: originCenterX,
+          y: originCenterY,
+          angle: angleToDestination,
+          state: 'taking_off',
+          speed: 15 + Math.random() * 10, // Slow during takeoff
+          altitude: 0,
+          targetAltitude: 0.5, // Helicopters fly lower than planes
+          originX: origin.x,
+          originY: origin.y,
+          originType: origin.type,
+          destX: dest.x,
+          destY: dest.y,
+          destType: dest.type,
+          destScreenX: destCenterX,
+          destScreenY: destCenterY,
+          stateProgress: 0,
+          rotorWash: [],
+          rotorAngle: 0,
+          color: HELICOPTER_COLORS[Math.floor(Math.random() * HELICOPTER_COLORS.length)],
+        });
+      }
+      
+      helicopterSpawnTimerRef.current = 0.8 + Math.random() * 2.2; // 0.8-3 seconds between spawns
+    }
+
+    // Update existing helicopters
+    const updatedHelicopters: Helicopter[] = [];
+    
+    for (const heli of helicoptersRef.current) {
+      // Update rotor animation
+      heli.rotorAngle += delta * 25; // Fast rotor spin
+      
+      // Update rotor wash particles - shorter duration on mobile
+      const washMaxAge = isMobile ? 0.4 : ROTOR_WASH_MAX_AGE;
+      const washSpawnInterval = isMobile ? 0.08 : ROTOR_WASH_SPAWN_INTERVAL;
+      heli.rotorWash = heli.rotorWash
+        .map(p => ({ ...p, age: p.age + delta, opacity: Math.max(0, 1 - p.age / washMaxAge) }))
+        .filter(p => p.age < washMaxAge);
+      
+      // Add new rotor wash particles when flying
+      if (heli.altitude > 0.2 && heli.state === 'flying') {
+        heli.stateProgress += delta;
+        if (heli.stateProgress >= washSpawnInterval) {
+          heli.stateProgress -= washSpawnInterval;
+          // Single small rotor wash particle behind helicopter
+          const behindAngle = heli.angle + Math.PI;
+          const offsetDist = 6;
+          heli.rotorWash.push({
+            x: heli.x + Math.cos(behindAngle) * offsetDist,
+            y: heli.y + Math.sin(behindAngle) * offsetDist,
+            age: 0,
+            opacity: 1
+          });
+        }
+      }
+      
+      // Update based on state
+      switch (heli.state) {
+        case 'taking_off': {
+          // Rise vertically first, then start moving
+          heli.altitude = Math.min(0.5, heli.altitude + delta * 0.4);
+          heli.speed = Math.min(50, heli.speed + delta * 15);
+          
+          // Start moving once at cruising altitude
+          if (heli.altitude >= 0.3) {
+            heli.x += Math.cos(heli.angle) * heli.speed * delta * speedMultiplier * 0.5;
+            heli.y += Math.sin(heli.angle) * heli.speed * delta * speedMultiplier * 0.5;
+          }
+          
+          if (heli.altitude >= 0.5) {
+            heli.state = 'flying';
+          }
+          break;
+        }
+        
+        case 'flying': {
+          // Move toward destination
+          heli.x += Math.cos(heli.angle) * heli.speed * delta * speedMultiplier;
+          heli.y += Math.sin(heli.angle) * heli.speed * delta * speedMultiplier;
+          
+          // Check if near destination
+          const distToDest = Math.hypot(heli.x - heli.destScreenX, heli.y - heli.destScreenY);
+          
+          if (distToDest < 80) {
+            heli.state = 'landing';
+            heli.targetAltitude = 0;
+          }
+          break;
+        }
+        
+        case 'landing': {
+          // Approach destination and descend
+          const distToDest = Math.hypot(heli.x - heli.destScreenX, heli.y - heli.destScreenY);
+          
+          // Slow down as we get closer
+          heli.speed = Math.max(10, heli.speed - delta * 20);
+          
+          // Keep moving toward destination if not there yet
+          if (distToDest > 15) {
+            const angleToDestination = Math.atan2(heli.destScreenY - heli.y, heli.destScreenX - heli.x);
+            heli.angle = angleToDestination;
+            heli.x += Math.cos(heli.angle) * heli.speed * delta * speedMultiplier;
+            heli.y += Math.sin(heli.angle) * heli.speed * delta * speedMultiplier;
+          }
+          
+          // Descend
+          heli.altitude = Math.max(0, heli.altitude - delta * 0.3);
+          
+          // Landed - remove helicopter
+          if (heli.altitude <= 0 && distToDest < 20) {
+            continue;
+          }
+          break;
+        }
+        
+        case 'hovering':
+          // Not used currently - helicopters just fly direct
+          break;
+      }
+      
+      updatedHelicopters.push(heli);
+    }
+    
+    helicoptersRef.current = updatedHelicopters;
+  }, [findHeliports, isMobile]);
+
   // Draw airplanes with contrails
   const drawAirplanes = useCallback((ctx: CanvasRenderingContext2D) => {
     const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
@@ -3575,6 +3810,164 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       ctx.beginPath();
       ctx.ellipse(-2, 8, 4, 2, 0, 0, Math.PI * 2);
       ctx.fill();
+      
+      ctx.restore();
+    }
+    
+    ctx.restore();
+  }, []);
+
+  // Draw helicopters with rotor wash
+  const drawHelicopters = useCallback((ctx: CanvasRenderingContext2D) => {
+    const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    const canvas = ctx.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Early exit if no helicopters
+    if (!currentGrid || currentGridSize <= 0 || helicoptersRef.current.length === 0) {
+      return;
+    }
+    
+    ctx.save();
+    ctx.scale(dpr * currentZoom, dpr * currentZoom);
+    ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
+    
+    const viewWidth = canvas.width / (dpr * currentZoom);
+    const viewHeight = canvas.height / (dpr * currentZoom);
+    const viewLeft = -currentOffset.x / currentZoom - 100;
+    const viewTop = -currentOffset.y / currentZoom - 100;
+    const viewRight = viewWidth - currentOffset.x / currentZoom + 100;
+    const viewBottom = viewHeight - currentOffset.y / currentZoom + 100;
+    
+    for (const heli of helicoptersRef.current) {
+      // Draw rotor wash/exhaust particles first (behind helicopter)
+      if (heli.rotorWash.length > 0) {
+        ctx.save();
+        for (const particle of heli.rotorWash) {
+          // Skip if outside viewport
+          if (particle.x < viewLeft || particle.x > viewRight || particle.y < viewTop || particle.y > viewBottom) {
+            continue;
+          }
+          
+          const size = 1.5 + particle.age * 4; // Smaller than plane contrails
+          const opacity = particle.opacity * 0.25 * heli.altitude;
+          
+          ctx.fillStyle = `rgba(200, 200, 200, ${opacity})`;
+          ctx.beginPath();
+          ctx.arc(particle.x, particle.y, size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      
+      // Skip helicopter rendering if outside viewport
+      if (heli.x < viewLeft - 30 || heli.x > viewRight + 30 || heli.y < viewTop - 30 || heli.y > viewBottom + 30) {
+        continue;
+      }
+      
+      // Draw shadow (always visible since helicopters fly lower)
+      const shadowOffset = (0.5 - heli.altitude) * 10 + 3;
+      const shadowScale = 0.5 + heli.altitude * 0.3;
+      const shadowOpacity = 0.25 * (0.6 - heli.altitude * 0.3);
+      
+      ctx.save();
+      ctx.translate(heli.x + shadowOffset, heli.y + shadowOffset * 0.5);
+      ctx.rotate(heli.angle);
+      ctx.scale(shadowScale, shadowScale * 0.5);
+      ctx.fillStyle = `rgba(0, 0, 0, ${shadowOpacity})`;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 10, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      
+      // Draw helicopter
+      ctx.save();
+      ctx.translate(heli.x, heli.y);
+      ctx.rotate(heli.angle);
+      
+      // Scale based on altitude (smaller than planes)
+      const altitudeScale = 0.5 + heli.altitude * 0.3;
+      ctx.scale(altitudeScale, altitudeScale);
+      
+      // Main body - oval/teardrop shape
+      ctx.fillStyle = heli.color;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 8, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Cockpit bubble (front)
+      ctx.fillStyle = '#87ceeb'; // Light blue glass
+      ctx.beginPath();
+      ctx.ellipse(5, 0, 3, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Tail boom
+      ctx.fillStyle = heli.color;
+      ctx.beginPath();
+      ctx.moveTo(-6, -1);
+      ctx.lineTo(-16, -0.5);
+      ctx.lineTo(-16, 0.5);
+      ctx.lineTo(-6, 1);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Tail rotor (vertical)
+      ctx.fillStyle = '#374151';
+      ctx.beginPath();
+      ctx.ellipse(-15, 0, 1, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Landing skids
+      ctx.strokeStyle = '#374151';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      // Left skid
+      ctx.moveTo(-4, 3.5);
+      ctx.lineTo(4, 3.5);
+      ctx.moveTo(-2, 4);
+      ctx.lineTo(-2, 6);
+      ctx.lineTo(2, 6);
+      ctx.lineTo(2, 4);
+      // Right skid
+      ctx.moveTo(-4, -3.5);
+      ctx.lineTo(4, -3.5);
+      ctx.moveTo(-2, -4);
+      ctx.lineTo(-2, -6);
+      ctx.lineTo(2, -6);
+      ctx.lineTo(2, -4);
+      ctx.stroke();
+      
+      ctx.restore();
+      
+      // Draw main rotor (drawn separately so it's always on top)
+      ctx.save();
+      ctx.translate(heli.x, heli.y);
+      
+      // Rotor hub
+      ctx.fillStyle = '#1f2937';
+      ctx.beginPath();
+      ctx.arc(0, 0, 2 * altitudeScale, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Rotor blades (spinning effect - draw as blurred disc)
+      const rotorRadius = 12 * altitudeScale;
+      ctx.strokeStyle = `rgba(100, 100, 100, ${0.4 + Math.sin(heli.rotorAngle * 4) * 0.1})`;
+      ctx.lineWidth = 1.5 * altitudeScale;
+      ctx.beginPath();
+      ctx.arc(0, 0, rotorRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Draw rotor blade lines (2 blades, rotating)
+      ctx.strokeStyle = 'rgba(50, 50, 50, 0.6)';
+      ctx.lineWidth = 1.5 * altitudeScale;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(heli.rotorAngle) * rotorRadius, Math.sin(heli.rotorAngle) * rotorRadius);
+      ctx.lineTo(Math.cos(heli.rotorAngle + Math.PI) * rotorRadius, Math.sin(heli.rotorAngle + Math.PI) * rotorRadius);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(heli.rotorAngle + Math.PI/2) * rotorRadius, Math.sin(heli.rotorAngle + Math.PI/2) * rotorRadius);
+      ctx.lineTo(Math.cos(heli.rotorAngle + Math.PI * 1.5) * rotorRadius, Math.sin(heli.rotorAngle + Math.PI * 1.5) * rotorRadius);
+      ctx.stroke();
       
       ctx.restore();
     }
@@ -5704,9 +6097,12 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
                 verticalPush = destHeight * 0.15;
               }
               // Use state-specific offset if available, then fall back to building-type or sprite-key offsets
-              // Priority: construction > abandoned > parks > dense > building-type > sprite-key
+              // Priority: parks-construction > construction > abandoned > parks > dense > building-type > sprite-key
               let extraOffset = 0;
-              if (isUnderConstruction && activePack.constructionVerticalOffsets && buildingType in activePack.constructionVerticalOffsets) {
+              if (isUnderConstruction && isParksBuilding && activePack.parksConstructionVerticalOffsets && buildingType in activePack.parksConstructionVerticalOffsets) {
+                // Parks building under construction - use parks construction offset
+                extraOffset = activePack.parksConstructionVerticalOffsets[buildingType] * h;
+              } else if (isUnderConstruction && activePack.constructionVerticalOffsets && buildingType in activePack.constructionVerticalOffsets) {
                 extraOffset = activePack.constructionVerticalOffsets[buildingType] * h;
               } else if (isAbandoned && activePack.abandonedVerticalOffsets && buildingType in activePack.abandonedVerticalOffsets) {
                 // Abandoned buildings may need different positioning than normal
@@ -6092,6 +6488,7 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
         updateEmergencyVehicles(delta); // Update emergency vehicles!
         updatePedestrians(delta); // Update pedestrians (zoom-gated)
         updateAirplanes(delta); // Update airplanes (airport required)
+        updateHelicopters(delta); // Update helicopters (hospital/airport required)
         updateBoats(delta); // Update boats (marina/pier required)
         updateFireworks(delta, hour); // Update fireworks (nighttime only)
       }
@@ -6100,13 +6497,14 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
       drawBoats(ctx); // Draw boats on water
       drawEmergencyVehicles(ctx); // Draw emergency vehicles!
       drawIncidentIndicators(ctx, delta); // Draw fire/crime incident indicators!
+      drawHelicopters(ctx); // Draw helicopters (below planes, above ground)
       drawAirplanes(ctx); // Draw airplanes above everything
       drawFireworks(ctx); // Draw fireworks above everything (nighttime only)
     };
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateBoats, drawBoats, drawIncidentIndicators, updateFireworks, drawFireworks, hour, isMobile]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, drawIncidentIndicators, updateFireworks, drawFireworks, hour, isMobile]);
   
   // Day/Night cycle lighting rendering
   useEffect(() => {
