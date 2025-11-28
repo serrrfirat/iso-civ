@@ -6316,6 +6316,10 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
             west: gridY < gridSize - 1 && grid[gridY + 1]?.[gridX]?.building.type === 'water',
           };
           
+          // Count adjacent water tiles
+          const adjacentCount = (adjacentWater.north ? 1 : 0) + (adjacentWater.east ? 1 : 0) + 
+                               (adjacentWater.south ? 1 : 0) + (adjacentWater.west ? 1 : 0);
+          
           if (waterImage) {
             // Center the water sprite on the tile
             const tileCenterX = x + w / 2;
@@ -6329,8 +6333,8 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
             const seedX = ((gridX * 7919 + gridY * 6271) % 1000) / 1000;
             const seedY = ((gridX * 4177 + gridY * 9311) % 1000) / 1000;
             
-            // Take a subcrop - use 40% of the image, offset randomly for variety
-            const cropScale = 0.4;
+            // Take a subcrop - use 35% of the image, offset randomly for variety
+            const cropScale = 0.35;
             const cropW = imgW * cropScale;
             const cropH = imgH * cropScale;
             const maxOffsetX = imgW - cropW;
@@ -6338,38 +6342,85 @@ function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile, isMob
             const srcX = seedX * maxOffsetX;
             const srcY = seedY * maxOffsetY;
             
-            // Create a clipping path for just this tile's diamond shape
-            // This ensures water NEVER bleeds outside the tile boundary
+            // Create a clipping path - expand toward adjacent WATER tiles only
+            // This allows blending between water tiles while preventing bleed onto land
+            const expand = w * 0.4; // How much to expand toward water neighbors
+            
+            // Calculate expanded corners based on water adjacency
+            // North edge (top-left): between left and top corners
+            // East edge (top-right): between top and right corners
+            // South edge (bottom-right): between right and bottom corners
+            // West edge (bottom-left): between bottom and left corners
+            const topY = y - (adjacentWater.north && adjacentWater.east ? expand * 0.5 : 0);
+            const rightX = x + w + ((adjacentWater.east && adjacentWater.south) ? expand * 0.5 : 0);
+            const bottomY = y + h + ((adjacentWater.south && adjacentWater.west) ? expand * 0.5 : 0);
+            const leftX = x - ((adjacentWater.west && adjacentWater.north) ? expand * 0.5 : 0);
+            
+            // Expand individual edges toward water neighbors
+            const topExpand = (adjacentWater.north || adjacentWater.east) ? expand * 0.3 : 0;
+            const rightExpand = (adjacentWater.east || adjacentWater.south) ? expand * 0.3 : 0;
+            const bottomExpand = (adjacentWater.south || adjacentWater.west) ? expand * 0.3 : 0;
+            const leftExpand = (adjacentWater.west || adjacentWater.north) ? expand * 0.3 : 0;
+            
             ctx.save();
             ctx.beginPath();
-            ctx.moveTo(x + w / 2, y);           // top
-            ctx.lineTo(x + w, y + h / 2);       // right
-            ctx.lineTo(x + w / 2, y + h);       // bottom
-            ctx.lineTo(x, y + h / 2);           // left
+            ctx.moveTo(x + w / 2, topY - topExpand);                    // top
+            ctx.lineTo(rightX + rightExpand, y + h / 2);                // right
+            ctx.lineTo(x + w / 2, bottomY + bottomExpand);              // bottom
+            ctx.lineTo(leftX - leftExpand, y + h / 2);                  // left
             ctx.closePath();
             ctx.clip();
             
-            // Draw water slightly larger than tile to ensure full coverage
-            // The clipping path keeps it contained
             const aspectRatio = cropH / cropW;
-            const drawScale = 1.3; // Larger than tile, but clipped
-            const destWidth = w * drawScale;
-            const destHeight = destWidth * aspectRatio;
+            const savedAlpha = ctx.globalAlpha;
             
-            // Small random offset for variety (but clipped so can't escape)
-            const jitterX = (seedX - 0.5) * w * 0.2;
-            const jitterY = (seedY - 0.5) * h * 0.2;
+            // For tiles with more water neighbors, draw multiple blended passes
+            if (adjacentCount >= 2) {
+              // Multiple passes with varying size and opacity for soft blending
+              const passes = [
+                { scale: 2.2, alpha: 0.25 },
+                { scale: 1.6, alpha: 0.45 },
+                { scale: 1.2, alpha: 0.7 },
+                { scale: 1.0, alpha: 1.0 },
+              ];
+              
+              // Jitter for variety
+              const jitterX = (seedX - 0.5) * w * 0.25;
+              const jitterY = (seedY - 0.5) * h * 0.25;
+              
+              for (const pass of passes) {
+                const destWidth = w * pass.scale;
+                const destHeight = destWidth * aspectRatio;
+                
+                ctx.globalAlpha = pass.alpha;
+                ctx.drawImage(
+                  waterImage,
+                  srcX, srcY, cropW, cropH,
+                  Math.round(tileCenterX - destWidth / 2 + jitterX),
+                  Math.round(tileCenterY - destHeight / 2 + jitterY),
+                  Math.round(destWidth),
+                  Math.round(destHeight)
+                );
+              }
+            } else {
+              // Edge tile with few water neighbors - single contained draw
+              const destWidth = w * 1.15;
+              const destHeight = destWidth * aspectRatio;
+              const jitterX = (seedX - 0.5) * w * 0.15;
+              const jitterY = (seedY - 0.5) * h * 0.15;
+              
+              ctx.drawImage(
+                waterImage,
+                srcX, srcY, cropW, cropH,
+                Math.round(tileCenterX - destWidth / 2 + jitterX),
+                Math.round(tileCenterY - destHeight / 2 + jitterY),
+                Math.round(destWidth),
+                Math.round(destHeight)
+              );
+            }
             
-            ctx.drawImage(
-              waterImage,
-              srcX, srcY, cropW, cropH,
-              Math.round(tileCenterX - destWidth / 2 + jitterX),
-              Math.round(tileCenterY - destHeight / 2 + jitterY),
-              Math.round(destWidth),
-              Math.round(destHeight)
-            );
-            
-            ctx.restore(); // Remove clipping
+            ctx.globalAlpha = savedAlpha;
+            ctx.restore();
           } else {
             // Water image not loaded yet - draw placeholder diamond
             ctx.fillStyle = '#0ea5e9';
