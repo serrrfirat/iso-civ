@@ -419,7 +419,8 @@ function drawBallast(
       // Vertical tracks (north-south)
       drawDoubleStraightBallast(northEdge, southEdge, ISO_EW);
       // Curved connections from west to north and south (no straight branch - curves provide the connection)
-      drawDoubleCurvedBallast(westEdge, northEdge, center, NEG_ISO_NS, ISO_EW, { x: 0, y: 1 });
+      // west-to-north is reversed curve_nw: use ISO_NS, NEG_ISO_EW, { x: 1, y: 0 }
+      drawDoubleCurvedBallast(westEdge, northEdge, center, ISO_NS, NEG_ISO_EW, { x: 1, y: 0 });
       drawDoubleCurvedBallast(westEdge, southEdge, center, NEG_ISO_NS, NEG_ISO_EW, { x: 0, y: -1 });
       drawCenterBallast();
       break;
@@ -638,7 +639,8 @@ function drawTies(
       // Vertical tracks (north-south)
       drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_EW, TIES_PER_TILE);
       // Curved connections from west to north and south (no straight branch - curves provide the connection)
-      drawDoubleCurveTies(westEdge, northEdge, center, NEG_ISO_NS, ISO_EW, NEG_ISO_NS, ISO_EW, { x: 0, y: 1 }, TIES_PER_TILE);
+      // west-to-north is reversed curve_nw: use ISO_NS, NEG_ISO_EW, { x: 1, y: 0 }
+      drawDoubleCurveTies(westEdge, northEdge, center, ISO_NS, NEG_ISO_EW, ISO_NS, NEG_ISO_EW, { x: 1, y: 0 }, TIES_PER_TILE);
       drawDoubleCurveTies(westEdge, southEdge, center, NEG_ISO_NS, NEG_ISO_EW, NEG_ISO_NS, NEG_ISO_EW, { x: 0, y: -1 }, TIES_PER_TILE);
       break;
     case 'junction_t_s':
@@ -871,7 +873,8 @@ function drawRails(
       // Vertical tracks (north-south)
       drawDoubleStraightRails(northEdge, southEdge, ISO_EW);
       // Curved connections from west to north and south (no straight branch - curves provide the connection)
-      drawDoubleCurvedRails(westEdge, northEdge, center, NEG_ISO_NS, ISO_EW, { x: 0, y: 1 });
+      // west-to-north is reversed curve_nw: use ISO_NS, NEG_ISO_EW, { x: 1, y: 0 }
+      drawDoubleCurvedRails(westEdge, northEdge, center, ISO_NS, NEG_ISO_EW, { x: 1, y: 0 });
       drawDoubleCurvedRails(westEdge, southEdge, center, NEG_ISO_NS, NEG_ISO_EW, { x: 0, y: -1 });
       break;
     case 'junction_t_s':

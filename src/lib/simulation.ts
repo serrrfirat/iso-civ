@@ -1303,6 +1303,8 @@ function calculateStats(grid: Tile[][], size: number, budget: Budget, taxRate: n
   let parkCount = 0;
   let subwayTiles = 0;
   let subwayStations = 0;
+  let railTiles = 0;
+  let railStations = 0;
   
   // Special buildings that affect demand
   let hasAirport = false;
@@ -1346,6 +1348,8 @@ function calculateStats(grid: Tile[][], size: number, budget: Budget, taxRate: n
       if (building.type === 'tennis') parkCount++; // Tennis courts count as parks
       if (tile.hasSubway) subwayTiles++;
       if (building.type === 'subway_station') subwayStations++;
+      if (building.type === 'rail' || tile.hasRailOverlay) railTiles++;
+      if (building.type === 'rail_station') railStations++;
       
       // Track special buildings (only count if construction is complete)
       if (building.constructionProgress === undefined || building.constructionProgress >= 100) {
@@ -1375,6 +1379,12 @@ function calculateStats(grid: Tile[][], size: number, budget: Budget, taxRate: n
   const taxAdditiveModifier = (9 - effectiveTaxRate) * 2;
   
   const subwayBonus = Math.min(20, subwayTiles * 0.5 + subwayStations * 3);
+  
+  // Rail network bonuses - affects commercial (passenger rail, accessibility) and industrial (freight transport)
+  // Rail stations have bigger impact than raw track count since they represent actual service
+  // Industrial gets a stronger bonus as freight rail is critical for factories/warehouses
+  const railCommercialBonus = Math.min(12, railTiles * 0.15 + railStations * 4);
+  const railIndustrialBonus = Math.min(18, railTiles * 0.25 + railStations * 6);
   
   // Special building bonuses
   // Airport: Major boost to commercial (business travel) and industrial (cargo/logistics)
@@ -1407,8 +1417,8 @@ function calculateStats(grid: Tile[][], size: number, budget: Budget, taxRate: n
   
   // Add special building bonuses to base demands
   const residentialWithBonuses = baseResidentialDemand + cityHallResidentialBonus + spaceProgramResidentialBonus + museumResidentialBonus;
-  const commercialWithBonuses = baseCommercialDemand + airportCommercialBonus + cityHallCommercialBonus + stadiumCommercialBonus + museumCommercialBonus + amusementParkCommercialBonus;
-  const industrialWithBonuses = baseIndustrialDemand + airportIndustrialBonus + cityHallIndustrialBonus + spaceProgramIndustrialBonus;
+  const commercialWithBonuses = baseCommercialDemand + airportCommercialBonus + cityHallCommercialBonus + stadiumCommercialBonus + museumCommercialBonus + amusementParkCommercialBonus + railCommercialBonus;
+  const industrialWithBonuses = baseIndustrialDemand + airportIndustrialBonus + cityHallIndustrialBonus + spaceProgramIndustrialBonus + railIndustrialBonus;
   
   // Apply tax effect: multiply by tax factor, then add small modifier
   // The multiplier ensures high taxes crush demand; the additive fine-tunes at normal rates
