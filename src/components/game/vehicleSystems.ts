@@ -1,12 +1,18 @@
 import React, { useCallback, useRef } from 'react';
 import { Car, CarDirection, EmergencyVehicle, EmergencyVehicleType, Pedestrian, PedestrianDestType, WorldRenderState, TILE_WIDTH, TILE_HEIGHT } from './types';
-import { CAR_COLORS, PEDESTRIAN_SKIN_COLORS, PEDESTRIAN_SHIRT_COLORS, PEDESTRIAN_MIN_ZOOM, DIRECTION_META } from './constants';
+import { CAR_COLORS, PEDESTRIAN_MIN_ZOOM, DIRECTION_META } from './constants';
 import { isRoadTile, getDirectionOptions, pickNextDirection, findPathOnRoads, getDirectionToTile, gridToScreen } from './utils';
-import { findResidentialBuildings, findPedestrianDestinations, findStations, findFires } from './gridFinders';
+import { findResidentialBuildings, findPedestrianDestinations, findStations, findFires, findRecreationAreas, findEnterableBuildings } from './gridFinders';
 import { drawPedestrians as drawPedestriansUtil } from './drawPedestrians';
 import { BuildingType, Tile } from '@/types/game';
 import { getTrafficLightState, canProceedThroughIntersection, TRAFFIC_LIGHT_TIMING } from './trafficSystem';
 import { CrimeType, getRandomCrimeType, getCrimeDuration } from './incidentData';
+import {
+  createPedestrian,
+  updatePedestrianState,
+  spawnPedestrianAtRecreation,
+  spawnPedestrianFromBuilding,
+} from './pedestrianSystem';
 
 export interface VehicleSystemRefs {
   carsRef: React.MutableRefObject<Car[]>;
@@ -114,6 +120,18 @@ export function useVehicleSystems(
     return findPedestrianDestinations(currentGrid, currentGridSize);
   }, [worldStateRef]);
 
+  // Find recreation areas
+  const findRecreationAreasCallback = useCallback(() => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    return findRecreationAreas(currentGrid, currentGridSize);
+  }, [worldStateRef]);
+
+  // Find enterable buildings
+  const findEnterableBuildingsCallback = useCallback(() => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    return findEnterableBuildings(currentGrid, currentGridSize);
+  }, [worldStateRef]);
+
   const spawnPedestrian = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     if (!currentGrid || currentGridSize <= 0) return false;
@@ -128,53 +146,97 @@ export function useVehicleSystems(
       return false;
     }
     
-    const home = residentials[Math.floor(Math.random() * residentials.length)];
-    const dest = destinations[Math.floor(Math.random() * destinations.length)];
+    // Choose spawn type - more variety in pedestrian spawning
+    const spawnType = Math.random();
     
-    const path = findPathOnRoads(currentGrid, currentGridSize, home.x, home.y, dest.x, dest.y);
-    if (!path || path.length === 0) {
+    // 60% - Normal walking pedestrian heading to a destination
+    if (spawnType < 0.6) {
+      const home = residentials[Math.floor(Math.random() * residentials.length)];
+      const dest = destinations[Math.floor(Math.random() * destinations.length)];
+      
+      const path = findPathOnRoads(currentGrid, currentGridSize, home.x, home.y, dest.x, dest.y);
+      if (!path || path.length === 0) {
+        return false;
+      }
+      
+      const startIndex = Math.floor(Math.random() * path.length);
+      const startTile = path[startIndex];
+      
+      let direction: CarDirection = 'south';
+      if (startIndex + 1 < path.length) {
+        const nextTile = path[startIndex + 1];
+        const dir = getDirectionToTile(startTile.x, startTile.y, nextTile.x, nextTile.y);
+        if (dir) direction = dir;
+      } else if (startIndex > 0) {
+        const prevTile = path[startIndex - 1];
+        const dir = getDirectionToTile(prevTile.x, prevTile.y, startTile.x, startTile.y);
+        if (dir) direction = dir;
+      }
+      
+      const ped = createPedestrian(
+        pedestrianIdRef.current++,
+        home.x,
+        home.y,
+        dest.x,
+        dest.y,
+        dest.type,
+        path,
+        startIndex,
+        direction
+      );
+      
+      pedestriansRef.current.push(ped);
+      return true;
+    }
+    
+    // 25% - Pedestrian already at a recreation area
+    if (spawnType < 0.85) {
+      const recreationAreas = findRecreationAreasCallback();
+      if (recreationAreas.length === 0) return false;
+      
+      const area = recreationAreas[Math.floor(Math.random() * recreationAreas.length)];
+      const home = residentials[Math.floor(Math.random() * residentials.length)];
+      
+      const ped = spawnPedestrianAtRecreation(
+        pedestrianIdRef.current++,
+        area.x,
+        area.y,
+        currentGrid,
+        currentGridSize,
+        home.x,
+        home.y
+      );
+      
+      if (ped) {
+        pedestriansRef.current.push(ped);
+        return true;
+      }
       return false;
     }
     
-    const startIndex = Math.floor(Math.random() * path.length);
-    const startTile = path[startIndex];
+    // 15% - Pedestrian exiting from a building
+    const enterableBuildings = findEnterableBuildingsCallback();
+    if (enterableBuildings.length === 0) return false;
     
-    let direction: CarDirection = 'south';
-    if (startIndex + 1 < path.length) {
-      const nextTile = path[startIndex + 1];
-      const dir = getDirectionToTile(startTile.x, startTile.y, nextTile.x, nextTile.y);
-      if (dir) direction = dir;
-    } else if (startIndex > 0) {
-      const prevTile = path[startIndex - 1];
-      const dir = getDirectionToTile(prevTile.x, prevTile.y, startTile.x, startTile.y);
-      if (dir) direction = dir;
+    const building = enterableBuildings[Math.floor(Math.random() * enterableBuildings.length)];
+    const home = residentials[Math.floor(Math.random() * residentials.length)];
+    
+    const ped = spawnPedestrianFromBuilding(
+      pedestrianIdRef.current++,
+      building.x,
+      building.y,
+      currentGrid,
+      currentGridSize,
+      home.x,
+      home.y
+    );
+    
+    if (ped) {
+      pedestriansRef.current.push(ped);
+      return true;
     }
-    
-    pedestriansRef.current.push({
-      id: pedestrianIdRef.current++,
-      tileX: startTile.x,
-      tileY: startTile.y,
-      direction,
-      progress: Math.random(),
-      speed: 0.12 + Math.random() * 0.08,
-      pathIndex: startIndex,
-      age: 0,
-      maxAge: 60 + Math.random() * 90,
-      skinColor: PEDESTRIAN_SKIN_COLORS[Math.floor(Math.random() * PEDESTRIAN_SKIN_COLORS.length)],
-      shirtColor: PEDESTRIAN_SHIRT_COLORS[Math.floor(Math.random() * PEDESTRIAN_SHIRT_COLORS.length)],
-      walkOffset: Math.random() * Math.PI * 2,
-      sidewalkSide: Math.random() < 0.5 ? 'left' : 'right',
-      destType: dest.type,
-      homeX: home.x,
-      homeY: home.y,
-      destX: dest.x,
-      destY: dest.y,
-      returningHome: startIndex >= path.length - 1,
-      path,
-    });
-    
-    return true;
-  }, [worldStateRef, findResidentialBuildingsCallback, findPedestrianDestinationsCallback, pedestriansRef, pedestrianIdRef]);
+    return false;
+  }, [worldStateRef, findResidentialBuildingsCallback, findPedestrianDestinationsCallback, findRecreationAreasCallback, findEnterableBuildingsCallback, pedestriansRef, pedestrianIdRef]);
 
   const findStationsCallback = useCallback((type: 'fire_station' | 'police_station'): { x: number; y: number }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
@@ -793,142 +855,48 @@ export function useVehicleSystems(
     }
     
     const updatedPedestrians: Pedestrian[] = [];
+    const allPedestrians = [...pedestriansRef.current];
     
-    for (const ped of [...pedestriansRef.current]) {
-      let alive = true;
-      
-      ped.age += delta;
-      if (ped.age > ped.maxAge) {
-        continue;
-      }
-      
-      ped.walkOffset += delta * 8;
-      
-      if (!isRoadTile(currentGrid, currentGridSize, ped.tileX, ped.tileY)) {
-        continue;
-      }
-      
-      // Most pedestrians respect traffic lights at intersections (based on their id)
-      // Check if approaching an intersection and should wait
-      let pedShouldWait = false;
-      const pedRespectsLights = (ped.id % 5) !== 0; // 80% respect lights (4 out of 5)
-      
-      if (pedRespectsLights && ped.pathIndex + 1 < ped.path.length && ped.progress > 0.6) {
-        const nextTile = ped.path[ped.pathIndex + 1];
-        // Check if next tile is an intersection
-        const nextNorth = isRoadTile(currentGrid, currentGridSize, nextTile.x - 1, nextTile.y);
-        const nextEast = isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y - 1);
-        const nextSouth = isRoadTile(currentGrid, currentGridSize, nextTile.x + 1, nextTile.y);
-        const nextWest = isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y + 1);
-        const isNextIntersection = [nextNorth, nextEast, nextSouth, nextWest].filter(Boolean).length >= 3;
-        
-        if (isNextIntersection) {
-          // Get traffic light state
-          const trafficTime = trafficLightTimerRef.current;
-          const lightState = getTrafficLightState(trafficTime);
-          
-          // Pedestrians wait when they can't proceed (same logic as cars)
-          if (!canProceedThroughIntersection(ped.direction, lightState)) {
-            pedShouldWait = true;
-          }
-        }
-      }
-      
-      if (!pedShouldWait) {
-        ped.progress += ped.speed * delta * speedMultiplier;
-      }
-      
-      if (ped.path.length === 1 && ped.progress >= 1) {
-        if (!ped.returningHome) {
-          ped.returningHome = true;
-          const returnPath = findPathOnRoads(currentGrid, currentGridSize, ped.destX, ped.destY, ped.homeX, ped.homeY);
-          if (returnPath && returnPath.length > 0) {
-            ped.path = returnPath;
-            ped.pathIndex = 0;
-            ped.progress = 0;
-            ped.tileX = returnPath[0].x;
-            ped.tileY = returnPath[0].y;
-            if (returnPath.length > 1) {
-              const nextTile = returnPath[1];
-              const dir = getDirectionToTile(returnPath[0].x, returnPath[0].y, nextTile.x, nextTile.y);
-              if (dir) ped.direction = dir;
-            }
-          } else {
-            continue;
-          }
-        } else {
-          continue;
-        }
-      }
-      
-      while (ped.progress >= 1 && ped.pathIndex < ped.path.length - 1) {
-        ped.pathIndex++;
-        ped.progress -= 1;
-        
-        const currentTile = ped.path[ped.pathIndex];
-        
-        if (currentTile.x < 0 || currentTile.x >= currentGridSize ||
-            currentTile.y < 0 || currentTile.y >= currentGridSize) {
-          alive = false;
-          break;
-        }
-        
-        ped.tileX = currentTile.x;
-        ped.tileY = currentTile.y;
-        
-        if (ped.pathIndex >= ped.path.length - 1) {
-          if (!ped.returningHome) {
-            ped.returningHome = true;
-            const returnPath = findPathOnRoads(currentGrid, currentGridSize, ped.destX, ped.destY, ped.homeX, ped.homeY);
-            if (returnPath && returnPath.length > 0) {
-              ped.path = returnPath;
-              ped.pathIndex = 0;
-              ped.progress = 0;
-              if (returnPath.length > 1) {
-                const nextTile = returnPath[1];
-                const dir = getDirectionToTile(returnPath[0].x, returnPath[0].y, nextTile.x, nextTile.y);
-                if (dir) ped.direction = dir;
-              }
-            } else {
-              alive = false;
-            }
-          } else {
-            alive = false;
-          }
-          break;
-        }
-        
-        if (ped.pathIndex + 1 < ped.path.length) {
-          const nextTile = ped.path[ped.pathIndex + 1];
-          const dir = getDirectionToTile(ped.tileX, ped.tileY, nextTile.x, nextTile.y);
-          if (dir) ped.direction = dir;
-        }
-      }
-      
-      if (alive && ped.progress >= 1 && ped.pathIndex >= ped.path.length - 1) {
-        if (!ped.returningHome) {
-          ped.returningHome = true;
-          const returnPath = findPathOnRoads(currentGrid, currentGridSize, ped.destX, ped.destY, ped.homeX, ped.homeY);
-          if (returnPath && returnPath.length > 0) {
-            ped.path = returnPath;
-            ped.pathIndex = 0;
-            ped.progress = 0;
-            ped.tileX = returnPath[0].x;
-            ped.tileY = returnPath[0].y;
-            if (returnPath.length > 1) {
-              const nextTile = returnPath[1];
-              const dir = getDirectionToTile(returnPath[0].x, returnPath[0].y, nextTile.x, nextTile.y);
-              if (dir) ped.direction = dir;
-            }
-          } else {
-            alive = false;
-          }
-        } else {
-          alive = false;
-        }
-      }
+    for (const ped of allPedestrians) {
+      // Use the new state machine for pedestrian updates
+      const alive = updatePedestrianState(
+        ped,
+        delta,
+        speedMultiplier,
+        currentGrid,
+        currentGridSize,
+        allPedestrians
+      );
       
       if (alive) {
+        // For walking pedestrians, also check traffic lights
+        if (ped.state === 'walking') {
+          // Most pedestrians respect traffic lights at intersections (based on their id)
+          const pedRespectsLights = (ped.id % 5) !== 0; // 80% respect lights (4 out of 5)
+          
+          if (pedRespectsLights && ped.pathIndex + 1 < ped.path.length && ped.progress > 0.6) {
+            const nextTile = ped.path[ped.pathIndex + 1];
+            // Check if next tile is an intersection
+            const nextNorth = isRoadTile(currentGrid, currentGridSize, nextTile.x - 1, nextTile.y);
+            const nextEast = isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y - 1);
+            const nextSouth = isRoadTile(currentGrid, currentGridSize, nextTile.x + 1, nextTile.y);
+            const nextWest = isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y + 1);
+            const isNextIntersection = [nextNorth, nextEast, nextSouth, nextWest].filter(Boolean).length >= 3;
+            
+            if (isNextIntersection) {
+              // Get traffic light state
+              const trafficTime = trafficLightTimerRef.current;
+              const lightState = getTrafficLightState(trafficTime);
+              
+              // Pedestrians wait when they can't proceed (same logic as cars)
+              if (!canProceedThroughIntersection(ped.direction, lightState)) {
+                // Stop the pedestrian progress - handled by not advancing
+                ped.progress = Math.min(ped.progress, 0.9);
+              }
+            }
+          }
+        }
+        
         updatedPedestrians.push(ped);
       }
     }

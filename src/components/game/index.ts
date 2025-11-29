@@ -12,6 +12,7 @@ export * from './drawAircraft';
 export * from './drawPedestrians';
 export * from './trafficSystem';
 export * from './incidentData';
+export * from './pedestrianSystem';
 export { Sidebar } from './Sidebar';
 export { OverlayModeToggle } from './OverlayModeToggle';
 export { MiniMap } from './MiniMap';

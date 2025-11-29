@@ -7,6 +7,21 @@ export const CAR_COLORS = ['#d97777', '#d4a01f', '#2ba67a', '#4d84c8', '#9a6ac9'
 // Pedestrian appearance colors
 export const PEDESTRIAN_SKIN_COLORS = ['#fdbf7e', '#e0ac69', '#c68642', '#8d5524', '#613318'];
 export const PEDESTRIAN_SHIRT_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#ffffff', '#1f2937'];
+export const PEDESTRIAN_PANTS_COLORS = ['#1f2937', '#374151', '#4b5563', '#1e3a8a', '#7c2d12', '#365314'];
+export const PEDESTRIAN_HAT_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f97316', '#8b5cf6', '#1f2937', '#ffffff'];
+
+// Pedestrian behavior constants
+export const PEDESTRIAN_BUILDING_ENTER_TIME = 1.0;  // Time to enter/exit building (seconds)
+export const PEDESTRIAN_MIN_ACTIVITY_TIME = 15.0;   // Minimum time at an activity
+export const PEDESTRIAN_MAX_ACTIVITY_TIME = 90.0;   // Maximum time at an activity
+export const PEDESTRIAN_BUILDING_MIN_TIME = 20.0;   // Minimum time inside buildings
+export const PEDESTRIAN_BUILDING_MAX_TIME = 180.0;  // Maximum time inside buildings
+export const PEDESTRIAN_SOCIAL_CHANCE = 0.15;       // Chance to stop and socialize
+export const PEDESTRIAN_SOCIAL_DURATION = 5.0;      // How long socializing lasts
+export const PEDESTRIAN_DOG_CHANCE = 0.08;          // Chance of walking a dog
+export const PEDESTRIAN_BAG_CHANCE = 0.25;          // Chance of carrying a bag
+export const PEDESTRIAN_HAT_CHANCE = 0.20;          // Chance of wearing a hat
+export const PEDESTRIAN_IDLE_CHANCE = 0.05;         // Chance to stop and idle briefly
 
 // Zoom thresholds for rendering detail elements
 // Lower values = more zoomed out, higher values = more zoomed in required

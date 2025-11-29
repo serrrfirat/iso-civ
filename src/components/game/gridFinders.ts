@@ -31,6 +31,43 @@ const PARK_TYPES: BuildingType[] = [
   'community_garden', 'pond_park', 'park_gate', 'mountain_lodge', 'mountain_trailhead'
 ];
 
+// Sports facilities where pedestrians play sports
+const SPORTS_TYPES: BuildingType[] = [
+  'basketball_courts', 'tennis', 'soccer_field_small', 'baseball_field_small',
+  'football_field', 'baseball_stadium', 'stadium', 'swimming_pool', 'skate_park'
+];
+
+// Recreation areas where pedestrians relax
+const RELAXATION_TYPES: BuildingType[] = [
+  'park', 'park_large', 'community_garden', 'pond_park', 'greenhouse_garden',
+  'amphitheater', 'campground', 'marina_docks_small', 'pier_large'
+];
+
+// Active recreation (not sitting)
+const ACTIVE_RECREATION_TYPES: BuildingType[] = [
+  'playground_small', 'playground_large', 'mini_golf_course', 'go_kart_track',
+  'roller_coaster_small', 'amusement_park', 'mountain_trailhead'
+];
+
+// Enterable buildings (pedestrians go inside)
+const ENTERABLE_BUILDING_TYPES: BuildingType[] = [
+  'shop_small', 'shop_medium', 'office_low', 'office_high', 'mall',
+  'school', 'university', 'hospital', 'museum', 'community_center',
+  'factory_small', 'factory_medium', 'factory_large', 'warehouse',
+  'police_station', 'fire_station', 'city_hall', 'rail_station',
+  'subway_station', 'mountain_lodge'
+];
+
+// Recreation area types for more specific destination finding
+export type RecreationType = 'sports' | 'relaxation' | 'active' | 'general';
+
+export interface RecreationDestination {
+  x: number;
+  y: number;
+  type: RecreationType;
+  buildingType: BuildingType;
+}
+
 export interface HeliportInfo {
   x: number;
   y: number;
@@ -95,6 +132,90 @@ export function findPedestrianDestinations(
     }
   }
   return destinations;
+}
+
+/**
+ * Find recreation areas with specific type classification
+ */
+export function findRecreationAreas(
+  grid: Tile[][],
+  gridSize: number
+): RecreationDestination[] {
+  if (!grid || gridSize <= 0) return [];
+
+  const destinations: RecreationDestination[] = [];
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const buildingType = grid[y][x].building.type;
+      
+      if (SPORTS_TYPES.includes(buildingType)) {
+        destinations.push({ x, y, type: 'sports', buildingType });
+      } else if (RELAXATION_TYPES.includes(buildingType)) {
+        destinations.push({ x, y, type: 'relaxation', buildingType });
+      } else if (ACTIVE_RECREATION_TYPES.includes(buildingType)) {
+        destinations.push({ x, y, type: 'active', buildingType });
+      } else if (PARK_TYPES.includes(buildingType)) {
+        destinations.push({ x, y, type: 'general', buildingType });
+      }
+    }
+  }
+  return destinations;
+}
+
+/**
+ * Find enterable buildings (shops, offices, etc.)
+ */
+export function findEnterableBuildings(
+  grid: Tile[][],
+  gridSize: number
+): { x: number; y: number; buildingType: BuildingType }[] {
+  if (!grid || gridSize <= 0) return [];
+
+  const buildings: { x: number; y: number; buildingType: BuildingType }[] = [];
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const tile = grid[y][x];
+      const buildingType = tile.building.type;
+      
+      // Only include active buildings (powered, not abandoned, construction complete)
+      if (
+        ENTERABLE_BUILDING_TYPES.includes(buildingType) &&
+        tile.building.constructionProgress >= 100 &&
+        !tile.building.abandoned
+      ) {
+        buildings.push({ x, y, buildingType });
+      }
+    }
+  }
+  return buildings;
+}
+
+/**
+ * Check if a building type is a sports facility
+ */
+export function isSportsFacility(buildingType: BuildingType): boolean {
+  return SPORTS_TYPES.includes(buildingType);
+}
+
+/**
+ * Check if a building type is a relaxation area
+ */
+export function isRelaxationArea(buildingType: BuildingType): boolean {
+  return RELAXATION_TYPES.includes(buildingType);
+}
+
+/**
+ * Check if a building type is enterable
+ */
+export function isEnterableBuilding(buildingType: BuildingType): boolean {
+  return ENTERABLE_BUILDING_TYPES.includes(buildingType);
+}
+
+/**
+ * Check if a building type is a park/recreation area
+ */
+export function isRecreationArea(buildingType: BuildingType): boolean {
+  return PARK_TYPES.includes(buildingType);
 }
 
 /**
