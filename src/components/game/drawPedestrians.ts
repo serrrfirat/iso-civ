@@ -13,6 +13,49 @@ import { getPedestrianOpacity, getVisiblePedestrians } from './pedestrianSystem'
 const LOD_SIMPLE_ZOOM = 0.55;  // Below this, draw very simple pedestrians (just above min zoom)
 const LOD_MEDIUM_ZOOM = 0.75;  // Below this, skip some details
 
+// Hair colors for hairstyles
+const HAIR_COLORS = ['#2c1810', '#4a3728', '#8b4513', '#d4a574', '#f5deb3', '#1a1a1a', '#8b0000'];
+
+/**
+ * Get Y offset to keep pedestrians visually on the sidewalk based on direction and side
+ * In isometric view, the sidewalk position varies based on which way they're walking
+ * and which side of the road they're on
+ */
+function getSidewalkYOffset(direction: 'north' | 'south' | 'east' | 'west', sidewalkSide: 'left' | 'right'): number {
+  // Offsets tuned for isometric view to keep pedestrians on sidewalk
+  // Negative = move up on screen, Positive = move down on screen
+  if (direction === 'north') {
+    return sidewalkSide === 'left' ? -2 : -6;
+  } else if (direction === 'south') {
+    return sidewalkSide === 'left' ? 2 : 6;
+  } else if (direction === 'east') {
+    return sidewalkSide === 'left' ? -6 : -2;
+  } else { // west
+    return sidewalkSide === 'left' ? 6 : 2;
+  }
+}
+
+/**
+ * Draw hair/ponytail on a pedestrian
+ * @param pedId - Pedestrian ID for consistent hair color (avoids flickering)
+ */
+function drawHair(ctx: CanvasRenderingContext2D, headX: number, headY: number, headRadius: number, pedId: number): void {
+  // Pick a hair color based on pedestrian ID (stable, no flickering)
+  const hairColor = HAIR_COLORS[pedId % HAIR_COLORS.length];
+  
+  ctx.fillStyle = hairColor;
+  
+  // Draw hair on top of head
+  ctx.beginPath();
+  ctx.arc(headX, headY - headRadius * 0.3, headRadius * 1.1, Math.PI, 0);
+  ctx.fill();
+  
+  // Draw ponytail or longer hair on side
+  ctx.beginPath();
+  ctx.ellipse(headX + headRadius * 0.8, headY + headRadius * 0.3, headRadius * 0.4, headRadius * 0.9, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 /**
  * Filter mode for drawing pedestrians
  * - 'all': Draw all visible pedestrians
@@ -78,28 +121,33 @@ export function drawPedestrians(
       const centerX = screenX + TILE_WIDTH / 2;
       const centerY = screenY + TILE_HEIGHT / 2;
       const meta = DIRECTION_META[ped.direction];
-      const sidewalkOffset = ped.sidewalkSide === 'left' ? -12 : 12;
-      // Base position plus activity offset for separation
+      const sidewalkOffset = ped.sidewalkSide === 'left' ? -10 : 10;
+      // Y offset depends on direction AND which side of road to stay on sidewalk
+      const yOffset = getSidewalkYOffset(ped.direction, ped.sidewalkSide);
       pedX = centerX + meta.vec.dx * ped.progress + meta.normal.nx * sidewalkOffset + ped.activityOffsetX;
-      pedY = centerY + meta.vec.dy * ped.progress + meta.normal.ny * sidewalkOffset + ped.activityOffsetY;
+      pedY = centerY + meta.vec.dy * ped.progress + meta.normal.ny * sidewalkOffset + ped.activityOffsetY + yOffset;
     } else if (ped.state === 'idle') {
       // Standing still at current position
       const { screenX, screenY } = gridToScreen(ped.tileX, ped.tileY, 0, 0);
       const centerX = screenX + TILE_WIDTH / 2;
       const centerY = screenY + TILE_HEIGHT / 2;
       const meta = DIRECTION_META[ped.direction];
-      const sidewalkOffset = ped.sidewalkSide === 'left' ? -12 : 12;
+      const sidewalkOffset = ped.sidewalkSide === 'left' ? -10 : 10;
+      // Y offset depends on direction AND which side of road to stay on sidewalk
+      const yOffset = getSidewalkYOffset(ped.direction, ped.sidewalkSide);
       pedX = centerX + meta.vec.dx * ped.progress + meta.normal.nx * sidewalkOffset;
-      pedY = centerY + meta.vec.dy * ped.progress + meta.normal.ny * sidewalkOffset;
+      pedY = centerY + meta.vec.dy * ped.progress + meta.normal.ny * sidewalkOffset + yOffset;
     } else {
       // Walking - normal position calculation
       const { screenX, screenY } = gridToScreen(ped.tileX, ped.tileY, 0, 0);
       const centerX = screenX + TILE_WIDTH / 2;
       const centerY = screenY + TILE_HEIGHT / 2;
       const meta = DIRECTION_META[ped.direction];
-      const sidewalkOffset = ped.sidewalkSide === 'left' ? -12 : 12;
+      const sidewalkOffset = ped.sidewalkSide === 'left' ? -10 : 10;
+      // Y offset depends on direction AND which side of road to stay on sidewalk
+      const yOffset = getSidewalkYOffset(ped.direction, ped.sidewalkSide);
       pedX = centerX + meta.vec.dx * ped.progress + meta.normal.nx * sidewalkOffset;
-      pedY = centerY + meta.vec.dy * ped.progress + meta.normal.ny * sidewalkOffset;
+      pedY = centerY + meta.vec.dy * ped.progress + meta.normal.ny * sidewalkOffset + yOffset;
     }
 
     // Viewport culling - be generous to avoid cutting off activities
@@ -293,6 +341,11 @@ function drawWalkingPedestrian(ctx: CanvasRenderingContext2D, ped: Pedestrian): 
   ctx.beginPath();
   ctx.arc(walkSway * scale, (-12 + walkBob) * scale, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
+
+  // Add hair for ~50% of pedestrians (based on ID)
+  if (ped.id % 2 === 0) {
+    drawHair(ctx, walkSway * scale, (-12 + walkBob) * scale, 3 * scale, ped.id);
+  }
 
   ctx.fillStyle = ped.shirtColor;
   ctx.beginPath();
@@ -610,7 +663,7 @@ function drawBaseballPlayer(ctx: CanvasRenderingContext2D, ped: Pedestrian): voi
  * Draw a swimmer
  */
 function drawSwimmer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
-  const scale = 0.30;
+  const scale = 0.22; // Smaller scale for pool swimmers
   const swim = Math.sin(ped.activityAnimTimer * 2);
   const bob = Math.sin(ped.activityAnimTimer * 1) * 1.5;
 
@@ -662,7 +715,7 @@ function drawSwimmer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
  * Draw a skateboarder
  */
 function drawSkateboarder(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
-  const scale = 0.31;
+  const scale = 0.23; // Smaller scale for skate park
   const ride = Math.sin(ped.activityAnimTimer * 1.5);
   const bob = Math.abs(ride) * 1.5;
 
@@ -723,7 +776,7 @@ function drawSkateboarder(ctx: CanvasRenderingContext2D, ped: Pedestrian): void 
  * Draw a person sitting on a bench
  */
 function drawSittingPerson(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
-  const scale = 0.31;
+  const scale = 0.22; // Smaller scale to fit better on bench
   const breathe = Math.sin(ped.activityAnimTimer * 0.5) * 0.3;
 
   // Bench
@@ -738,6 +791,11 @@ function drawSittingPerson(ctx: CanvasRenderingContext2D, ped: Pedestrian): void
   ctx.beginPath();
   ctx.arc(0, (-8 + breathe) * scale, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
+
+  // Hair for variety
+  if (ped.id % 2 === 0) {
+    drawHair(ctx, 0, (-8 + breathe) * scale, 3 * scale, ped.id);
+  }
 
   // Hat if has one
   if (ped.hasHat) {
@@ -796,7 +854,7 @@ const BLANKET_COLORS = [
 ];
 
 function drawPicnicker(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
-  const scale = 0.29;
+  const scale = 0.22; // Smaller scale for park activities
 
   // Picnic blanket - muted pastel colors based on pedestrian ID
   const blanketColor = BLANKET_COLORS[ped.id % BLANKET_COLORS.length];
@@ -813,6 +871,11 @@ function drawPicnicker(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   ctx.beginPath();
   ctx.arc(0, -8 * scale, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
+
+  // Add hair for ~50% of pedestrians
+  if (ped.id % 2 === 0) {
+    drawHair(ctx, 0, -8 * scale, 3 * scale, ped.id);
+  }
 
   // Body
   ctx.fillStyle = ped.shirtColor;
@@ -841,7 +904,7 @@ function drawPicnicker(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
  * Draw a jogger
  */
 function drawJogger(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
-  const scale = 0.23; // 35% smaller than other pedestrians
+  const scale = 0.20; // Small scale for park joggers
   const run = ped.walkOffset;
   const bounce = Math.abs(Math.sin(run * 2)) * 2;
 
@@ -850,6 +913,11 @@ function drawJogger(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   ctx.beginPath();
   ctx.arc(0, (-12 + bounce) * scale, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
+
+  // Add hair for ~50% of pedestrians (ponytail bouncing)
+  if (ped.id % 2 === 0) {
+    drawHair(ctx, 0, (-12 + bounce) * scale, 3 * scale, ped.id);
+  }
 
   // Headband
   ctx.fillStyle = ped.shirtColor;
@@ -905,7 +973,7 @@ function drawDogWalker(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
  * Draw a kid on playground
  */
 function drawPlaygroundKid(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
-  const scale = 0.27; // Smaller - it's a kid
+  const scale = 0.20; // Small - it's a kid on playground
   const swing = Math.sin(ped.activityAnimTimer * 1.5) * 8;
   const sway = Math.cos(ped.activityAnimTimer * 1.5) * 3;
 
@@ -962,7 +1030,7 @@ function drawPlaygroundKid(ctx: CanvasRenderingContext2D, ped: Pedestrian): void
  * Draw a spectator watching a game
  */
 function drawSpectator(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
-  const scale = 0.30;
+  const scale = 0.22; // Smaller scale for park/stadium spectators
   const cheer = Math.sin(ped.activityAnimTimer * 2);
   const cheerUp = cheer > 0.7;
 
@@ -972,11 +1040,16 @@ function drawSpectator(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   ctx.arc(0, (-12 + (cheerUp ? -1 : 0)) * scale, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
 
-  // Team cap/hat
-  ctx.fillStyle = ped.shirtColor;
-  ctx.beginPath();
-  ctx.arc(0, (-13 + (cheerUp ? -1 : 0)) * scale, 3.5 * scale, Math.PI, 0);
-  ctx.fill();
+  // Add hair for ~50% of pedestrians (instead of cap)
+  if (ped.id % 2 === 0) {
+    drawHair(ctx, 0, (-12 + (cheerUp ? -1 : 0)) * scale, 3 * scale, ped.id);
+  } else {
+    // Team cap/hat for others
+    ctx.fillStyle = ped.shirtColor;
+    ctx.beginPath();
+    ctx.arc(0, (-13 + (cheerUp ? -1 : 0)) * scale, 3.5 * scale, Math.PI, 0);
+    ctx.fill();
+  }
 
   // Body
   ctx.fillStyle = ped.shirtColor;
@@ -1039,6 +1112,11 @@ function drawSocializingPerson(ctx: CanvasRenderingContext2D, ped: Pedestrian): 
   ctx.arc(0, -12 * scale, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
 
+  // Add hair for ~50% of pedestrians
+  if (ped.id % 2 === 0) {
+    drawHair(ctx, 0, -12 * scale, 3 * scale, ped.id);
+  }
+
   // Body
   ctx.fillStyle = ped.shirtColor;
   ctx.beginPath();
@@ -1092,6 +1170,11 @@ function drawIdlePerson(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   ctx.beginPath();
   ctx.arc(0, (-12 + breathe) * scale, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
+
+  // Add hair for ~50% of pedestrians
+  if (ped.id % 2 === 0 && !ped.hasHat) {
+    drawHair(ctx, 0, (-12 + breathe) * scale, 3 * scale, ped.id);
+  }
 
   // Hat if has one
   if (ped.hasHat) {

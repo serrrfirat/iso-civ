@@ -40,6 +40,8 @@ import {
   DIRECTION_ARROWS_MIN_ZOOM,
   MEDIAN_PLANTS_MIN_ZOOM,
   LANE_MARKINGS_MIN_ZOOM,
+  SIDEWALK_MIN_ZOOM,
+  SIDEWALK_MIN_ZOOM_MOBILE,
   BOAT_COLORS,
   BOAT_MIN_ZOOM,
   WAKE_MIN_ZOOM_MOBILE,
@@ -1955,6 +1957,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // ============================================
       // DRAW SIDEWALKS (only on outer edges of merged roads)
       // ============================================
+      // Use mobile-specific zoom threshold (lower = visible when more zoomed out)
+      const sidewalkMinZoom = isMobile ? SIDEWALK_MIN_ZOOM_MOBILE : SIDEWALK_MIN_ZOOM;
+      const showSidewalks = currentZoom >= sidewalkMinZoom;
+      
       const isOuterEdge = (edgeDir: 'north' | 'east' | 'south' | 'west') => {
         // For merged roads, only draw sidewalks on the outermost tiles
         if (mergeInfo.type === 'single') return true;
@@ -2020,16 +2026,16 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       };
       
       // Draw sidewalks on edges without roads (only on outer edges for merged roads)
-      if (!north && isOuterEdge('north')) {
+      if (showSidewalks && !north && isOuterEdge('north')) {
         drawSidewalkEdge(leftCorner.x, leftCorner.y, topCorner.x, topCorner.y, 0.707, 0.707, !west && isOuterEdge('west'), !east && isOuterEdge('east'));
       }
-      if (!east && isOuterEdge('east')) {
+      if (showSidewalks && !east && isOuterEdge('east')) {
         drawSidewalkEdge(topCorner.x, topCorner.y, rightCorner.x, rightCorner.y, -0.707, 0.707, !north && isOuterEdge('north'), !south && isOuterEdge('south'));
       }
-      if (!south && isOuterEdge('south')) {
+      if (showSidewalks && !south && isOuterEdge('south')) {
         drawSidewalkEdge(rightCorner.x, rightCorner.y, bottomCorner.x, bottomCorner.y, -0.707, -0.707, !east && isOuterEdge('east'), !west && isOuterEdge('west'));
       }
-      if (!west && isOuterEdge('west')) {
+      if (showSidewalks && !west && isOuterEdge('west')) {
         drawSidewalkEdge(bottomCorner.x, bottomCorner.y, leftCorner.x, leftCorner.y, 0.707, -0.707, !south && isOuterEdge('south'), !north && isOuterEdge('north'));
       }
       
@@ -2049,8 +2055,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         return { x: shortenedOuterX + inwardDx * swWidth, y: shortenedOuterY + inwardDy * swWidth };
       };
       
-      // Draw corner pieces only for outer edges
-      if (!north && !east && isOuterEdge('north') && isOuterEdge('east')) {
+      // Draw corner pieces only for outer edges (when zoomed in enough)
+      if (showSidewalks && !north && !east && isOuterEdge('north') && isOuterEdge('east')) {
         const northInner = getShortenedInnerEndpoint(topCorner.x, topCorner.y, leftCorner.x, leftCorner.y, 0.707, 0.707);
         const eastInner = getShortenedInnerEndpoint(topCorner.x, topCorner.y, rightCorner.x, rightCorner.y, -0.707, 0.707);
         ctx.beginPath();
@@ -2060,7 +2066,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         ctx.closePath();
         ctx.fill();
       }
-      if (!east && !south && isOuterEdge('east') && isOuterEdge('south')) {
+      if (showSidewalks && !east && !south && isOuterEdge('east') && isOuterEdge('south')) {
         const eastInner = getShortenedInnerEndpoint(rightCorner.x, rightCorner.y, topCorner.x, topCorner.y, -0.707, 0.707);
         const southInner = getShortenedInnerEndpoint(rightCorner.x, rightCorner.y, bottomCorner.x, bottomCorner.y, -0.707, -0.707);
         ctx.beginPath();
@@ -2070,7 +2076,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         ctx.closePath();
         ctx.fill();
       }
-      if (!south && !west && isOuterEdge('south') && isOuterEdge('west')) {
+      if (showSidewalks && !south && !west && isOuterEdge('south') && isOuterEdge('west')) {
         const southInner = getShortenedInnerEndpoint(bottomCorner.x, bottomCorner.y, rightCorner.x, rightCorner.y, -0.707, -0.707);
         const westInner = getShortenedInnerEndpoint(bottomCorner.x, bottomCorner.y, leftCorner.x, leftCorner.y, 0.707, -0.707);
         ctx.beginPath();
@@ -2080,7 +2086,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         ctx.closePath();
         ctx.fill();
       }
-      if (!west && !north && isOuterEdge('west') && isOuterEdge('north')) {
+      if (showSidewalks && !west && !north && isOuterEdge('west') && isOuterEdge('north')) {
         const westInner = getShortenedInnerEndpoint(leftCorner.x, leftCorner.y, bottomCorner.x, bottomCorner.y, 0.707, -0.707);
         const northInner = getShortenedInnerEndpoint(leftCorner.x, leftCorner.y, topCorner.x, topCorner.y, 0.707, 0.707);
         ctx.beginPath();
@@ -2167,7 +2173,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       
       // Interior sidewalk corners - small isometric diamonds at corners where two roads meet
       // Each corner drawn independently based on its two adjacent road directions
-      {
+      if (showSidewalks) {
         ctx.fillStyle = sidewalkColor;
         const cs = swWidth * 0.8;
         const isFourWay = north && east && south && west;
@@ -3812,7 +3818,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         clearAirCanvas();
       } else {
         drawCars(ctx);
-        drawPedestrians(ctx); // Draw pedestrians (zoom-gated)
         drawBoats(ctx); // Draw boats on water
         drawTrainsCallback(ctx); // Draw trains on rail network
         drawSmog(ctx); // Draw factory smog (above ground, below aircraft)
@@ -3822,8 +3827,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // Draw incident indicators on air canvas (above buildings so tooltips are visible)
         drawIncidentIndicators(airCtx, delta); // Draw fire/crime incident indicators!
         
-        // Draw recreation pedestrians on air canvas (above buildings, smooth animation)
-        drawRecreationPedestrians(airCtx);
+        // Draw ALL pedestrians on air canvas (above buildings/parks, smooth animation)
+        drawPedestrians(airCtx); // Draw walking pedestrians
+        drawRecreationPedestrians(airCtx); // Draw recreation pedestrians (at parks, benches, etc.)
         
         drawHelicopters(airCtx); // Draw helicopters (below planes, above buildings)
         drawAirplanes(airCtx); // Draw airplanes above everything

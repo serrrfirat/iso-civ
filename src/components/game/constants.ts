@@ -4,8 +4,8 @@ import { CarDirection, DirectionMeta, TILE_WIDTH, TILE_HEIGHT } from './types';
 // Vehicle colors (duller/muted versions)
 export const CAR_COLORS = ['#d97777', '#d4a01f', '#2ba67a', '#4d84c8', '#9a6ac9'];
 
-// Pedestrian appearance colors
-export const PEDESTRIAN_SKIN_COLORS = ['#fdbf7e', '#e0ac69', '#c68642', '#8d5524', '#613318'];
+// Pedestrian appearance colors - includes lighter skin tones
+export const PEDESTRIAN_SKIN_COLORS = ['#ffe4c4', '#ffd5b8', '#ffc8a8', '#fdbf7e', '#e0ac69', '#c68642', '#8d5524', '#613318'];
 export const PEDESTRIAN_SHIRT_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#ec4899', '#ffffff', '#1f2937'];
 export const PEDESTRIAN_PANTS_COLORS = ['#1f2937', '#374151', '#4b5563', '#1e3a8a', '#7c2d12', '#365314'];
 export const PEDESTRIAN_HAT_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f97316', '#8b5cf6', '#1f2937', '#ffffff'];
@@ -39,6 +39,8 @@ export const DIRECTION_ARROWS_MIN_ZOOM = 0.65;    // Directional arrows on merge
 export const MEDIAN_PLANTS_MIN_ZOOM = 0.55;       // Plants/shrubs on road medians
 export const LANE_MARKINGS_MIN_ZOOM = 0.5;        // Lane markings and road lines
 export const LANE_MARKINGS_MEDIAN_MIN_ZOOM = 0.6; // Median markings for avenues/highways
+export const SIDEWALK_MIN_ZOOM = 0.45;            // Sidewalks on road edges (desktop)
+export const SIDEWALK_MIN_ZOOM_MOBILE = 0.35;     // Sidewalks on mobile (lower = visible when more zoomed out)
 
 // Airplane system constants
 export const AIRPLANE_MIN_POPULATION = 5000; // Minimum population required for airplane activity
