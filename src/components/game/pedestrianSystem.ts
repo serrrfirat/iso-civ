@@ -332,6 +332,7 @@ function updateWalkingState(
     if (Math.random() < PEDESTRIAN_SOCIAL_CHANCE) {
       const nearbyPed = findNearbyPedestrianFast(ped, allPedestrians);
       if (nearbyPed) {
+        // Set up socializing state for both pedestrians
         ped.state = 'socializing';
         ped.socialTarget = nearbyPed.id;
         ped.activityDuration = PEDESTRIAN_SOCIAL_DURATION;
@@ -340,6 +341,15 @@ function updateWalkingState(
         nearbyPed.socialTarget = ped.id;
         nearbyPed.activityDuration = PEDESTRIAN_SOCIAL_DURATION;
         nearbyPed.activityProgress = 0;
+        
+        // Offset pedestrians so they face each other and don't overlap
+        // Use activity offsets to position them on opposite sides
+        const offsetDistance = 8; // pixels apart
+        ped.activityOffsetX = -offsetDistance;
+        ped.activityOffsetY = 0;
+        nearbyPed.activityOffsetX = offsetDistance;
+        nearbyPed.activityOffsetY = 0;
+        
         return true;
       }
     }
@@ -574,19 +584,43 @@ function updateSocializingState(
   // Check if partner is still socializing
   if (ped.socialTarget !== null) {
     const partner = allPedestrians.find(p => p.id === ped.socialTarget);
-    if (!partner || partner.state !== 'socializing' || partner.socialTarget !== ped.id) {
-      // Partner left, stop socializing
+    if (!partner) {
+      // Partner no longer exists, stop socializing
       ped.state = 'walking';
       ped.socialTarget = null;
       ped.activityProgress = 0;
+      ped.activityOffsetX = 0;
+      ped.activityOffsetY = 0;
+      return true;
+    }
+    
+    // If partner is no longer socializing with us (they may have just finished),
+    // we should also finish but don't abruptly disappear - complete our transition
+    if (partner.state !== 'socializing' || partner.socialTarget !== ped.id) {
+      ped.state = 'walking';
+      ped.socialTarget = null;
+      ped.activityProgress = 0;
+      ped.activityOffsetX = 0;
+      ped.activityOffsetY = 0;
       return true;
     }
   }
   
   if (ped.activityProgress >= 1) {
+    // Finished socializing - also signal partner to finish
+    if (ped.socialTarget !== null) {
+      const partner = allPedestrians.find(p => p.id === ped.socialTarget);
+      if (partner && partner.state === 'socializing') {
+        // Set partner's progress to complete so they finish on next update
+        partner.activityProgress = 1;
+      }
+    }
+    
     ped.state = 'walking';
     ped.socialTarget = null;
     ped.activityProgress = 0;
+    ped.activityOffsetX = 0;
+    ped.activityOffsetY = 0;
   }
   
   return true;
@@ -595,6 +629,7 @@ function updateSocializingState(
 /**
  * Find a nearby pedestrian for socializing - optimized version
  * Only checks a limited number of pedestrians to avoid O(n²) behavior
+ * Prefers adjacent tile matches to avoid same-position overlapping
  */
 function findNearbyPedestrianFast(
   ped: Pedestrian,
@@ -603,6 +638,8 @@ function findNearbyPedestrianFast(
   // Only check up to 20 pedestrians to avoid performance issues
   const checkLimit = Math.min(20, allPedestrians.length);
   const startIdx = ped.id % Math.max(1, allPedestrians.length - checkLimit);
+  
+  let sameTileMatch: Pedestrian | null = null;
   
   for (let i = 0; i < checkLimit; i++) {
     const idx = (startIdx + i) % allPedestrians.length;
@@ -614,11 +651,20 @@ function findNearbyPedestrianFast(
     
     // Quick distance check - same tile or adjacent
     const dist = Math.abs(other.tileX - ped.tileX) + Math.abs(other.tileY - ped.tileY);
-    if (dist <= 1) {
+    
+    if (dist === 1) {
+      // Adjacent tile - prefer this to avoid overlap issues
       return other;
+    } else if (dist === 0 && !sameTileMatch) {
+      // Same tile - only use if no adjacent tile match found
+      // Also check they're not on the same sidewalk side to reduce overlap
+      if (other.sidewalkSide !== ped.sidewalkSide) {
+        sameTileMatch = other;
+      }
     }
   }
-  return null;
+  
+  return sameTileMatch;
 }
 
 /**

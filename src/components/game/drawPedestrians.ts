@@ -54,7 +54,17 @@ export function drawPedestrians(
       const { screenX, screenY } = gridToScreen(ped.destX, ped.destY, 0, 0);
       pedX = screenX + TILE_WIDTH / 2;
       pedY = screenY + TILE_HEIGHT / 2;
-    } else if (ped.state === 'socializing' || ped.state === 'idle') {
+    } else if (ped.state === 'socializing') {
+      // Socializing - standing still with offset to face conversation partner
+      const { screenX, screenY } = gridToScreen(ped.tileX, ped.tileY, 0, 0);
+      const centerX = screenX + TILE_WIDTH / 2;
+      const centerY = screenY + TILE_HEIGHT / 2;
+      const meta = DIRECTION_META[ped.direction];
+      const sidewalkOffset = ped.sidewalkSide === 'left' ? -12 : 12;
+      // Base position plus activity offset for separation
+      pedX = centerX + meta.vec.dx * ped.progress + meta.normal.nx * sidewalkOffset + ped.activityOffsetX;
+      pedY = centerY + meta.vec.dy * ped.progress + meta.normal.ny * sidewalkOffset + ped.activityOffsetY;
+    } else if (ped.state === 'idle') {
       // Standing still at current position
       const { screenX, screenY } = gridToScreen(ped.tileX, ped.tileY, 0, 0);
       const centerX = screenX + TILE_WIDTH / 2;
