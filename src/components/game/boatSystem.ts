@@ -3,6 +3,9 @@ import { Boat, TourWaypoint, WorldRenderState, TILE_WIDTH, TILE_HEIGHT } from '.
 import {
   BOAT_COLORS,
   BOAT_MIN_ZOOM,
+  WAKE_MIN_ZOOM_MOBILE,
+  BOATS_PER_DOCK,
+  MAX_BOATS,
   WAKE_MAX_AGE,
   WAKE_SPAWN_INTERVAL,
 } from './constants';
@@ -75,8 +78,8 @@ export function useBoatSystem(
       return;
     }
 
-    // Calculate max boats based on number of docks (3 boats per dock, max 25)
-    const maxBoats = Math.min(25, docks.length * 3);
+    // Calculate max boats based on number of docks
+    const maxBoats = Math.min(MAX_BOATS, Math.floor(docks.length * BOATS_PER_DOCK));
     
     // Speed multiplier based on game speed
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 1.5 : 2;
@@ -368,9 +371,12 @@ export function useBoatSystem(
     const viewRight = viewWidth - currentOffset.x / currentZoom + 100;
     const viewBottom = viewHeight - currentOffset.y / currentZoom + 100;
     
+    // Hide wakes on mobile when zoomed out (similar to streetlights/traffic lights threshold)
+    const showWakes = !isMobile || currentZoom >= WAKE_MIN_ZOOM_MOBILE;
+    
     for (const boat of boatsRef.current) {
       // Draw wake particles first (behind boat) - similar to plane contrails
-      if (boat.wake.length > 0) {
+      if (showWakes && boat.wake.length > 0) {
         for (const particle of boat.wake) {
           // Skip if outside viewport
           if (particle.x < viewLeft || particle.x > viewRight || particle.y < viewTop || particle.y > viewBottom) {
