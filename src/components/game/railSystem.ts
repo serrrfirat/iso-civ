@@ -1122,7 +1122,7 @@ function drawInsetRails(
   const cy = y + h / 2;
   const railGauge = w * TRACK_GAUGE_RATIO;
   const railWidth = zoom >= 0.7 ? 0.85 : 0.7;
-  const insetWidth = railWidth + 0.5; // Subtle dark border for inset effect
+  const insetWidth = railWidth + 0.8; // Darker border for inset effect on streets
   const trackSep = w * TRACK_SEPARATION_RATIO;
   const halfSep = trackSep / 2;
 
@@ -1134,7 +1134,7 @@ function drawInsetRails(
 
   const halfGauge = railGauge / 2;
   
-  const INSET_DARK = '#2a2a2a';  // Dark border for inset effect
+  const INSET_DARK = '#101010';  // Darker border for better visibility on streets
   const RAIL_SILVER = '#7a7a7a'; // Slightly lighter silver for road rails
 
   // Draw a single track's inset rail pair along a straight segment
