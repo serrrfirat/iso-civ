@@ -107,3 +107,9 @@ export const OPPOSITE_DIRECTION: Record<CarDirection, CarDirection> = {
 export const TRAFFIC_LIGHT_GREEN_DURATION = 3.0;   // Seconds
 export const TRAFFIC_LIGHT_YELLOW_DURATION = 0.8;  // Seconds
 export const TRAFFIC_LIGHT_CYCLE = 7.6;            // Full cycle time
+
+// Train system constants
+export const TRAIN_MIN_ZOOM = 0.35;               // Minimum zoom to show trains
+export const TRAIN_SPAWN_INTERVAL = 3.0;          // Seconds between train spawn attempts
+export const MIN_RAIL_TILES_FOR_TRAINS = 10;      // Minimum rail tiles needed
+export const MAX_TRAINS = 8;                       // Maximum trains in city

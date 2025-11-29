@@ -1988,6 +1988,8 @@ const BUILDING_SIZES: Partial<Record<BuildingType, { width: number; height: numb
   roller_coaster_small: { width: 2, height: 2 },
   mountain_lodge: { width: 2, height: 2 },
   mountain_trailhead: { width: 3, height: 3 },
+  // Transportation
+  rail_station: { width: 2, height: 2 },
 };
 
 // Get the size of a building (how many tiles it spans)

@@ -294,3 +294,48 @@ export type WorldRenderState = {
 
 // Overlay modes for visualization
 export type OverlayMode = 'none' | 'power' | 'water' | 'fire' | 'police' | 'health' | 'education' | 'subway';
+
+// ============================================================================
+// Train Types
+// ============================================================================
+
+/** Train carriage type */
+export type CarriageType = 'locomotive' | 'passenger' | 'freight_box' | 'freight_tank' | 'freight_flat' | 'caboose';
+
+/** Train type (passenger or freight) */
+export type TrainType = 'passenger' | 'freight';
+
+/** Individual train carriage */
+export type TrainCarriage = {
+  type: CarriageType;
+  color: string;
+  // Position tracking for smooth multi-carriage movement
+  tileX: number;
+  tileY: number;
+  progress: number;
+  direction: CarDirection;
+};
+
+/** Complete train with multiple carriages */
+export type Train = {
+  id: number;
+  type: TrainType;
+  carriages: TrainCarriage[];
+  // Lead locomotive position
+  tileX: number;
+  tileY: number;
+  direction: CarDirection;
+  progress: number;
+  speed: number;
+  // Path for the train
+  path: { x: number; y: number }[];
+  pathIndex: number;
+  // Lifecycle
+  age: number;
+  maxAge: number;
+  // Visual
+  color: string;
+  // Station stops
+  atStation: boolean;
+  stationWaitTimer: number;
+};

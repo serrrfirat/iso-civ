@@ -62,14 +62,14 @@ export function SettingsPanel() {
   }, [getSavedCityInfo]);
   
   // Initialize showSpriteTest from query parameter
-  const spriteTestFromUrl = searchParams.get('spriteTest') === 'true';
+  const spriteTestFromUrl = searchParams?.get('spriteTest') === 'true';
   const [showSpriteTest, setShowSpriteTest] = useState(spriteTestFromUrl);
   const lastUrlValueRef = useRef(spriteTestFromUrl);
   const isUpdatingFromStateRef = useRef(false);
   
   // Sync state with query parameter when URL changes externally
   useEffect(() => {
-    const spriteTestParam = searchParams.get('spriteTest') === 'true';
+    const spriteTestParam = searchParams?.get('spriteTest') === 'true';
     // Only update if URL value actually changed and we're not updating from state
     if (spriteTestParam !== lastUrlValueRef.current && !isUpdatingFromStateRef.current) {
       lastUrlValueRef.current = spriteTestParam;
@@ -79,13 +79,13 @@ export function SettingsPanel() {
   
   // Sync query parameter when showSpriteTest changes (but avoid loops)
   useEffect(() => {
-    const currentParam = searchParams.get('spriteTest') === 'true';
+    const currentParam = searchParams?.get('spriteTest') === 'true';
     if (currentParam === showSpriteTest) return; // Already in sync
     
     isUpdatingFromStateRef.current = true;
     lastUrlValueRef.current = showSpriteTest;
     
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams?.toString() || '');
     if (showSpriteTest) {
       params.set('spriteTest', 'true');
     } else {
