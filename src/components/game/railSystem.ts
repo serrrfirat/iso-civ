@@ -408,23 +408,35 @@ function drawBallast(
       drawDoubleCurvedBallast(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 });
       break;
     case 'junction_t_n':
+      // Horizontal tracks (east-west)
       drawDoubleStraightBallast(eastEdge, westEdge, ISO_NS);
-      drawDoubleStraightBallast(center, southEdge, ISO_EW);
+      // Curved connections from south to east and west (no straight branch - curves provide the connection)
+      drawDoubleCurvedBallast(southEdge, eastEdge, center, ISO_EW, NEG_ISO_NS, { x: -1, y: 0 });
+      drawDoubleCurvedBallast(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 });
       drawCenterBallast();
       break;
     case 'junction_t_e':
+      // Vertical tracks (north-south)
       drawDoubleStraightBallast(northEdge, southEdge, ISO_EW);
-      drawDoubleStraightBallast(center, westEdge, ISO_NS);
+      // Curved connections from west to north and south (no straight branch - curves provide the connection)
+      drawDoubleCurvedBallast(westEdge, northEdge, center, NEG_ISO_NS, ISO_EW, { x: 0, y: 1 });
+      drawDoubleCurvedBallast(westEdge, southEdge, center, NEG_ISO_NS, NEG_ISO_EW, { x: 0, y: -1 });
       drawCenterBallast();
       break;
     case 'junction_t_s':
+      // Horizontal tracks (east-west)
       drawDoubleStraightBallast(eastEdge, westEdge, ISO_NS);
-      drawDoubleStraightBallast(center, northEdge, ISO_EW);
+      // Curved connections from north to east and west (no straight branch - curves provide the connection)
+      drawDoubleCurvedBallast(northEdge, eastEdge, center, ISO_EW, ISO_NS, { x: 0, y: 1 });
+      drawDoubleCurvedBallast(northEdge, westEdge, center, NEG_ISO_EW, ISO_NS, { x: 1, y: 0 });
       drawCenterBallast();
       break;
     case 'junction_t_w':
+      // Vertical tracks (north-south)
       drawDoubleStraightBallast(northEdge, southEdge, ISO_EW);
-      drawDoubleStraightBallast(center, eastEdge, ISO_NS);
+      // Curved connections from east to north and south (no straight branch - curves provide the connection)
+      drawDoubleCurvedBallast(eastEdge, northEdge, center, ISO_NS, ISO_EW, { x: 0, y: 1 });
+      drawDoubleCurvedBallast(eastEdge, southEdge, center, ISO_NS, NEG_ISO_EW, { x: 0, y: -1 });
       drawCenterBallast();
       break;
     case 'junction_cross':
@@ -616,20 +628,32 @@ function drawTies(
       drawDoubleCurveTies(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 }, TIES_PER_TILE);
       break;
     case 'junction_t_n':
+      // Horizontal tracks (east-west)
       drawDoubleTies(eastEdge, westEdge, ISO_NS, ISO_NS, TIES_PER_TILE);
-      drawDoubleTies(center, southEdge, ISO_EW, ISO_EW, tiesHalf);
+      // Curved connections from south to east and west (no straight branch - curves provide the connection)
+      drawDoubleCurveTies(southEdge, eastEdge, center, ISO_EW, NEG_ISO_NS, ISO_EW, NEG_ISO_NS, { x: -1, y: 0 }, TIES_PER_TILE);
+      drawDoubleCurveTies(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 }, TIES_PER_TILE);
       break;
     case 'junction_t_e':
+      // Vertical tracks (north-south)
       drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_EW, TIES_PER_TILE);
-      drawDoubleTies(center, westEdge, ISO_NS, ISO_NS, tiesHalf);
+      // Curved connections from west to north and south (no straight branch - curves provide the connection)
+      drawDoubleCurveTies(westEdge, northEdge, center, NEG_ISO_NS, ISO_EW, NEG_ISO_NS, ISO_EW, { x: 0, y: 1 }, TIES_PER_TILE);
+      drawDoubleCurveTies(westEdge, southEdge, center, NEG_ISO_NS, NEG_ISO_EW, NEG_ISO_NS, NEG_ISO_EW, { x: 0, y: -1 }, TIES_PER_TILE);
       break;
     case 'junction_t_s':
+      // Horizontal tracks (east-west)
       drawDoubleTies(eastEdge, westEdge, ISO_NS, ISO_NS, TIES_PER_TILE);
-      drawDoubleTies(center, northEdge, ISO_EW, ISO_EW, tiesHalf);
+      // Curved connections from north to east and west (no straight branch - curves provide the connection)
+      drawDoubleCurveTies(northEdge, eastEdge, center, ISO_EW, ISO_NS, ISO_EW, ISO_NS, { x: 0, y: 1 }, TIES_PER_TILE);
+      drawDoubleCurveTies(northEdge, westEdge, center, NEG_ISO_EW, ISO_NS, NEG_ISO_EW, ISO_NS, { x: 1, y: 0 }, TIES_PER_TILE);
       break;
     case 'junction_t_w':
+      // Vertical tracks (north-south)
       drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_EW, TIES_PER_TILE);
-      drawDoubleTies(center, eastEdge, ISO_NS, ISO_NS, tiesHalf);
+      // Curved connections from east to north and south (no straight branch - curves provide the connection)
+      drawDoubleCurveTies(eastEdge, northEdge, center, ISO_NS, ISO_EW, ISO_NS, ISO_EW, { x: 0, y: 1 }, TIES_PER_TILE);
+      drawDoubleCurveTies(eastEdge, southEdge, center, ISO_NS, NEG_ISO_EW, ISO_NS, NEG_ISO_EW, { x: 0, y: -1 }, TIES_PER_TILE);
       break;
     case 'junction_cross':
       drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_EW, TIES_PER_TILE);
@@ -837,20 +861,32 @@ function drawRails(
       drawDoubleCurvedRails(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 });
       break;
     case 'junction_t_n':
+      // Horizontal tracks (east-west)
       drawDoubleStraightRails(eastEdge, westEdge, ISO_NS);
-      drawDoubleStraightRails(center, southEdge, ISO_EW);
+      // Curved connections from south to east and west (no straight branch - curves provide the connection)
+      drawDoubleCurvedRails(southEdge, eastEdge, center, ISO_EW, NEG_ISO_NS, { x: -1, y: 0 });
+      drawDoubleCurvedRails(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 });
       break;
     case 'junction_t_e':
+      // Vertical tracks (north-south)
       drawDoubleStraightRails(northEdge, southEdge, ISO_EW);
-      drawDoubleStraightRails(center, westEdge, ISO_NS);
+      // Curved connections from west to north and south (no straight branch - curves provide the connection)
+      drawDoubleCurvedRails(westEdge, northEdge, center, NEG_ISO_NS, ISO_EW, { x: 0, y: 1 });
+      drawDoubleCurvedRails(westEdge, southEdge, center, NEG_ISO_NS, NEG_ISO_EW, { x: 0, y: -1 });
       break;
     case 'junction_t_s':
+      // Horizontal tracks (east-west)
       drawDoubleStraightRails(eastEdge, westEdge, ISO_NS);
-      drawDoubleStraightRails(center, northEdge, ISO_EW);
+      // Curved connections from north to east and west (no straight branch - curves provide the connection)
+      drawDoubleCurvedRails(northEdge, eastEdge, center, ISO_EW, ISO_NS, { x: 0, y: 1 });
+      drawDoubleCurvedRails(northEdge, westEdge, center, NEG_ISO_EW, ISO_NS, { x: 1, y: 0 });
       break;
     case 'junction_t_w':
+      // Vertical tracks (north-south)
       drawDoubleStraightRails(northEdge, southEdge, ISO_EW);
-      drawDoubleStraightRails(center, eastEdge, ISO_NS);
+      // Curved connections from east to north and south (no straight branch - curves provide the connection)
+      drawDoubleCurvedRails(eastEdge, northEdge, center, ISO_NS, ISO_EW, { x: 0, y: 1 });
+      drawDoubleCurvedRails(eastEdge, southEdge, center, ISO_NS, NEG_ISO_EW, { x: 0, y: -1 });
       break;
     case 'junction_cross':
       drawDoubleStraightRails(northEdge, southEdge, ISO_EW);
