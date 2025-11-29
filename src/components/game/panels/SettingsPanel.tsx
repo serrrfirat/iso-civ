@@ -542,7 +542,9 @@ export function SettingsPanel() {
                 loadState(JSON.stringify(exampleState7));
                 setActivePanel('none');
               }}
-            ></Button>
+            >
+              Load Example State 7
+            </Button>
             <Button
               variant="default"
               className="w-full mt-4"
