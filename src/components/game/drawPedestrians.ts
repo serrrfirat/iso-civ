@@ -94,10 +94,6 @@ export function drawPedestrians(
       continue;
     }
 
-    // Check if behind building (for walking pedestrians only, skip for performance at low zoom)
-    if (!useSimpleLOD && ped.state === 'walking' && isEntityBehindBuilding(grid, gridSize, ped.tileX, ped.tileY)) {
-      continue;
-    }
 
     // Get opacity for enter/exit animations
     const opacity = getPedestrianOpacity(ped);

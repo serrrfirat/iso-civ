@@ -118,22 +118,6 @@ function getCurveTraversalDirection(
   return null;
 }
 
-/** 
- * Get a consistent track side for curves based on the entry direction.
- * This ensures trains stay on the same physical track throughout the curve.
- * 
- * The entry direction determines which track the train was on BEFORE entering the curve,
- * and it should stay on that same track through and after the curve.
- */
-function getCurveTrackSide(
-  entryDirection: CarDirection
-): 0 | 1 {
-  // Use the same logic as straight tracks: the track side is determined by which
-  // direction the train was traveling BEFORE it entered the curve.
-  // This way, the train stays on the same physical track throughout.
-  return (entryDirection === 'north' || entryDirection === 'east') ? 0 : 1;
-}
-
 /** Calculate position and angle on a quadratic bezier curve */
 function bezierPositionAndAngle(
   from: { x: number; y: number },
@@ -790,8 +774,13 @@ function drawCarriage(
     const { from, to, control, fromPerp, toPerp } = curveGeometry;
     const { entryT, exitT, entryDirection } = curveTraversal;
     
-    // Use consistent track side based on entry direction for the entire curve
-    const curveTrackSide = getCurveTrackSide(entryDirection);
+    // Calculate track sides at entry and exit to ensure smooth transition
+    // The train enters on entryDirection's track side and exits on exitDirection's track side
+    const exitDirection = carriage.direction;
+    const entryTrackSide = getTrackSide(entryDirection);
+    const exitTrackSide = getTrackSide(exitDirection);
+    const entryMultiplier = entryTrackSide === 0 ? 1 : -1;
+    const exitMultiplier = exitTrackSide === 0 ? 1 : -1;
     
     // Map progress (0-1) to curve parameter t
     const t = entryT + (exitT - entryT) * carriage.progress;
@@ -822,8 +811,10 @@ function drawCarriage(
     const perpX = perpLen > 0 ? interpPerpX / perpLen : 0;
     const perpY = perpLen > 0 ? interpPerpY / perpLen : 0;
     
-    // Offset multiplier based on track side (consistent with straight tracks)
-    const curveOffsetMultiplier = curveTrackSide === 0 ? 1 : -1;
+    // Interpolate offset multiplier from entry to exit track side
+    // This ensures smooth transition: at progress=0 we match the incoming straight track,
+    // at progress=1 we match the outgoing straight track
+    const curveOffsetMultiplier = entryMultiplier + (exitMultiplier - entryMultiplier) * carriage.progress;
     
     // Apply track offset
     carX = bezierResult.x + perpX * trackOffset * curveOffsetMultiplier;
