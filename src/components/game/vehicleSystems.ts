@@ -906,8 +906,8 @@ export function useVehicleSystems(
       
       if (alive) {
         // OPTIMIZED: Only check traffic lights for walking pedestrians approaching intersections
-        // Check less frequently - only when close to tile boundary
-        if (ped.state === 'walking' && ped.progress > 0.7 && ped.pathIndex + 1 < ped.path.length) {
+        // Check when approaching the end of the current tile (before entering intersection)
+        if (ped.state === 'walking' && ped.progress > 0.4 && ped.pathIndex + 1 < ped.path.length) {
           // Only 80% respect lights (skip check for some pedestrians)
           if ((ped.id % 5) !== 0) {
             const nextTile = ped.path[ped.pathIndex + 1];
@@ -919,7 +919,8 @@ export function useVehicleSystems(
             if (roadCount < 3 && isRoadTile(currentGrid, currentGridSize, nextTile.x, nextTile.y + 1)) roadCount++;
             
             if (roadCount >= 3 && !canProceedThroughIntersection(ped.direction, lightState)) {
-              ped.progress = Math.min(ped.progress, 0.85);
+              // Stop at edge of sidewalk (0.5 = middle of tile, near sidewalk edge)
+              ped.progress = Math.min(ped.progress, 0.5);
             }
           }
         }
