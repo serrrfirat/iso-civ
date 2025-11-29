@@ -87,9 +87,9 @@ export const RAIL_COLORS = {
   BALLAST_DARK: '#7B6354',      // Darker ballast edges
   TIE: '#3a2718',               // Wooden rail ties (sleepers) - darker for contrast
   TIE_HIGHLIGHT: '#5d4a3a',     // Lighter tie surface
-  RAIL: '#303030',              // Steel rail - darker for visibility
-  RAIL_HIGHLIGHT: '#505050',    // Rail highlight
-  RAIL_SHADOW: '#1a1a1a',       // Rail shadow
+  RAIL: '#6a6a6a',              // Steel rail - silvery
+  RAIL_HIGHLIGHT: '#8a8a8a',    // Rail highlight
+  RAIL_SHADOW: '#404040',       // Rail shadow
 };
 
 /** Locomotive colors (various liveries) */
@@ -127,7 +127,7 @@ export const TRACK_GAUGE_RATIO = 0.06;
 export const BALLAST_WIDTH_RATIO = 0.18;
 
 /** Number of ties per tile */
-export const TIES_PER_TILE = 5;
+export const TIES_PER_TILE = 7;
 
 /** Separation between the two parallel tracks as ratio of tile width */
 export const TRACK_SEPARATION_RATIO = 0.22;
@@ -503,9 +503,6 @@ function drawBallast(
   }
 }
 
-/** Screen-space perpendicular (90° clockwise rotation) */
-const getScreenPerp = (dx: number, dy: number) => ({ x: dy, y: -dx });
-
 /**
  * Draw rail ties (sleepers) for DOUBLE tracks
  */
@@ -522,8 +519,8 @@ function drawTies(
   const h = TILE_HEIGHT;
   const cx = x + w / 2;
   const cy = y + h / 2;
-  const tieWidth = w * 0.025;
-  const tieLength = w * BALLAST_WIDTH_RATIO * 0.85;
+  const tieWidth = w * 0.018;
+  const tieLength = w * BALLAST_WIDTH_RATIO * 0.765;
   const trackSep = w * TRACK_SEPARATION_RATIO;
   const halfSep = trackSep / 2;
 
@@ -535,51 +532,65 @@ function drawTies(
 
   ctx.fillStyle = RAIL_COLORS.TIE;
 
-  const drawTie = (tieX: number, tieY: number, tieDir: { x: number; y: number }) => {
+  // Draw a single tie using isometric-aligned directions
+  // tieDir: direction the tie extends (across the track)
+  // tiePerpDir: direction along the track (for tie thickness)
+  const drawTie = (
+    tieX: number,
+    tieY: number,
+    tieDir: { x: number; y: number },
+    tiePerpDir: { x: number; y: number }
+  ) => {
     const halfLen = tieLength / 2;
     const halfWidth = tieWidth / 2;
-    const perpDir = getScreenPerp(tieDir.x, tieDir.y);
     
     ctx.beginPath();
-    ctx.moveTo(tieX + tieDir.x * halfLen + perpDir.x * halfWidth, tieY + tieDir.y * halfLen + perpDir.y * halfWidth);
-    ctx.lineTo(tieX + tieDir.x * halfLen - perpDir.x * halfWidth, tieY + tieDir.y * halfLen - perpDir.y * halfWidth);
-    ctx.lineTo(tieX - tieDir.x * halfLen - perpDir.x * halfWidth, tieY - tieDir.y * halfLen - perpDir.y * halfWidth);
-    ctx.lineTo(tieX - tieDir.x * halfLen + perpDir.x * halfWidth, tieY - tieDir.y * halfLen + perpDir.y * halfWidth);
+    ctx.moveTo(tieX + tieDir.x * halfLen + tiePerpDir.x * halfWidth, tieY + tieDir.y * halfLen + tiePerpDir.y * halfWidth);
+    ctx.lineTo(tieX + tieDir.x * halfLen - tiePerpDir.x * halfWidth, tieY + tieDir.y * halfLen - tiePerpDir.y * halfWidth);
+    ctx.lineTo(tieX - tieDir.x * halfLen - tiePerpDir.x * halfWidth, tieY - tieDir.y * halfLen - tiePerpDir.y * halfWidth);
+    ctx.lineTo(tieX - tieDir.x * halfLen + tiePerpDir.x * halfWidth, tieY - tieDir.y * halfLen + tiePerpDir.y * halfWidth);
     ctx.closePath();
     ctx.fill();
   };
 
   // Draw ties for a single track along a straight segment
+  // tieDir: direction ties extend (perpendicular to track in isometric space)
+  // tiePerpDir: direction along the track (for tie thickness)
   const drawSingleTrackTies = (
     from: { x: number; y: number },
     to: { x: number; y: number },
     tieDir: { x: number; y: number },
+    tiePerpDir: { x: number; y: number },
     numTies: number
   ) => {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     for (let i = 0; i < numTies; i++) {
       const t = (i + 0.5) / numTies;
-      drawTie(from.x + dx * t, from.y + dy * t, tieDir);
+      drawTie(from.x + dx * t, from.y + dy * t, tieDir, tiePerpDir);
     }
   };
 
   // Draw ties for double track along a straight segment
+  // tieDir: direction ties extend (perpendicular to track)
+  // tiePerpDir: direction along the track (for tie thickness)
+  // perp: direction to offset the two tracks
   const drawDoubleTies = (
     from: { x: number; y: number },
     to: { x: number; y: number },
     tieDir: { x: number; y: number },
+    tiePerpDir: { x: number; y: number },
     perp: { x: number; y: number },
     numTies: number
   ) => {
     // Track 0
     const from0 = offsetPoint(from, perp, halfSep);
     const to0 = offsetPoint(to, perp, halfSep);
-    drawSingleTrackTies(from0, to0, tieDir, numTies);
+    drawSingleTrackTies(from0, to0, tieDir, tiePerpDir, numTies);
     // Track 1
     const from1 = offsetPoint(from, perp, -halfSep);
     const to1 = offsetPoint(to, perp, -halfSep);
-    drawSingleTrackTies(from1, to1, tieDir, numTies);
+    drawSingleTrackTies(from1, to1, tieDir, tiePerpDir, numTies);
   };
 
   // Draw ties for a single track along a curve
@@ -589,6 +600,8 @@ function drawTies(
     control: { x: number; y: number },
     fromTieDir: { x: number; y: number },
     toTieDir: { x: number; y: number },
+    fromTiePerpDir: { x: number; y: number },
+    toTiePerpDir: { x: number; y: number },
     numTies: number
   ) => {
     for (let i = 0; i < numTies; i++) {
@@ -596,9 +609,15 @@ function drawTies(
       const u = 1 - t;
       const tieX = u * u * from.x + 2 * u * t * control.x + t * t * to.x;
       const tieY = u * u * from.y + 2 * u * t * control.y + t * t * to.y;
+      // Interpolate tie direction
       const interpDir = { x: fromTieDir.x * u + toTieDir.x * t, y: fromTieDir.y * u + toTieDir.y * t };
       const interpLen = Math.hypot(interpDir.x, interpDir.y);
-      drawTie(tieX, tieY, { x: interpDir.x / interpLen, y: interpDir.y / interpLen });
+      const normTieDir = { x: interpDir.x / interpLen, y: interpDir.y / interpLen };
+      // Interpolate perpendicular direction for tie thickness
+      const interpPerpDir = { x: fromTiePerpDir.x * u + toTiePerpDir.x * t, y: fromTiePerpDir.y * u + toTiePerpDir.y * t };
+      const interpPerpLen = Math.hypot(interpPerpDir.x, interpPerpDir.y);
+      const normTiePerpDir = { x: interpPerpDir.x / interpPerpLen, y: interpPerpDir.y / interpPerpLen };
+      drawTie(tieX, tieY, normTieDir, normTiePerpDir);
     }
   };
 
@@ -609,6 +628,8 @@ function drawTies(
     control: { x: number; y: number },
     fromTieDir: { x: number; y: number },
     toTieDir: { x: number; y: number },
+    fromTiePerpDir: { x: number; y: number },
+    toTiePerpDir: { x: number; y: number },
     fromPerp: { x: number; y: number },
     toPerp: { x: number; y: number },
     curvePerp: { x: number; y: number },
@@ -618,79 +639,88 @@ function drawTies(
     const from0 = offsetPoint(from, fromPerp, halfSep);
     const to0 = offsetPoint(to, toPerp, halfSep);
     const ctrl0 = offsetPoint(control, curvePerp, halfSep);
-    drawSingleCurveTies(from0, to0, ctrl0, fromTieDir, toTieDir, numTies);
+    drawSingleCurveTies(from0, to0, ctrl0, fromTieDir, toTieDir, fromTiePerpDir, toTiePerpDir, numTies);
     // Track 1
     const from1 = offsetPoint(from, fromPerp, -halfSep);
     const to1 = offsetPoint(to, toPerp, -halfSep);
     const ctrl1 = offsetPoint(control, curvePerp, -halfSep);
-    drawSingleCurveTies(from1, to1, ctrl1, fromTieDir, toTieDir, numTies);
+    drawSingleCurveTies(from1, to1, ctrl1, fromTieDir, toTieDir, fromTiePerpDir, toTiePerpDir, numTies);
   };
 
   const tiesHalf = Math.ceil(TIES_PER_TILE / 2);
 
+  // For ties perpendicular to tracks:
+  // N-S track: ties extend E-W (tieDir = ISO_EW), tie thickness along N-S (tiePerpDir = ISO_NS)
+  // E-W track: ties extend N-S (tieDir = ISO_NS), tie thickness along E-W (tiePerpDir = ISO_EW)
+
   switch (trackType) {
     case 'straight_ns':
-      drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_EW, TIES_PER_TILE);
+      // Track runs N-S, ties extend E-W, tie thickness along N-S
+      drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_NS, ISO_EW, TIES_PER_TILE);
       break;
     case 'straight_ew':
-      drawDoubleTies(eastEdge, westEdge, ISO_NS, ISO_NS, TIES_PER_TILE);
+      // Track runs E-W, ties extend N-S, tie thickness along E-W
+      drawDoubleTies(eastEdge, westEdge, ISO_NS, ISO_EW, ISO_NS, TIES_PER_TILE);
       break;
     case 'curve_ne':
-      drawDoubleCurveTies(northEdge, eastEdge, center, ISO_EW, ISO_NS, ISO_EW, ISO_NS, { x: 0, y: 1 }, TIES_PER_TILE);
+      // At north: track is N-S, ties E-W; At east: track is E-W, ties N-S
+      drawDoubleCurveTies(northEdge, eastEdge, center, ISO_EW, ISO_NS, ISO_NS, ISO_EW, ISO_EW, ISO_NS, { x: 0, y: 1 }, TIES_PER_TILE);
       break;
     case 'curve_nw':
-      drawDoubleCurveTies(northEdge, westEdge, center, NEG_ISO_EW, ISO_NS, NEG_ISO_EW, ISO_NS, { x: 1, y: 0 }, TIES_PER_TILE);
+      // At north: track is N-S, ties E-W; At west: track is E-W, ties N-S
+      drawDoubleCurveTies(northEdge, westEdge, center, NEG_ISO_EW, ISO_NS, ISO_NS, ISO_EW, NEG_ISO_EW, ISO_NS, { x: 1, y: 0 }, TIES_PER_TILE);
       break;
     case 'curve_se':
-      drawDoubleCurveTies(southEdge, eastEdge, center, ISO_EW, NEG_ISO_NS, ISO_EW, NEG_ISO_NS, { x: -1, y: 0 }, TIES_PER_TILE);
+      // At south: track is N-S, ties E-W; At east: track is E-W, ties N-S
+      drawDoubleCurveTies(southEdge, eastEdge, center, ISO_EW, NEG_ISO_NS, NEG_ISO_NS, NEG_ISO_EW, ISO_EW, NEG_ISO_NS, { x: -1, y: 0 }, TIES_PER_TILE);
       break;
     case 'curve_sw':
-      drawDoubleCurveTies(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 }, TIES_PER_TILE);
+      // At south: track is N-S, ties E-W; At west: track is E-W, ties N-S
+      drawDoubleCurveTies(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, NEG_ISO_NS, NEG_ISO_EW, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 }, TIES_PER_TILE);
       break;
     case 'junction_t_n':
-      // Horizontal tracks (east-west)
-      drawDoubleTies(eastEdge, westEdge, ISO_NS, ISO_NS, TIES_PER_TILE);
-      // Curved connections from south to east and west (no straight branch - curves provide the connection)
-      drawDoubleCurveTies(southEdge, eastEdge, center, ISO_EW, NEG_ISO_NS, ISO_EW, NEG_ISO_NS, { x: -1, y: 0 }, TIES_PER_TILE);
-      drawDoubleCurveTies(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 }, TIES_PER_TILE);
+      // Horizontal tracks (east-west): ties extend N-S
+      drawDoubleTies(eastEdge, westEdge, ISO_NS, ISO_EW, ISO_NS, TIES_PER_TILE);
+      // Curved connections from south to east and west
+      drawDoubleCurveTies(southEdge, eastEdge, center, ISO_EW, NEG_ISO_NS, NEG_ISO_NS, NEG_ISO_EW, ISO_EW, NEG_ISO_NS, { x: -1, y: 0 }, TIES_PER_TILE);
+      drawDoubleCurveTies(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, NEG_ISO_NS, NEG_ISO_EW, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 }, TIES_PER_TILE);
       break;
     case 'junction_t_e':
-      // Vertical tracks (north-south)
-      drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_EW, TIES_PER_TILE);
-      // Curved connections from west to north and south (no straight branch - curves provide the connection)
-      // west-to-north is reversed curve_nw: use ISO_NS, NEG_ISO_EW, { x: 1, y: 0 }
-      drawDoubleCurveTies(westEdge, northEdge, center, ISO_NS, NEG_ISO_EW, ISO_NS, NEG_ISO_EW, { x: 1, y: 0 }, TIES_PER_TILE);
-      drawDoubleCurveTies(westEdge, southEdge, center, NEG_ISO_NS, NEG_ISO_EW, NEG_ISO_NS, NEG_ISO_EW, { x: 0, y: -1 }, TIES_PER_TILE);
+      // Vertical tracks (north-south): ties extend E-W
+      drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_NS, ISO_EW, TIES_PER_TILE);
+      // Curved connections from west to north and south
+      drawDoubleCurveTies(westEdge, northEdge, center, ISO_NS, NEG_ISO_EW, ISO_EW, ISO_NS, ISO_NS, NEG_ISO_EW, { x: 1, y: 0 }, TIES_PER_TILE);
+      drawDoubleCurveTies(westEdge, southEdge, center, NEG_ISO_NS, NEG_ISO_EW, NEG_ISO_EW, NEG_ISO_NS, NEG_ISO_NS, NEG_ISO_EW, { x: 0, y: -1 }, TIES_PER_TILE);
       break;
     case 'junction_t_s':
-      // Horizontal tracks (east-west)
-      drawDoubleTies(eastEdge, westEdge, ISO_NS, ISO_NS, TIES_PER_TILE);
-      // Curved connections from north to east and west (no straight branch - curves provide the connection)
-      drawDoubleCurveTies(northEdge, eastEdge, center, ISO_EW, ISO_NS, ISO_EW, ISO_NS, { x: 0, y: 1 }, TIES_PER_TILE);
-      drawDoubleCurveTies(northEdge, westEdge, center, NEG_ISO_EW, ISO_NS, NEG_ISO_EW, ISO_NS, { x: 1, y: 0 }, TIES_PER_TILE);
+      // Horizontal tracks (east-west): ties extend N-S
+      drawDoubleTies(eastEdge, westEdge, ISO_NS, ISO_EW, ISO_NS, TIES_PER_TILE);
+      // Curved connections from north to east and west
+      drawDoubleCurveTies(northEdge, eastEdge, center, ISO_EW, ISO_NS, ISO_NS, ISO_EW, ISO_EW, ISO_NS, { x: 0, y: 1 }, TIES_PER_TILE);
+      drawDoubleCurveTies(northEdge, westEdge, center, NEG_ISO_EW, ISO_NS, ISO_NS, ISO_EW, NEG_ISO_EW, ISO_NS, { x: 1, y: 0 }, TIES_PER_TILE);
       break;
     case 'junction_t_w':
-      // Vertical tracks (north-south)
-      drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_EW, TIES_PER_TILE);
-      // Curved connections from east to north and south (no straight branch - curves provide the connection)
-      drawDoubleCurveTies(eastEdge, northEdge, center, ISO_NS, ISO_EW, ISO_NS, ISO_EW, { x: 0, y: 1 }, TIES_PER_TILE);
-      drawDoubleCurveTies(eastEdge, southEdge, center, ISO_NS, NEG_ISO_EW, ISO_NS, NEG_ISO_EW, { x: 0, y: -1 }, TIES_PER_TILE);
+      // Vertical tracks (north-south): ties extend E-W
+      drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_NS, ISO_EW, TIES_PER_TILE);
+      // Curved connections from east to north and south
+      drawDoubleCurveTies(eastEdge, northEdge, center, ISO_NS, ISO_EW, ISO_EW, ISO_NS, ISO_NS, ISO_EW, { x: 0, y: 1 }, TIES_PER_TILE);
+      drawDoubleCurveTies(eastEdge, southEdge, center, ISO_NS, NEG_ISO_EW, NEG_ISO_EW, NEG_ISO_NS, ISO_NS, NEG_ISO_EW, { x: 0, y: -1 }, TIES_PER_TILE);
       break;
     case 'junction_cross':
-      drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_EW, TIES_PER_TILE);
-      drawDoubleTies(eastEdge, westEdge, ISO_NS, ISO_NS, TIES_PER_TILE);
+      drawDoubleTies(northEdge, southEdge, ISO_EW, ISO_NS, ISO_EW, TIES_PER_TILE);
+      drawDoubleTies(eastEdge, westEdge, ISO_NS, ISO_EW, ISO_NS, TIES_PER_TILE);
       break;
     case 'terminus_n':
-      drawDoubleTies(center, southEdge, ISO_EW, ISO_EW, tiesHalf);
+      drawDoubleTies(center, southEdge, ISO_EW, ISO_NS, ISO_EW, tiesHalf);
       break;
     case 'terminus_e':
-      drawDoubleTies(center, westEdge, ISO_NS, ISO_NS, tiesHalf);
+      drawDoubleTies(center, westEdge, ISO_NS, ISO_EW, ISO_NS, tiesHalf);
       break;
     case 'terminus_s':
-      drawDoubleTies(center, northEdge, ISO_EW, ISO_EW, tiesHalf);
+      drawDoubleTies(center, northEdge, ISO_EW, ISO_NS, ISO_EW, tiesHalf);
       break;
     case 'terminus_w':
-      drawDoubleTies(center, eastEdge, ISO_NS, ISO_NS, tiesHalf);
+      drawDoubleTies(center, eastEdge, ISO_NS, ISO_EW, ISO_NS, tiesHalf);
       break;
     case 'single': {
       // Draw ties for a short segment aligned with actual N-S tile axis
@@ -708,7 +738,8 @@ function drawTies(
       const singleStubLen = nsLen * 0.35;
       const singleFrom = { x: cx - nsDir.x * singleStubLen, y: cy - nsDir.y * singleStubLen };
       const singleTo = { x: cx + nsDir.x * singleStubLen, y: cy + nsDir.y * singleStubLen };
-      drawDoubleTies(singleFrom, singleTo, ewDir, ewDir, 3);
+      // Ties extend E-W, tie thickness along N-S
+      drawDoubleTies(singleFrom, singleTo, ewDir, nsDir, ewDir, 3);
       break;
     }
   }
@@ -729,7 +760,7 @@ function drawRails(
   const cx = x + w / 2;
   const cy = y + h / 2;
   const railGauge = w * TRACK_GAUGE_RATIO;
-  const railWidth = zoom >= 0.7 ? 1.5 : 1.2;
+  const railWidth = zoom >= 0.7 ? 0.85 : 0.7;
   const trackSep = w * TRACK_SEPARATION_RATIO;
   const halfSep = trackSep / 2;
 
