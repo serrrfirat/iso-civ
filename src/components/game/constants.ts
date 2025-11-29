@@ -63,6 +63,20 @@ export const MAX_BOATS = 12; // Maximum total boats in the city
 export const WAKE_MAX_AGE = 2.0; // seconds - how long wake particles last
 export const WAKE_SPAWN_INTERVAL = 0.03; // seconds between wake particles
 
+// Barge system constants (ocean cargo ships)
+export const BARGE_COLORS = ['#2c3e50', '#34495e', '#7f8c8d', '#c0392b', '#27ae60', '#2980b9']; // Industrial ship colors
+export const BARGE_MIN_ZOOM = 0.25; // Minimum zoom level to show barges (slightly lower than boats)
+export const BARGE_SPEED_MIN = 8; // Minimum speed (pixels/second) - slower than boats
+export const BARGE_SPEED_MAX = 12; // Maximum speed (pixels/second)
+export const MAX_BARGES = 4; // Maximum barges in the city at once
+export const BARGE_SPAWN_INTERVAL_MIN = 8; // Minimum seconds between barge spawns
+export const BARGE_SPAWN_INTERVAL_MAX = 20; // Maximum seconds between barge spawns
+export const BARGE_DOCK_TIME_MIN = 8; // Minimum seconds docked at marina
+export const BARGE_DOCK_TIME_MAX = 15; // Maximum seconds docked at marina
+export const BARGE_CARGO_VALUE_MIN = 50; // Minimum cargo value (adds to city income)
+export const BARGE_CARGO_VALUE_MAX = 200; // Maximum cargo value
+export const BARGE_WAKE_SPAWN_INTERVAL = 0.05; // Slower wake spawn than boats (larger vessel)
+
 // Factory smog system constants
 export const SMOG_BUILDINGS: BuildingType[] = ['factory_medium', 'factory_large'];
 export const SMOG_PARTICLE_MAX_AGE = 8.0; // seconds - how long smog particles last

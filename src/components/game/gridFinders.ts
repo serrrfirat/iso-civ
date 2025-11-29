@@ -337,6 +337,178 @@ export function findMarinasAndPiers(
 }
 
 /**
+ * Find marinas that are connected to ocean water (for barge docking)
+ * A marina is ocean-connected if it's adjacent to water that touches the map edge
+ * Note: Marina is a 2x2 building, so we check all tiles around the entire footprint
+ */
+export function findOceanConnectedMarinas(
+  grid: Tile[][],
+  gridSize: number
+): DockInfo[] {
+  if (!grid || gridSize <= 0) return [];
+
+  // First, find all water tiles that are connected to the edge (ocean water)
+  const oceanWaterTiles = new Set<string>();
+  const visited = new Set<string>();
+  const queue: { x: number; y: number }[] = [];
+
+  // Start BFS from all edge water tiles
+  for (let i = 0; i < gridSize; i++) {
+    // Check all four edges
+    const edgeTiles = [
+      { x: 0, y: i },           // West edge
+      { x: gridSize - 1, y: i }, // East edge
+      { x: i, y: 0 },           // North edge
+      { x: i, y: gridSize - 1 }, // South edge
+    ];
+    
+    for (const tile of edgeTiles) {
+      if (grid[tile.y][tile.x].building.type === 'water') {
+        const key = `${tile.x},${tile.y}`;
+        if (!visited.has(key)) {
+          queue.push(tile);
+          visited.add(key);
+        }
+      }
+    }
+  }
+
+  // BFS to find all water connected to edges
+  const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  while (queue.length > 0) {
+    const { x, y } = queue.shift()!;
+    oceanWaterTiles.add(`${x},${y}`);
+
+    for (const [dx, dy] of directions) {
+      const nx = x + dx;
+      const ny = y + dy;
+      const key = `${nx},${ny}`;
+      
+      if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize && !visited.has(key)) {
+        if (grid[ny][nx].building.type === 'water') {
+          visited.add(key);
+          queue.push({ x: nx, y: ny });
+        }
+      }
+    }
+  }
+
+  // Now find marinas adjacent to ocean water
+  // Marina is 2x2, so we need to check around the entire footprint
+  const oceanMarinas: DockInfo[] = [];
+
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const buildingType = grid[y][x].building.type;
+      if (buildingType === 'marina_docks_small') {
+        // Marina is 2x2, check all tiles around the entire 2x2 footprint
+        // The origin is at (x, y), so the building occupies (x, y), (x+1, y), (x, y+1), (x+1, y+1)
+        let foundOceanWater = false;
+        
+        // Check all positions around the 2x2 footprint
+        const perimeterPositions = [
+          // Top edge (above the 2x2)
+          { nx: x - 1, ny: y - 1 }, { nx: x, ny: y - 1 }, { nx: x + 1, ny: y - 1 }, { nx: x + 2, ny: y - 1 },
+          // Bottom edge (below the 2x2)
+          { nx: x - 1, ny: y + 2 }, { nx: x, ny: y + 2 }, { nx: x + 1, ny: y + 2 }, { nx: x + 2, ny: y + 2 },
+          // Left edge
+          { nx: x - 1, ny: y }, { nx: x - 1, ny: y + 1 },
+          // Right edge
+          { nx: x + 2, ny: y }, { nx: x + 2, ny: y + 1 },
+        ];
+        
+        for (const pos of perimeterPositions) {
+          if (oceanWaterTiles.has(`${pos.nx},${pos.ny}`)) {
+            foundOceanWater = true;
+            break;
+          }
+        }
+        
+        if (foundOceanWater) {
+          oceanMarinas.push({ x, y, type: 'marina' });
+        }
+      }
+    }
+  }
+
+  return oceanMarinas;
+}
+
+export interface OceanSpawnPoint {
+  x: number;
+  y: number;
+  screenX: number;
+  screenY: number;
+  edge: 'north' | 'south' | 'east' | 'west';
+}
+
+/**
+ * Find spawn points for barges along ocean edges
+ * Returns water tiles at map edges that are part of connected ocean bodies
+ */
+export function findOceanSpawnPoints(
+  grid: Tile[][],
+  gridSize: number
+): OceanSpawnPoint[] {
+  if (!grid || gridSize <= 0) return [];
+
+  const spawnPoints: OceanSpawnPoint[] = [];
+
+  // Check each edge for water tiles
+  for (let i = 0; i < gridSize; i++) {
+    // West edge (x=0)
+    if (grid[i][0].building.type === 'water') {
+      const { screenX, screenY } = gridToScreen(0, i, 0, 0);
+      spawnPoints.push({
+        x: 0,
+        y: i,
+        screenX: screenX + TILE_WIDTH / 2,
+        screenY: screenY + TILE_HEIGHT / 2,
+        edge: 'west'
+      });
+    }
+    
+    // East edge (x=gridSize-1)
+    if (grid[i][gridSize - 1].building.type === 'water') {
+      const { screenX, screenY } = gridToScreen(gridSize - 1, i, 0, 0);
+      spawnPoints.push({
+        x: gridSize - 1,
+        y: i,
+        screenX: screenX + TILE_WIDTH / 2,
+        screenY: screenY + TILE_HEIGHT / 2,
+        edge: 'east'
+      });
+    }
+    
+    // North edge (y=0)
+    if (grid[0][i].building.type === 'water') {
+      const { screenX, screenY } = gridToScreen(i, 0, 0, 0);
+      spawnPoints.push({
+        x: i,
+        y: 0,
+        screenX: screenX + TILE_WIDTH / 2,
+        screenY: screenY + TILE_HEIGHT / 2,
+        edge: 'north'
+      });
+    }
+    
+    // South edge (y=gridSize-1)
+    if (grid[gridSize - 1][i].building.type === 'water') {
+      const { screenX, screenY } = gridToScreen(i, gridSize - 1, 0, 0);
+      spawnPoints.push({
+        x: i,
+        y: gridSize - 1,
+        screenX: screenX + TILE_WIDTH / 2,
+        screenY: screenY + TILE_HEIGHT / 2,
+        edge: 'south'
+      });
+    }
+  }
+
+  return spawnPoints;
+}
+
+/**
  * Find water tile adjacent to a marina/pier for boat positioning
  */
 export function findAdjacentWaterTile(
@@ -358,6 +530,48 @@ export function findAdjacentWaterTile(
       }
     }
   }
+  return null;
+}
+
+/**
+ * Find water tile adjacent to a 2x2 marina for barge docking
+ * Checks all tiles around the 2x2 footprint, not just the origin
+ */
+export function findAdjacentWaterTileForMarina(
+  grid: Tile[][],
+  gridSize: number,
+  marinaX: number,
+  marinaY: number
+): { x: number; y: number } | null {
+  if (!grid || gridSize <= 0) return null;
+
+  // Marina is 2x2, check all tiles around the entire footprint
+  // Prioritize tiles directly adjacent to edges (not corners) for better docking visuals
+  const perimeterPositions = [
+    // Direct edges first (better for docking)
+    { nx: marinaX - 1, ny: marinaY },     // Left of top-left
+    { nx: marinaX - 1, ny: marinaY + 1 }, // Left of bottom-left
+    { nx: marinaX + 2, ny: marinaY },     // Right of top-right
+    { nx: marinaX + 2, ny: marinaY + 1 }, // Right of bottom-right
+    { nx: marinaX, ny: marinaY - 1 },     // Above top-left
+    { nx: marinaX + 1, ny: marinaY - 1 }, // Above top-right
+    { nx: marinaX, ny: marinaY + 2 },     // Below bottom-left
+    { nx: marinaX + 1, ny: marinaY + 2 }, // Below bottom-right
+    // Corners last
+    { nx: marinaX - 1, ny: marinaY - 1 }, // Top-left corner
+    { nx: marinaX + 2, ny: marinaY - 1 }, // Top-right corner
+    { nx: marinaX - 1, ny: marinaY + 2 }, // Bottom-left corner
+    { nx: marinaX + 2, ny: marinaY + 2 }, // Bottom-right corner
+  ];
+
+  for (const pos of perimeterPositions) {
+    if (pos.nx >= 0 && pos.nx < gridSize && pos.ny >= 0 && pos.ny < gridSize) {
+      if (grid[pos.ny][pos.nx].building.type === 'water') {
+        return { x: pos.nx, y: pos.ny };
+      }
+    }
+  }
+
   return null;
 }
 

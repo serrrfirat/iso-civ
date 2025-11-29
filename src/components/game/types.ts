@@ -275,6 +275,51 @@ export type Boat = {
   homeScreenY: number;
 };
 
+// Barge types for ocean cargo transport
+export type BargeState = 'approaching' | 'docking' | 'docked' | 'departing' | 'leaving';
+
+export type Barge = {
+  id: number;
+  // Screen position (isometric coordinates)
+  x: number;
+  y: number;
+  // Movement direction in radians
+  angle: number;
+  // Target angle for smooth turning
+  targetAngle: number;
+  // Current state
+  state: BargeState;
+  // Speed (pixels per second in screen space) - slower than boats
+  speed: number;
+  // Spawn edge of the map ('north' | 'south' | 'east' | 'west')
+  spawnEdge: 'north' | 'south' | 'east' | 'west';
+  // Spawn point (screen coordinates)
+  spawnScreenX: number;
+  spawnScreenY: number;
+  // Target marina tile coordinates
+  targetMarinaX: number;
+  targetMarinaY: number;
+  // Screen position of target marina
+  targetScreenX: number;
+  targetScreenY: number;
+  // Lifetime/age tracking
+  age: number;
+  // Barge color/style
+  color: string;
+  // Wake particles (larger than boats)
+  wake: WakeParticle[];
+  // Progress for wake spawning
+  wakeSpawnProgress: number;
+  // Cargo type for visual variety (0 = containers, 1 = bulk, 2 = tanker)
+  cargoType: number;
+  // Economic value delivered when docked
+  cargoValue: number;
+  // Time spent docked (for loading/unloading)
+  dockTime: number;
+  // Max dock time before departing
+  maxDockTime: number;
+};
+
 // Smog/smoke particle types for industrial factories
 export type SmogParticle = {
   x: number;
