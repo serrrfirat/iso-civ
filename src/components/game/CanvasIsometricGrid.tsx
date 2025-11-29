@@ -3149,6 +3149,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               if (buildingType === 'water_tower') {
                 scaleMultiplier *= 0.9; // Scale down by 10%
               }
+              // Special scale adjustment for subway_station (scaled down 30%)
+              if (buildingType === 'subway_station') {
+                scaleMultiplier *= 0.7; // Scale down by 30%
+              }
               // Special scale adjustment for house_small (scaled up 8%)
               if (buildingType === 'house_small') {
                 scaleMultiplier *= 1.08; // Scale up by 8%

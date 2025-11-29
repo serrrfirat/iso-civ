@@ -44,7 +44,7 @@ export function VinnieDialog({ open, onOpenChange }: VinnieDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-slate-900 border-slate-700 text-slate-100">
         <DialogHeader>
-          <DialogTitle className="text-yellow-400">A Shady Offer</DialogTitle>
+          <DialogTitle className="text-sky-400">A Shady Offer</DialogTitle>
           <DialogDescription asChild>
             <div className="text-slate-300 pt-2">
               <p className="mb-2">
@@ -69,7 +69,7 @@ export function VinnieDialog({ open, onOpenChange }: VinnieDialogProps) {
           </Button>
           <Button
             onClick={handleAccept}
-            className="bg-yellow-600 hover:bg-yellow-700 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             Accept Offer
           </Button>
