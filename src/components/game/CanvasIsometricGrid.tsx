@@ -36,6 +36,7 @@ import {
   LANE_MARKINGS_MIN_ZOOM,
   SIDEWALK_MIN_ZOOM,
   SIDEWALK_MIN_ZOOM_MOBILE,
+  SKIP_SMALL_ELEMENTS_ZOOM_THRESHOLD,
 } from '@/components/game/constants';
 import {
   gridToScreen,
@@ -121,6 +122,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const [isPanning, setIsPanning] = useState(false);
   const isPanningRef = useRef(false); // Ref for animation loop to check panning state
   const isPinchZoomingRef = useRef(false); // Ref for animation loop to check pinch zoom state
+  const zoomRef = useRef(isMobile ? 0.6 : 1); // Ref for animation loop to check zoom level
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredTile, setHoveredTile] = useState<{ x: number; y: number } | null>(null);
   const [hoveredIncident, setHoveredIncident] = useState<{
@@ -464,6 +466,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   useEffect(() => {
     isPanningRef.current = isPanning;
   }, [isPanning]);
+  
+  // Sync zoom state to ref for animation loop access
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
 
   // Notify parent of viewport changes for minimap
   useEffect(() => {
@@ -619,7 +626,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     };
     
     // Use extracted utility function for drawing
-    drawHelicoptersUtil(ctx, helicoptersRef.current, viewBounds, visualHour, navLightFlashTimerRef.current, isMobile);
+    drawHelicoptersUtil(ctx, helicoptersRef.current, viewBounds, visualHour, navLightFlashTimerRef.current, isMobile, currentZoom);
     
     ctx.restore();
   }, [visualHour, isMobile]);
@@ -2844,6 +2851,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       }
       // PERF: Skip drawing animated elements during mobile panning/zooming for better performance
       const skipAnimatedElements = isMobile && (isPanningRef.current || isPinchZoomingRef.current);
+      // PERF: Skip small elements (boats, helis, smog) on desktop when panning while very zoomed out
+      const skipSmallElements = !isMobile && isPanningRef.current && zoomRef.current < SKIP_SMALL_ELEMENTS_ZOOM_THRESHOLD;
+      
       if (skipAnimatedElements) {
         // Clear the canvases but don't draw anything - hides all animated elements while panning/zooming
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2851,10 +2861,14 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         clearAirCanvas();
       } else {
         drawCars(ctx);
-        drawBoats(ctx); // Draw boats on water
-        drawBarges(ctx); // Draw ocean barges
+        if (!skipSmallElements) {
+          drawBoats(ctx); // Draw boats on water (skip when panning zoomed out on desktop)
+        }
+        drawBarges(ctx); // Draw ocean barges (larger, keep visible)
         drawTrainsCallback(ctx); // Draw trains on rail network
-        drawSmog(ctx); // Draw factory smog (above ground, below aircraft)
+        if (!skipSmallElements) {
+          drawSmog(ctx); // Draw factory smog (skip when panning zoomed out on desktop)
+        }
         drawPedestrians(ctx); // Draw walking pedestrians (below buildings)
         drawEmergencyVehicles(ctx); // Draw emergency vehicles!
         clearAirCanvas();
@@ -2865,7 +2879,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // Draw recreation pedestrians on air canvas (above parks, not other buildings)
         drawRecreationPedestrians(airCtx); // Draw recreation pedestrians (at parks, benches, etc.)
         
-        drawHelicopters(airCtx); // Draw helicopters (below planes, above buildings)
+        if (!skipSmallElements) {
+          drawHelicopters(airCtx); // Draw helicopters (skip when panning zoomed out on desktop)
+        }
         drawAirplanes(airCtx); // Draw airplanes above everything
         drawFireworks(airCtx); // Draw fireworks above everything (nighttime only)
       }
@@ -3399,7 +3415,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     // Calculate new zoom
     const zoomDelta = e.deltaY > 0 ? -0.05 : 0.05;
-    const newZoom = Math.max(0.3, Math.min(7, zoom + zoomDelta));
+    const newZoom = Math.max(0.2, Math.min(7, zoom + zoomDelta));
     
     if (newZoom === zoom) return;
     
@@ -3468,7 +3484,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Pinch to zoom
       const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
       const scale = currentDistance / initialPinchDistanceRef.current;
-      const newZoom = Math.max(0.3, Math.min(7, initialZoomRef.current * scale));
+      const newZoom = Math.max(0.2, Math.min(7, initialZoomRef.current * scale));
 
       const currentCenter = getTouchCenter(e.touches[0], e.touches[1]);
       const rect = containerRef.current?.getBoundingClientRect();

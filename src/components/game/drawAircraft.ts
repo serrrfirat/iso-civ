@@ -432,15 +432,19 @@ export function drawHelicopters(
   viewBounds: { viewLeft: number; viewTop: number; viewRight: number; viewBottom: number },
   hour: number,
   navLightFlashTimer: number,
-  isMobile: boolean = false
+  isMobile: boolean = false,
+  zoom: number = 1
 ): void {
   if (helicopters.length === 0) return;
 
   const isNight = hour >= 20 || hour < 6;
+  
+  // PERF: Skip searchlights when very zoomed out (hard to see anyway)
+  const showSearchlights = zoom >= 0.5;
 
   // First pass: draw all searchlight ground spots (so they appear behind everything)
   // PERF: Skip searchlights on mobile - gradient creation is expensive
-  if (isNight && !isMobile) {
+  if (isNight && !isMobile && showSearchlights) {
     for (const heli of helicopters) {
       // Only draw searchlight when flying at sufficient altitude
       if (heli.altitude < 0.3 || heli.state === 'landing') continue;
@@ -702,8 +706,8 @@ export function drawHelicopters(
     ctx.restore();
 
     // Draw searchlight beam at night (when flying)
-    // PERF: Skip searchlight beam on mobile - gradients and shadowBlur are expensive
-    if (isNight && !isMobile && heli.altitude > 0.3 && heli.state !== 'landing') {
+    // PERF: Skip searchlight beam on mobile or when very zoomed out - gradients and shadowBlur are expensive
+    if (isNight && !isMobile && showSearchlights && heli.altitude > 0.3 && heli.state !== 'landing') {
       // Calculate the same spot position as in the first pass
       const sweepOffset = Math.sin(heli.searchlightAngle) * heli.searchlightSweepRange;
       const lightAngle = heli.searchlightBaseAngle + sweepOffset;
