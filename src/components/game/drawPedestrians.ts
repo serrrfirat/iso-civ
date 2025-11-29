@@ -761,14 +761,25 @@ function drawSittingPerson(ctx: CanvasRenderingContext2D, ped: Pedestrian): void
 /**
  * Draw someone having a picnic
  */
+// Muted pastel blanket colors
+const BLANKET_COLORS = [
+  { main: '#d4a5a5', accent: '#f5e6e6' },  // Dusty rose
+  { main: '#a5c4d4', accent: '#e6f0f5' },  // Soft blue
+  { main: '#b5d4a5', accent: '#e6f5e6' },  // Sage green
+  { main: '#d4cfa5', accent: '#f5f3e6' },  // Muted yellow
+  { main: '#c4a5d4', accent: '#f0e6f5' },  // Lavender
+  { main: '#d4b5a5', accent: '#f5ece6' },  // Warm beige
+];
+
 function drawPicnicker(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.34;
 
-  // Picnic blanket
-  ctx.fillStyle = '#dc2626';
+  // Picnic blanket - muted pastel colors based on pedestrian ID
+  const blanketColor = BLANKET_COLORS[ped.id % BLANKET_COLORS.length];
+  ctx.fillStyle = blanketColor.main;
   ctx.fillRect(-8 * scale, 0, 16 * scale, 8 * scale);
   // Blanket pattern
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = blanketColor.accent;
   ctx.fillRect(-6 * scale, 2 * scale, 4 * scale, 4 * scale);
   ctx.fillRect(2 * scale, 2 * scale, 4 * scale, 4 * scale);
 
