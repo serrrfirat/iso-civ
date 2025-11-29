@@ -49,7 +49,7 @@ function buildMenuItems(): MenuItem[] {
   const items: MenuItem[] = [];
 
   // Tools category
-  const toolsCategory: Tool[] = ['select', 'bulldoze', 'road', 'subway'];
+  const toolsCategory: Tool[] = ['select', 'bulldoze', 'road', 'rail', 'subway'];
   toolsCategory.forEach(tool => {
     const info = TOOL_INFO[tool];
     items.push({
@@ -60,7 +60,7 @@ function buildMenuItems(): MenuItem[] {
       description: info.description,
       cost: info.cost,
       category: 'tools',
-      keywords: [info.name.toLowerCase(), tool, 'tool'],
+      keywords: [info.name.toLowerCase(), tool, 'tool', 'infrastructure'],
     });
   });
 
@@ -177,7 +177,7 @@ function buildMenuItems(): MenuItem[] {
   });
 
   // Utilities
-  const utilitiesCategory: Tool[] = ['power_plant', 'water_tower', 'subway_station'];
+  const utilitiesCategory: Tool[] = ['power_plant', 'water_tower', 'subway_station', 'rail_station'];
   utilitiesCategory.forEach(tool => {
     const info = TOOL_INFO[tool];
     items.push({
@@ -188,7 +188,7 @@ function buildMenuItems(): MenuItem[] {
       description: info.description,
       cost: info.cost,
       category: 'utilities',
-      keywords: [info.name.toLowerCase(), tool, 'utility', 'power', 'water', 'infrastructure'],
+      keywords: [info.name.toLowerCase(), tool, 'utility', 'power', 'water', 'infrastructure', 'transit', 'station', 'train'],
     });
   });
 

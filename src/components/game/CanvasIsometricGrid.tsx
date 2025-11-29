@@ -1665,6 +1665,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       if (currentSpritePack.shopsSrc) {
         loadSpriteImage(currentSpritePack.shopsSrc, true).catch(console.error);
       }
+      if (currentSpritePack.stationsSrc) {
+        loadSpriteImage(currentSpritePack.stationsSrc, true).catch(console.error);
+      }
       if (currentSpritePack.modernSrc) {
         loadSpriteImage(currentSpritePack.modernSrc, true).catch(console.error);
       }
@@ -2604,10 +2607,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         return;
       }
       
-      // Check if this building type has a sprite in the tile renderer or parks sheet
+      // Check if this building type has a sprite in the tile renderer, parks sheet, or stations sheet
       const activePack = getActiveSpritePack();
       const hasTileSprite = BUILDING_TO_SPRITE[buildingType] || 
-        (activePack.parksBuildings && activePack.parksBuildings[buildingType]);
+        (activePack.parksBuildings && activePack.parksBuildings[buildingType]) ||
+        (activePack.stationsVariants && activePack.stationsVariants[buildingType]);
       
       if (hasTileSprite) {
         // Special handling for water: use separate water.png image with blending for adjacent water tiles
@@ -2797,6 +2801,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           let useModernVariant: { row: number; col: number } | null = null;
           let useFarmVariant: { row: number; col: number } | null = null;
           let useShopVariant: { row: number; col: number } | null = null;
+          let useStationVariant: { row: number; col: number } | null = null;
           let useParksBuilding: { row: number; col: number } | null = null;
           
           // Check if this is a parks building first
@@ -2876,6 +2881,19 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               useShopVariant = variants[variantIndex];
               spriteSource = activePack.shopsSrc;
             }
+          } else if (activePack.stationsSrc && activePack.stationsVariants && activePack.stationsVariants[buildingType]) {
+            // Check if this building type has station variants available (rail stations)
+            const variants = activePack.stationsVariants[buildingType];
+            // Use deterministic random based on tile position to select variant
+            // This ensures the same building always shows the same variant
+            const seed = (tile.x * 31 + tile.y * 17) % 100;
+            // Always use a station variant if available (100% chance)
+            if (variants.length > 0) {
+              // Select which station variant to use based on position
+              const variantIndex = (tile.x * 7 + tile.y * 13) % variants.length;
+              useStationVariant = variants[variantIndex];
+              spriteSource = activePack.stationsSrc;
+            }
           }
 
           const filteredSpriteSheet = getCachedImage(spriteSource, true) || getCachedImage(spriteSource);
@@ -2885,12 +2903,13 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             const sheetWidth = filteredSpriteSheet.naturalWidth || filteredSpriteSheet.width;
             const sheetHeight = filteredSpriteSheet.naturalHeight || filteredSpriteSheet.height;
             
-            // Get sprite coordinates - either from parks, dense variant, modern variant, farm variant, shop variant, or normal mapping
+            // Get sprite coordinates - either from parks, dense variant, modern variant, farm variant, shop variant, station variant, or normal mapping
             let coords: { sx: number; sy: number; sw: number; sh: number } | null;
             let isDenseVariant = false;
             let isModernVariant = false;
             let isFarmVariant = false;
             let isShopVariant = false;
+            let isStationVariant = false;
             let isParksBuilding = false;
             if (useParksBuilding) {
               isParksBuilding = true;
@@ -3003,6 +3022,36 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 sw: tileWidth,
                 sh: sourceH,
               };
+            } else if (useStationVariant) {
+              isStationVariant = true;
+              // Calculate coordinates directly from station variant row/col
+              const stationsCols = activePack.stationsCols || 5;
+              const stationsRows = activePack.stationsRows || 6;
+              const tileWidth = Math.floor(sheetWidth / stationsCols);
+              const tileHeight = Math.floor(sheetHeight / stationsRows);
+              let sourceY = useStationVariant.row * tileHeight;
+              let sourceH = tileHeight;
+              
+              // Special handling for rows that have content bleeding from row above
+              // Third row (row 2, 0-indexed) - shift down to avoid capturing content from row above
+              if (useStationVariant.row === 2) {
+                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
+              }
+              // Fourth row (row 3, 0-indexed) - shift down to avoid capturing content from row above
+              if (useStationVariant.row === 3) {
+                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
+              }
+              // Fifth row (row 4, 0-indexed) - shift down to avoid capturing content from row above
+              if (useStationVariant.row === 4) {
+                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
+              }
+              
+              coords = {
+                sx: useStationVariant.col * tileWidth,
+                sy: sourceY,
+                sw: tileWidth,
+                sh: sourceH,
+              };
             } else {
               // getSpriteCoords handles building type to sprite key mapping
               coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight);
@@ -3096,6 +3145,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               if (isShopVariant && activePack.shopsScales && buildingType in activePack.shopsScales) {
                 scaleMultiplier *= activePack.shopsScales[buildingType];
               }
+              // Apply station-specific scale if building uses station variant and has custom scale in config
+              if (isStationVariant && activePack.stationsScales && buildingType in activePack.stationsScales) {
+                scaleMultiplier *= activePack.stationsScales[buildingType];
+              }
               // Apply parks-specific scale if building is from parks sheet and has custom scale in config
               if (isParksBuilding && activePack.parksScales && buildingType in activePack.parksScales) {
                 scaleMultiplier *= activePack.parksScales[buildingType];
@@ -3131,6 +3184,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // Apply shop-specific horizontal offset if available
               if (isShopVariant && activePack.shopsHorizontalOffsets && buildingType in activePack.shopsHorizontalOffsets) {
                 horizontalOffset = activePack.shopsHorizontalOffsets[buildingType] * w;
+              }
+              // Apply station-specific horizontal offset if available
+              if (isStationVariant && activePack.stationsHorizontalOffsets && buildingType in activePack.stationsHorizontalOffsets) {
+                horizontalOffset = activePack.stationsHorizontalOffsets[buildingType] * w;
               }
               drawX += horizontalOffset;
               
@@ -3173,6 +3230,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               } else if (isShopVariant && activePack.shopsVerticalOffsets && buildingType in activePack.shopsVerticalOffsets) {
                 // Shop variants may need different positioning than normal
                 extraOffset = activePack.shopsVerticalOffsets[buildingType] * h;
+              } else if (isStationVariant && activePack.stationsVerticalOffsets && buildingType in activePack.stationsVerticalOffsets) {
+                // Station variants may need different positioning than normal
+                extraOffset = activePack.stationsVerticalOffsets[buildingType] * h;
               } else if (activePack.buildingVerticalOffsets && buildingType in activePack.buildingVerticalOffsets) {
                 // Building-type-specific offset (for buildings sharing sprites but needing different positioning)
                 extraOffset = activePack.buildingVerticalOffsets[buildingType] * h;
@@ -4193,7 +4253,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     // Calculate new zoom
     const zoomDelta = e.deltaY > 0 ? -0.05 : 0.05;
-    const newZoom = Math.max(0.3, Math.min(2, zoom + zoomDelta));
+    const newZoom = Math.max(0.3, Math.min(5, zoom + zoomDelta));
     
     if (newZoom === zoom) return;
     
@@ -4262,7 +4322,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Pinch to zoom
       const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
       const scale = currentDistance / initialPinchDistanceRef.current;
-      const newZoom = Math.max(0.3, Math.min(2, initialZoomRef.current * scale));
+      const newZoom = Math.max(0.3, Math.min(5, initialZoomRef.current * scale));
 
       const currentCenter = getTouchCenter(e.touches[0], e.touches[1]);
       const rect = containerRef.current?.getBoundingClientRect();

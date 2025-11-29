@@ -116,6 +116,20 @@ export interface SpritePack {
   shopsHorizontalOffsets?: Record<string, number>;
   // Per-building-type scale adjustments for SHOPS sprite sheet buildings
   shopsScales?: Record<string, number>;
+  // Path to the stations sprite sheet (rail station variants)
+  stationsSrc?: string;
+  // Stations layout configuration (columns and rows for the stations sheet)
+  stationsCols?: number;
+  stationsRows?: number;
+  // Stations variants: maps building type to available variants in the stations sheet
+  // Each variant specifies row and column (0-indexed) in the stations sprite sheet
+  stationsVariants?: Record<string, { row: number; col: number }[]>;
+  // Per-building-type vertical offset adjustments for STATIONS sprite sheet buildings
+  stationsVerticalOffsets?: Record<string, number>;
+  // Per-building-type horizontal offset adjustments for STATIONS sprite sheet buildings
+  stationsHorizontalOffsets?: Record<string, number>;
+  // Per-building-type scale adjustments for STATIONS sprite sheet buildings
+  stationsScales?: Record<string, number>;
   // Maps building types to sprite keys in spriteOrder
   buildingToSprite: Record<string, string>;
   // Optional global scale multiplier for all sprites in this pack
@@ -459,6 +473,34 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     shop_small: 0.90,  // Scale down 10% total
     shop_medium: 0.90, // Scale down 10% total
   },
+  // Stations sprite sheet configuration (rail station variants)
+  stationsSrc: '/assets/sprites_red_water_new_stations.png',
+  stationsCols: 5,
+  stationsRows: 6,
+  stationsVariants: {
+    // Rail station sprites (2x2 buildings)
+    // Row 2 (3rd row): cols 0, 1, 2
+    // Row 3 (4th row): cols 2, 3
+    // Row 4 (5th row): cols 1, 2, 3
+    // Row 5 (6th row): cols 0, 1
+    rail_station: [
+      // Third row, columns 1-3 (0-indexed: row 2, cols 0-2)
+      { row: 2, col: 0 }, { row: 2, col: 1 }, { row: 2, col: 2 },
+      // Fourth row, columns 3-4 (0-indexed: row 3, cols 2-3)
+      { row: 3, col: 2 }, { row: 3, col: 3 },
+      // Fifth row, columns 2-4 (0-indexed: row 4, cols 1-3)
+      { row: 4, col: 1 }, { row: 4, col: 2 }, { row: 4, col: 3 },
+      // Sixth row, columns 1-2 (0-indexed: row 5, cols 0-1)
+      { row: 5, col: 0 }, { row: 5, col: 1 },
+    ],
+  },
+  stationsVerticalOffsets: {
+    rail_station: -0.6, // Shift up to align with 2x2 building footprint
+  },
+  stationsHorizontalOffsets: {},
+  stationsScales: {
+    rail_station: 0.85, // Scale down 15% for better fit
+  },
   buildingToSprite: {
     house_small: 'house_small',
     house_medium: 'house_medium',
@@ -491,7 +533,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     tree: 'tree',
     water: 'water',
     subway_station: 'subway_station',
-    rail_station: 'subway_station', // Use subway_station sprite for now
+    // rail_station uses stationsVariants from the stations sprite sheet
     city_hall: 'city_hall',
     amusement_park: 'amusement_park',
   },
