@@ -357,19 +357,6 @@ export function SettingsPanel() {
             )}
           </div>
           
-          <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Controls</div>
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <div className="flex justify-between"><span>Pan (mouse)</span><span className="text-foreground">Alt + Drag / Middle Click</span></div>
-              <div className="flex justify-between"><span>Pan (keys)</span><span className="text-foreground">W / A / S / D</span></div>
-              <div className="flex justify-between"><span>Zoom</span><span className="text-foreground">Scroll Wheel</span></div>
-              <div className="flex justify-between"><span>Place Multiple</span><span className="text-foreground">Click + Drag</span></div>
-              <div className="flex justify-between"><span>View Tile Info</span><span className="text-foreground">Select Tool + Click</span></div>
-            </div>
-          </div>
-          
-          <Separator />
-          
           {/* Restore saved city button - shown if there's a saved city from before viewing a shared city */}
           {savedCityInfo && (
             <div className="space-y-2">
