@@ -3063,12 +3063,16 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
               }
               // Fourth row (row 3, 0-indexed) - shift down to avoid capturing content from row above
+              // Also reduce height slightly to crop out bottom clipping from row below
               if (useStationVariant.row === 3) {
                 sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
+                sourceH -= tileHeight * 0.05; // Reduce height by 5% to crop bottom clipping
               }
               // Fifth row (row 4, 0-indexed) - shift down to avoid capturing content from row above
+              // Also reduce height to crop out bottom clipping from row below
               if (useStationVariant.row === 4) {
                 sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
+                sourceH -= tileHeight * 0.1; // Reduce height by 10% to crop bottom clipping
               }
               
               coords = {
@@ -4323,7 +4327,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     // Calculate new zoom
     const zoomDelta = e.deltaY > 0 ? -0.05 : 0.05;
-    const newZoom = Math.max(0.3, Math.min(5, zoom + zoomDelta));
+    const newZoom = Math.max(0.3, Math.min(7, zoom + zoomDelta));
     
     if (newZoom === zoom) return;
     
@@ -4392,7 +4396,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Pinch to zoom
       const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
       const scale = currentDistance / initialPinchDistanceRef.current;
-      const newZoom = Math.max(0.3, Math.min(5, initialZoomRef.current * scale));
+      const newZoom = Math.max(0.3, Math.min(7, initialZoomRef.current * scale));
 
       const currentCenter = getTouchCenter(e.touches[0], e.touches[1]);
       const rect = containerRef.current?.getBoundingClientRect();

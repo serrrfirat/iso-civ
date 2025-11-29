@@ -258,7 +258,7 @@ function createPassengerTrain(
     tileY,
     direction,
     progress: 0,
-    speed: 0.35 + Math.random() * 0.15, // Faster speed
+    speed: 0.45 + Math.random() * 0.15, // Faster speed
     path: [{ x: tileX, y: tileY }],
     pathIndex: 0,
     age: 0,
@@ -330,7 +330,7 @@ function createFreightTrain(
     tileY,
     direction,
     progress: 0,
-    speed: 0.25 + Math.random() * 0.1, // Faster speed
+    speed: 0.35 + Math.random() * 0.1, // Faster speed
     path: [{ x: tileX, y: tileY }],
     pathIndex: 0,
     age: 0,
