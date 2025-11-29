@@ -750,10 +750,8 @@ export function drawMergedRoadSegment(
       }
     } else if (mergeInfo.orientation === 'ew') {
       // EW road - draw sidewalks on north/south edges if this is an outer tile
-      // positionInMerge=0 (northernmost) has side='right', so north edge is outer
-      // positionInMerge=last (southernmost) has side='left', so south edge is outer
-      if (mergeInfo.side === 'right' && !adj.north) {
-        // North sidewalk (top-left edge) - drawn on northernmost tile
+      if (mergeInfo.side === 'left' && !adj.north) {
+        // North sidewalk (top-left edge)
         ctx.beginPath();
         ctx.moveTo(leftCorner.x, leftCorner.y);
         ctx.lineTo(topCorner.x, topCorner.y);
@@ -763,8 +761,8 @@ export function drawMergedRoadSegment(
         ctx.fill();
         ctx.stroke();
       }
-      if (mergeInfo.side === 'left' && !adj.south) {
-        // South sidewalk (bottom-right edge) - drawn on southernmost tile
+      if (mergeInfo.side === 'right' && !adj.south) {
+        // South sidewalk (bottom-right edge)
         ctx.beginPath();
         ctx.moveTo(rightCorner.x, rightCorner.y);
         ctx.lineTo(bottomCorner.x, bottomCorner.y);

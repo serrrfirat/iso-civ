@@ -1967,10 +1967,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         }
         if (mergeInfo.orientation === 'ew') {
           // EW roads: sidewalks on north/south edges of outermost tiles
-          // positionInMerge=0 (northernmost) has side='right', so north edge is outer
-          // positionInMerge=last (southernmost) has side='left', so south edge is outer
-          if (edgeDir === 'north') return mergeInfo.side === 'right';
-          if (edgeDir === 'south') return mergeInfo.side === 'left';
+          if (edgeDir === 'north') return mergeInfo.side === 'left';
+          if (edgeDir === 'south') return mergeInfo.side === 'right';
           return true;
         }
         return true;
@@ -2166,6 +2164,74 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       ctx.lineTo(cx - centerSize, cy);
       ctx.closePath();
       ctx.fill();
+      
+      // Interior sidewalk corners - small isometric diamonds at corners where two roads meet
+      // Each corner drawn independently based on its two adjacent road directions
+      {
+        ctx.fillStyle = sidewalkColor;
+        const cs = swWidth * 0.8;
+        const isFourWay = north && east && south && west;
+        
+        // Top corner - draw if north AND east both have roads
+        if (north && east) {
+          ctx.beginPath();
+          ctx.moveTo(topCorner.x, topCorner.y);
+          ctx.lineTo(topCorner.x - cs, topCorner.y + cs * 0.5);
+          ctx.lineTo(topCorner.x, topCorner.y + cs);
+          ctx.lineTo(topCorner.x + cs, topCorner.y + cs * 0.5);
+          ctx.closePath();
+          ctx.fill();
+        }
+        
+        // Right corner - draw if east AND south both have roads
+        if (east && south) {
+          ctx.beginPath();
+          ctx.moveTo(rightCorner.x, rightCorner.y);
+          if (isFourWay) {
+            // At 4-way intersections, use rotated shape (tall/narrow)
+            ctx.lineTo(rightCorner.x - cs * 0.625, rightCorner.y - cs * 1.25);
+            ctx.lineTo(rightCorner.x - cs * 1.25, rightCorner.y);
+            ctx.lineTo(rightCorner.x - cs * 0.625, rightCorner.y + cs * 1.25);
+          } else {
+            // At T-intersections/corners, use flat shape
+            ctx.lineTo(rightCorner.x - cs, rightCorner.y - cs * 0.5);
+            ctx.lineTo(rightCorner.x - cs * 2, rightCorner.y);
+            ctx.lineTo(rightCorner.x - cs, rightCorner.y + cs * 0.5);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+        
+        // Bottom corner - draw if south AND west both have roads
+        if (south && west) {
+          ctx.beginPath();
+          ctx.moveTo(bottomCorner.x, bottomCorner.y);
+          ctx.lineTo(bottomCorner.x + cs, bottomCorner.y - cs * 0.5);
+          ctx.lineTo(bottomCorner.x, bottomCorner.y - cs);
+          ctx.lineTo(bottomCorner.x - cs, bottomCorner.y - cs * 0.5);
+          ctx.closePath();
+          ctx.fill();
+        }
+        
+        // Left corner - draw if west AND north both have roads
+        if (west && north) {
+          ctx.beginPath();
+          ctx.moveTo(leftCorner.x, leftCorner.y);
+          if (isFourWay) {
+            // At 4-way intersections, use rotated shape (tall/narrow)
+            ctx.lineTo(leftCorner.x + cs * 0.625, leftCorner.y - cs * 1.25);
+            ctx.lineTo(leftCorner.x + cs * 1.25, leftCorner.y);
+            ctx.lineTo(leftCorner.x + cs * 0.625, leftCorner.y + cs * 1.25);
+          } else {
+            // At T-intersections/corners, use flat shape
+            ctx.lineTo(leftCorner.x + cs, leftCorner.y - cs * 0.5);
+            ctx.lineTo(leftCorner.x + cs * 2, leftCorner.y);
+            ctx.lineTo(leftCorner.x + cs, leftCorner.y + cs * 0.5);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
       
       // ============================================
       // DRAW LANE MARKINGS AND MEDIANS

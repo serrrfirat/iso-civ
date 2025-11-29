@@ -85,8 +85,8 @@ export interface Train {
 export const RAIL_COLORS = {
   BALLAST: '#9B8365',           // Track bed (gravel/ballast) - lighter for contrast
   BALLAST_DARK: '#7B6354',      // Darker ballast edges
-  TIE: '#3a2718',               // Wooden rail ties (sleepers) - darker for contrast
-  TIE_HIGHLIGHT: '#5d4a3a',     // Lighter tie surface
+  TIE: '#5c422e',               // Wooden rail ties (sleepers)
+  TIE_HIGHLIGHT: '#7a5d48',     // Lighter tie surface
   RAIL: '#6a6a6a',              // Steel rail - silvery
   RAIL_HIGHLIGHT: '#8a8a8a',    // Rail highlight
   RAIL_SHADOW: '#404040',       // Rail shadow
@@ -1083,7 +1083,7 @@ export function getAdjacentRailForOverlay(
 }
 
 /**
- * Draw rail tracks only (ties and rails, no ballast) for overlay on roads
+ * Draw rail tracks only (inset rails, no ties or ballast) for overlay on roads
  * This is used when rail is overlaid on a road tile - the road provides the base
  */
 export function drawRailTracksOnly(
@@ -1102,9 +1102,239 @@ export function drawRailTracksOnly(
   // Determine track type
   const trackType = getTrackType(connections);
 
-  // Draw only ties and rails (no ballast) - the road base is already drawn
-  drawTies(ctx, x, y, trackType, zoom);
-  drawRails(ctx, x, y, trackType, zoom);
+  // Draw inset rails only (no ties) - rails are embedded in the road
+  drawInsetRails(ctx, x, y, trackType, zoom);
+}
+
+/**
+ * Draw inset rails for road overlays - darker borders to look embedded
+ */
+function drawInsetRails(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  trackType: TrackType,
+  zoom: number
+): void {
+  const w = TILE_WIDTH;
+  const h = TILE_HEIGHT;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const railGauge = w * TRACK_GAUGE_RATIO;
+  const railWidth = zoom >= 0.7 ? 0.85 : 0.7;
+  const insetWidth = railWidth + 0.5; // Subtle dark border for inset effect
+  const trackSep = w * TRACK_SEPARATION_RATIO;
+  const halfSep = trackSep / 2;
+
+  const northEdge = { x: x + w * 0.25, y: y + h * 0.25 };
+  const eastEdge = { x: x + w * 0.75, y: y + h * 0.25 };
+  const southEdge = { x: x + w * 0.75, y: y + h * 0.75 };
+  const westEdge = { x: x + w * 0.25, y: y + h * 0.75 };
+  const center = { x: cx, y: cy };
+
+  const halfGauge = railGauge / 2;
+  
+  const INSET_DARK = '#2a2a2a';  // Dark border for inset effect
+  const RAIL_SILVER = '#7a7a7a'; // Slightly lighter silver for road rails
+
+  // Draw a single track's inset rail pair along a straight segment
+  const drawSingleStraightInsetRails = (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    perp: { x: number; y: number }
+  ) => {
+    // Draw dark inset borders first
+    ctx.strokeStyle = INSET_DARK;
+    ctx.lineWidth = insetWidth;
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(from.x + perp.x * halfGauge, from.y + perp.y * halfGauge);
+    ctx.lineTo(to.x + perp.x * halfGauge, to.y + perp.y * halfGauge);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(from.x - perp.x * halfGauge, from.y - perp.y * halfGauge);
+    ctx.lineTo(to.x - perp.x * halfGauge, to.y - perp.y * halfGauge);
+    ctx.stroke();
+
+    // Draw silver rails on top
+    ctx.strokeStyle = RAIL_SILVER;
+    ctx.lineWidth = railWidth;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x + perp.x * halfGauge, from.y + perp.y * halfGauge);
+    ctx.lineTo(to.x + perp.x * halfGauge, to.y + perp.y * halfGauge);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(from.x - perp.x * halfGauge, from.y - perp.y * halfGauge);
+    ctx.lineTo(to.x - perp.x * halfGauge, to.y - perp.y * halfGauge);
+    ctx.stroke();
+  };
+
+  // Draw double straight inset rails
+  const drawDoubleStraightInsetRails = (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    perp: { x: number; y: number }
+  ) => {
+    const from0 = offsetPoint(from, perp, halfSep);
+    const to0 = offsetPoint(to, perp, halfSep);
+    drawSingleStraightInsetRails(from0, to0, perp);
+
+    const from1 = offsetPoint(from, perp, -halfSep);
+    const to1 = offsetPoint(to, perp, -halfSep);
+    drawSingleStraightInsetRails(from1, to1, perp);
+  };
+
+  // Draw a single track's curved inset rails
+  const drawSingleCurvedInsetRails = (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    control: { x: number; y: number },
+    fromPerp: { x: number; y: number },
+    toPerp: { x: number; y: number }
+  ) => {
+    const midPerp = { x: (fromPerp.x + toPerp.x) / 2, y: (fromPerp.y + toPerp.y) / 2 };
+    const midLen = Math.hypot(midPerp.x, midPerp.y);
+    const ctrlPerp = { x: midPerp.x / midLen, y: midPerp.y / midLen };
+
+    // Draw dark inset borders first
+    ctx.strokeStyle = INSET_DARK;
+    ctx.lineWidth = insetWidth;
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(from.x + fromPerp.x * halfGauge, from.y + fromPerp.y * halfGauge);
+    ctx.quadraticCurveTo(
+      control.x + ctrlPerp.x * halfGauge, control.y + ctrlPerp.y * halfGauge,
+      to.x + toPerp.x * halfGauge, to.y + toPerp.y * halfGauge
+    );
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(from.x - fromPerp.x * halfGauge, from.y - fromPerp.y * halfGauge);
+    ctx.quadraticCurveTo(
+      control.x - ctrlPerp.x * halfGauge, control.y - ctrlPerp.y * halfGauge,
+      to.x - toPerp.x * halfGauge, to.y - toPerp.y * halfGauge
+    );
+    ctx.stroke();
+
+    // Draw silver rails on top
+    ctx.strokeStyle = RAIL_SILVER;
+    ctx.lineWidth = railWidth;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x + fromPerp.x * halfGauge, from.y + fromPerp.y * halfGauge);
+    ctx.quadraticCurveTo(
+      control.x + ctrlPerp.x * halfGauge, control.y + ctrlPerp.y * halfGauge,
+      to.x + toPerp.x * halfGauge, to.y + toPerp.y * halfGauge
+    );
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(from.x - fromPerp.x * halfGauge, from.y - fromPerp.y * halfGauge);
+    ctx.quadraticCurveTo(
+      control.x - ctrlPerp.x * halfGauge, control.y - ctrlPerp.y * halfGauge,
+      to.x - toPerp.x * halfGauge, to.y - toPerp.y * halfGauge
+    );
+    ctx.stroke();
+  };
+
+  // Draw double curved inset rails
+  const drawDoubleCurvedInsetRails = (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    control: { x: number; y: number },
+    fromPerp: { x: number; y: number },
+    toPerp: { x: number; y: number },
+    curvePerp: { x: number; y: number }
+  ) => {
+    const from0 = offsetPoint(from, fromPerp, halfSep);
+    const to0 = offsetPoint(to, toPerp, halfSep);
+    const ctrl0 = offsetPoint(control, curvePerp, halfSep);
+    drawSingleCurvedInsetRails(from0, to0, ctrl0, fromPerp, toPerp);
+
+    const from1 = offsetPoint(from, fromPerp, -halfSep);
+    const to1 = offsetPoint(to, toPerp, -halfSep);
+    const ctrl1 = offsetPoint(control, curvePerp, -halfSep);
+    drawSingleCurvedInsetRails(from1, to1, ctrl1, fromPerp, toPerp);
+  };
+
+  switch (trackType) {
+    case 'straight_ns':
+      drawDoubleStraightInsetRails(northEdge, southEdge, ISO_EW);
+      break;
+    case 'straight_ew':
+      drawDoubleStraightInsetRails(eastEdge, westEdge, ISO_NS);
+      break;
+    case 'curve_ne':
+      drawDoubleCurvedInsetRails(northEdge, eastEdge, center, ISO_EW, ISO_NS, { x: 0, y: 1 });
+      break;
+    case 'curve_nw':
+      drawDoubleCurvedInsetRails(northEdge, westEdge, center, NEG_ISO_EW, ISO_NS, { x: 1, y: 0 });
+      break;
+    case 'curve_se':
+      drawDoubleCurvedInsetRails(southEdge, eastEdge, center, ISO_EW, NEG_ISO_NS, { x: -1, y: 0 });
+      break;
+    case 'curve_sw':
+      drawDoubleCurvedInsetRails(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 });
+      break;
+    case 'junction_t_n':
+      drawDoubleStraightInsetRails(eastEdge, westEdge, ISO_NS);
+      drawDoubleCurvedInsetRails(southEdge, eastEdge, center, ISO_EW, NEG_ISO_NS, { x: -1, y: 0 });
+      drawDoubleCurvedInsetRails(southEdge, westEdge, center, NEG_ISO_EW, NEG_ISO_NS, { x: 0, y: -1 });
+      break;
+    case 'junction_t_e':
+      drawDoubleStraightInsetRails(northEdge, southEdge, ISO_EW);
+      drawDoubleCurvedInsetRails(westEdge, northEdge, center, ISO_NS, NEG_ISO_EW, { x: 1, y: 0 });
+      drawDoubleCurvedInsetRails(westEdge, southEdge, center, NEG_ISO_NS, NEG_ISO_EW, { x: 0, y: -1 });
+      break;
+    case 'junction_t_s':
+      drawDoubleStraightInsetRails(eastEdge, westEdge, ISO_NS);
+      drawDoubleCurvedInsetRails(northEdge, eastEdge, center, ISO_EW, ISO_NS, { x: 0, y: 1 });
+      drawDoubleCurvedInsetRails(northEdge, westEdge, center, NEG_ISO_EW, ISO_NS, { x: 1, y: 0 });
+      break;
+    case 'junction_t_w':
+      drawDoubleStraightInsetRails(northEdge, southEdge, ISO_EW);
+      drawDoubleCurvedInsetRails(eastEdge, northEdge, center, ISO_NS, ISO_EW, { x: 0, y: 1 });
+      drawDoubleCurvedInsetRails(eastEdge, southEdge, center, ISO_NS, NEG_ISO_EW, { x: 0, y: -1 });
+      break;
+    case 'junction_cross':
+      drawDoubleStraightInsetRails(northEdge, southEdge, ISO_EW);
+      drawDoubleStraightInsetRails(eastEdge, westEdge, ISO_NS);
+      break;
+    case 'terminus_n':
+      drawDoubleStraightInsetRails(center, southEdge, ISO_EW);
+      break;
+    case 'terminus_e':
+      drawDoubleStraightInsetRails(center, westEdge, ISO_NS);
+      break;
+    case 'terminus_s':
+      drawDoubleStraightInsetRails(center, northEdge, ISO_EW);
+      break;
+    case 'terminus_w':
+      drawDoubleStraightInsetRails(center, eastEdge, ISO_NS);
+      break;
+    case 'single': {
+      const nsDirX = southEdge.x - northEdge.x;
+      const nsDirY = southEdge.y - northEdge.y;
+      const nsLen = Math.hypot(nsDirX, nsDirY);
+      const nsDir = { x: nsDirX / nsLen, y: nsDirY / nsLen };
+      
+      const ewDirX = westEdge.x - eastEdge.x;
+      const ewDirY = westEdge.y - eastEdge.y;
+      const ewLen = Math.hypot(ewDirX, ewDirY);
+      const ewDir = { x: ewDirX / ewLen, y: ewDirY / ewLen };
+      
+      const stubLen = nsLen * 0.35;
+      const singleFrom = { x: cx - nsDir.x * stubLen, y: cy - nsDir.y * stubLen };
+      const singleTo = { x: cx + nsDir.x * stubLen, y: cy + nsDir.y * stubLen };
+      drawDoubleStraightInsetRails(singleFrom, singleTo, ewDir);
+      break;
+    }
+  }
 }
 
 // ============================================================================
