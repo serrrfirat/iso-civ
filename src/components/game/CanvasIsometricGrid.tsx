@@ -174,7 +174,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null); // PERF: Separate canvas for hover/selection highlights
   const carsCanvasRef = useRef<HTMLCanvasElement>(null);
   const buildingsCanvasRef = useRef<HTMLCanvasElement>(null); // Buildings rendered on top of cars/trains
-  const aircraftCanvasRef = useRef<HTMLCanvasElement>(null); // Aircraft rendered on top of buildings
   const lightingCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const renderPendingRef = useRef<number | null>(null); // PERF: Track pending render frame
@@ -1720,10 +1719,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         if (buildingsCanvasRef.current) {
           buildingsCanvasRef.current.style.width = `${rect.width}px`;
           buildingsCanvasRef.current.style.height = `${rect.height}px`;
-        }
-        if (aircraftCanvasRef.current) {
-          aircraftCanvasRef.current.style.width = `${rect.width}px`;
-          aircraftCanvasRef.current.style.height = `${rect.height}px`;
         }
         if (lightingCanvasRef.current) {
           lightingCanvasRef.current.style.width = `${rect.width}px`;
@@ -3743,13 +3738,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    const aircraftCanvas = aircraftCanvasRef.current;
-    const aircraftCtx = aircraftCanvas?.getContext('2d');
-    
     ctx.imageSmoothingEnabled = false;
-    if (aircraftCtx) {
-      aircraftCtx.imageSmoothingEnabled = false;
-    }
     
     let animationFrameId: number;
     let lastTime = performance.now();
@@ -3792,13 +3781,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // Clear the canvas but don't draw anything - hides all animated elements while panning/zooming
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Also clear aircraft canvas
-        if (aircraftCtx && aircraftCanvas) {
-          aircraftCtx.setTransform(1, 0, 0, 1, 0, 0);
-          aircraftCtx.clearRect(0, 0, aircraftCanvas.width, aircraftCanvas.height);
-        }
       } else {
-        // Draw ground vehicles on cars canvas (below buildings)
         drawCars(ctx);
         drawPedestrians(ctx); // Draw pedestrians (zoom-gated)
         drawBoats(ctx); // Draw boats on water
@@ -3806,13 +3789,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         drawSmog(ctx); // Draw factory smog (above ground, below aircraft)
         drawEmergencyVehicles(ctx); // Draw emergency vehicles!
         drawIncidentIndicators(ctx, delta); // Draw fire/crime incident indicators!
-        
-        // Draw aircraft on separate canvas (above buildings)
-        if (aircraftCtx) {
-          drawHelicopters(aircraftCtx); // Draw helicopters (above buildings)
-          drawAirplanes(aircraftCtx); // Draw airplanes above everything
-          drawFireworks(aircraftCtx); // Draw fireworks above everything (nighttime only)
-        }
+        drawHelicopters(ctx); // Draw helicopters (below planes, above ground)
+        drawAirplanes(ctx); // Draw airplanes above everything
+        drawFireworks(ctx); // Draw fireworks above everything (nighttime only)
       }
     };
     
@@ -4523,12 +4502,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       />
       <canvas
         ref={buildingsCanvasRef}
-        width={canvasSize.width}
-        height={canvasSize.height}
-        className="absolute top-0 left-0 pointer-events-none"
-      />
-      <canvas
-        ref={aircraftCanvasRef}
         width={canvasSize.width}
         height={canvasSize.height}
         className="absolute top-0 left-0 pointer-events-none"
