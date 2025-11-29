@@ -2233,8 +2233,19 @@ export function placeBuilding(
     }
   }
 
-  // Only roads can be placed on roads - all other buildings require clearing the road first
+  // Can't place rail on existing buildings (only allow on grass, tree, or existing rail)
+  if (buildingType === 'rail') {
+    const allowedTypes: BuildingType[] = ['grass', 'tree', 'rail'];
+    if (!allowedTypes.includes(tile.building.type)) {
+      return state; // Can't place rail on existing building
+    }
+  }
+
+  // Only roads can be placed on roads, only rail can be placed on rail - all other buildings require clearing first
   if (buildingType && buildingType !== 'road' && tile.building.type === 'road') {
+    return state;
+  }
+  if (buildingType && buildingType !== 'rail' && tile.building.type === 'rail') {
     return state;
   }
 
@@ -2305,9 +2316,9 @@ export function placeBuilding(
     } else {
       // Single tile building - check if tile is available
       // Can't place on water, existing buildings, or 'empty' tiles (part of multi-tile buildings)
-      // Note: 'road' is included here so roads can extend over existing roads,
-      // but non-road buildings are already blocked from roads by the check above
-      const allowedTypes: BuildingType[] = ['grass', 'tree', 'road'];
+      // Note: 'road' and 'rail' are included here so they can extend over existing roads/rails,
+      // but non-road/rail buildings are already blocked from roads/rails by the checks above
+      const allowedTypes: BuildingType[] = ['grass', 'tree', 'road', 'rail'];
       if (!allowedTypes.includes(tile.building.type)) {
         return state; // Can't place on existing building or part of multi-tile building
       }
@@ -2337,7 +2348,7 @@ function findBuildingOrigin(
   // If this tile has an actual building (not empty), check if it's multi-tile
   if (tile.building.type !== 'empty' && tile.building.type !== 'grass' && 
       tile.building.type !== 'water' && tile.building.type !== 'road' && 
-      tile.building.type !== 'tree') {
+      tile.building.type !== 'rail' && tile.building.type !== 'tree') {
     const size = getBuildingSize(tile.building.type);
     if (size.width > 1 || size.height > 1) {
       return { originX: x, originY: y, buildingType: tile.building.type };
@@ -2360,6 +2371,7 @@ function findBuildingOrigin(
               checkTile.building.type !== 'grass' &&
               checkTile.building.type !== 'water' &&
               checkTile.building.type !== 'road' &&
+              checkTile.building.type !== 'rail' &&
               checkTile.building.type !== 'tree') {
             const size = getBuildingSize(checkTile.building.type);
             // Check if this building's footprint includes our original tile
