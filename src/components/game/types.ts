@@ -130,8 +130,50 @@ export type EmergencyVehicle = {
   flashTimer: number; // For emergency light animation
 };
 
-// Pedestrian types and destinations
+// Pedestrian types, destinations, and behaviors
 export type PedestrianDestType = 'school' | 'commercial' | 'industrial' | 'park' | 'home';
+
+// Pedestrian behavioral states
+export type PedestrianState =
+  | 'walking'           // Walking along a path
+  | 'entering_building' // Entering a building (fading out animation)
+  | 'inside_building'   // Inside a building (invisible)
+  | 'exiting_building'  // Exiting a building (fading in animation)
+  | 'at_recreation'     // At a recreational area doing an activity
+  | 'idle'              // Standing still, waiting
+  | 'socializing';      // Chatting with other pedestrians
+
+// Activities pedestrians can do at recreation areas
+export type PedestrianActivity =
+  | 'none'
+  | 'playing_basketball'
+  | 'playing_tennis'
+  | 'playing_soccer'
+  | 'playing_baseball'
+  | 'swimming'
+  | 'skateboarding'
+  | 'sitting_bench'
+  | 'picnicking'
+  | 'walking_dog'
+  | 'jogging'
+  | 'playground'
+  | 'watching_game'
+  | 'shopping'
+  | 'working'
+  | 'studying';
+
+// Recreation area types with their associated activities
+export type RecreationAreaType =
+  | 'basketball_court'
+  | 'tennis_court'
+  | 'soccer_field'
+  | 'baseball_field'
+  | 'swimming_pool'
+  | 'skate_park'
+  | 'park_bench'
+  | 'playground'
+  | 'stadium_seating'
+  | 'generic_park';
 
 export type Pedestrian = {
   id: number;
@@ -144,8 +186,11 @@ export type Pedestrian = {
   maxAge: number;
   skinColor: string;
   shirtColor: string;
-  walkOffset: number; // For walking animation
-  sidewalkSide: 'left' | 'right'; // Which side of the road they walk on
+  pantsColor: string;        // NEW: pants/shorts color
+  hasHat: boolean;           // NEW: wearing a hat
+  hatColor: string;          // NEW: hat color
+  walkOffset: number;        // For walking animation
+  sidewalkSide: 'left' | 'right';
   destType: PedestrianDestType;
   homeX: number;
   homeY: number;
@@ -154,6 +199,22 @@ export type Pedestrian = {
   returningHome: boolean;
   path: { x: number; y: number }[];
   pathIndex: number;
+  // NEW: Dynamic behavior properties
+  state: PedestrianState;
+  activity: PedestrianActivity;
+  activityProgress: number;  // 0-1 progress through current activity
+  activityDuration: number;  // How long to stay at current activity (seconds)
+  buildingEntryProgress: number; // 0-1 for enter/exit animations
+  socialTarget: number | null;   // ID of pedestrian we're socializing with
+  // Position offset within activity area (for varied positioning)
+  activityOffsetX: number;
+  activityOffsetY: number;
+  // Animation state for activities
+  activityAnimTimer: number;
+  // Items the pedestrian might have
+  hasBall: boolean;          // Carrying a ball
+  hasDog: boolean;           // Walking a dog
+  hasBag: boolean;           // Shopping bag or briefcase
 };
 
 // Boat types for water navigation
