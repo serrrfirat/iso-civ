@@ -844,7 +844,7 @@ export function useVehicleSystems(
     }
     
     // Scale pedestrian count with city size (road tiles), with a reasonable cap
-    const maxPedestrians = Math.min(PEDESTRIAN_MAX_COUNT, Math.max(100, roadTileCount * 2));
+    const maxPedestrians = Math.min(PEDESTRIAN_MAX_COUNT, Math.max(150, roadTileCount * 3));
     pedestrianSpawnTimerRef.current -= delta;
     
     if (pedestriansRef.current.length < maxPedestrians && pedestrianSpawnTimerRef.current <= 0) {
