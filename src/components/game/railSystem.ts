@@ -218,9 +218,9 @@ export function getTrackType(connections: RailConnection): TrackType {
 // Track Drawing Functions
 // ============================================================================
 
-// Screen-space perpendicular calculation (90° counter-clockwise rotation)
-// This matches how roads calculate their perpendiculars
-const getPerp = (dx: number, dy: number) => ({ x: -dy, y: dx });
+// Screen-space perpendicular calculation (90° clockwise rotation)
+// This gives the correct rail offset direction for isometric tracks
+const getPerp = (dx: number, dy: number) => ({ x: dy, y: -dx });
 
 /**
  * Draw the ballast (gravel bed) foundation for tracks
@@ -328,6 +328,7 @@ function drawBallast(
   };
 
   // Draw ballast based on track type
+  // For curves, use the center to create curves that go through the middle of the tile
   switch (trackType) {
     case 'straight_ns':
       drawStraightBallast(northEdge, southEdge);
@@ -336,16 +337,20 @@ function drawBallast(
       drawStraightBallast(eastEdge, westEdge);
       break;
     case 'curve_ne':
-      drawCurvedBallast(northEdge, eastEdge, topCorner);
+      // North (top-left edge) to East (top-right edge) - curve through center
+      drawCurvedBallast(northEdge, eastEdge, center);
       break;
     case 'curve_nw':
-      drawCurvedBallast(northEdge, westEdge, leftCorner);
+      // North (top-left edge) to West (bottom-left edge) - curve through center
+      drawCurvedBallast(northEdge, westEdge, center);
       break;
     case 'curve_se':
-      drawCurvedBallast(southEdge, eastEdge, rightCorner);
+      // South (bottom-right edge) to East (top-right edge) - curve through center
+      drawCurvedBallast(southEdge, eastEdge, center);
       break;
     case 'curve_sw':
-      drawCurvedBallast(southEdge, westEdge, bottomCorner);
+      // South (bottom-right edge) to West (bottom-left edge) - curve through center
+      drawCurvedBallast(southEdge, westEdge, center);
       break;
     case 'junction_t_n':
       drawStraightBallast(eastEdge, westEdge);
@@ -515,16 +520,16 @@ function drawTies(
       drawTiesAlongSegment(eastEdge, westEdge, TIES_PER_TILE);
       break;
     case 'curve_ne':
-      drawTiesAlongCurve(northEdge, eastEdge, topCorner, TIES_PER_TILE);
+      drawTiesAlongCurve(northEdge, eastEdge, center, TIES_PER_TILE);
       break;
     case 'curve_nw':
-      drawTiesAlongCurve(northEdge, westEdge, leftCorner, TIES_PER_TILE);
+      drawTiesAlongCurve(northEdge, westEdge, center, TIES_PER_TILE);
       break;
     case 'curve_se':
-      drawTiesAlongCurve(southEdge, eastEdge, rightCorner, TIES_PER_TILE);
+      drawTiesAlongCurve(southEdge, eastEdge, center, TIES_PER_TILE);
       break;
     case 'curve_sw':
-      drawTiesAlongCurve(southEdge, westEdge, bottomCorner, TIES_PER_TILE);
+      drawTiesAlongCurve(southEdge, westEdge, center, TIES_PER_TILE);
       break;
     case 'junction_t_n':
       drawTiesAlongSegment(eastEdge, westEdge, TIES_PER_TILE);
@@ -755,16 +760,16 @@ function drawRails(
       drawStraightRailPair(eastEdge, westEdge);
       break;
     case 'curve_ne':
-      drawCurvedRailPair(northEdge, eastEdge, topCorner);
+      drawCurvedRailPair(northEdge, eastEdge, center);
       break;
     case 'curve_nw':
-      drawCurvedRailPair(northEdge, westEdge, leftCorner);
+      drawCurvedRailPair(northEdge, westEdge, center);
       break;
     case 'curve_se':
-      drawCurvedRailPair(southEdge, eastEdge, rightCorner);
+      drawCurvedRailPair(southEdge, eastEdge, center);
       break;
     case 'curve_sw':
-      drawCurvedRailPair(southEdge, westEdge, bottomCorner);
+      drawCurvedRailPair(southEdge, westEdge, center);
       break;
     case 'junction_t_n':
       drawStraightRailPair(eastEdge, westEdge);
