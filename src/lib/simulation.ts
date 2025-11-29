@@ -1988,6 +1988,8 @@ const BUILDING_SIZES: Partial<Record<BuildingType, { width: number; height: numb
   roller_coaster_small: { width: 2, height: 2 },
   mountain_lodge: { width: 2, height: 2 },
   mountain_trailhead: { width: 3, height: 3 },
+  // Transportation
+  rail_station: { width: 2, height: 2 },
 };
 
 // Get the size of a building (how many tiles it spans)
@@ -2222,17 +2224,28 @@ export function placeBuilding(
   // Can't build on water
   if (tile.building.type === 'water') return state;
 
-  // Can't place roads on existing buildings (only allow on grass, tree, or existing roads)
+  // Can't place roads on existing buildings (only allow on grass, tree, existing roads, or rail - rail+road creates combined tile)
   // Note: 'empty' tiles are part of multi-tile building footprints, so roads can't be placed there either
   if (buildingType === 'road') {
-    const allowedTypes: BuildingType[] = ['grass', 'tree', 'road'];
+    const allowedTypes: BuildingType[] = ['grass', 'tree', 'road', 'rail'];
     if (!allowedTypes.includes(tile.building.type)) {
       return state; // Can't place road on existing building
     }
   }
 
-  // Only roads can be placed on roads - all other buildings require clearing the road first
-  if (buildingType && buildingType !== 'road' && tile.building.type === 'road') {
+  // Can't place rail on existing buildings (only allow on grass, tree, existing rail, or road - rail+road creates combined tile)
+  if (buildingType === 'rail') {
+    const allowedTypes: BuildingType[] = ['grass', 'tree', 'rail', 'road'];
+    if (!allowedTypes.includes(tile.building.type)) {
+      return state; // Can't place rail on existing building
+    }
+  }
+
+  // Roads and rail can be combined, but other buildings require clearing first
+  if (buildingType && buildingType !== 'road' && buildingType !== 'rail' && tile.building.type === 'road') {
+    return state;
+  }
+  if (buildingType && buildingType !== 'road' && buildingType !== 'rail' && tile.building.type === 'rail') {
     return state;
   }
 
@@ -2303,14 +2316,36 @@ export function placeBuilding(
     } else {
       // Single tile building - check if tile is available
       // Can't place on water, existing buildings, or 'empty' tiles (part of multi-tile buildings)
-      // Note: 'road' is included here so roads can extend over existing roads,
-      // but non-road buildings are already blocked from roads by the check above
-      const allowedTypes: BuildingType[] = ['grass', 'tree', 'road'];
+      // Note: 'road' and 'rail' are included here so they can extend over existing roads/rails,
+      // but non-road/rail buildings are already blocked from roads/rails by the checks above
+      const allowedTypes: BuildingType[] = ['grass', 'tree', 'road', 'rail'];
       if (!allowedTypes.includes(tile.building.type)) {
         return state; // Can't place on existing building or part of multi-tile building
       }
-      newGrid[y][x].building = createBuilding(buildingType);
-      newGrid[y][x].zone = 'none';
+      
+      // Handle combined rail+road tiles
+      if (buildingType === 'rail' && tile.building.type === 'road') {
+        // Placing rail on road: keep as road with rail overlay
+        newGrid[y][x].hasRailOverlay = true;
+        // Don't change the building type - it stays as road
+      } else if (buildingType === 'road' && tile.building.type === 'rail') {
+        // Placing road on rail: convert to road with rail overlay
+        newGrid[y][x].building = createBuilding('road');
+        newGrid[y][x].hasRailOverlay = true;
+        newGrid[y][x].zone = 'none';
+      } else if (buildingType === 'rail' && tile.hasRailOverlay) {
+        // Already has rail overlay, do nothing
+      } else if (buildingType === 'road' && tile.hasRailOverlay) {
+        // Already has road with rail overlay, do nothing
+      } else {
+        // Normal placement
+        newGrid[y][x].building = createBuilding(buildingType);
+        newGrid[y][x].zone = 'none';
+        // Clear rail overlay if placing non-combined building
+        if (buildingType !== 'road') {
+          newGrid[y][x].hasRailOverlay = false;
+        }
+      }
       // Set flip for waterfront buildings to face the water
       if (shouldFlip) {
         newGrid[y][x].building.flipped = true;
@@ -2335,7 +2370,7 @@ function findBuildingOrigin(
   // If this tile has an actual building (not empty), check if it's multi-tile
   if (tile.building.type !== 'empty' && tile.building.type !== 'grass' && 
       tile.building.type !== 'water' && tile.building.type !== 'road' && 
-      tile.building.type !== 'tree') {
+      tile.building.type !== 'rail' && tile.building.type !== 'tree') {
     const size = getBuildingSize(tile.building.type);
     if (size.width > 1 || size.height > 1) {
       return { originX: x, originY: y, buildingType: tile.building.type };
@@ -2358,6 +2393,7 @@ function findBuildingOrigin(
               checkTile.building.type !== 'grass' &&
               checkTile.building.type !== 'water' &&
               checkTile.building.type !== 'road' &&
+              checkTile.building.type !== 'rail' &&
               checkTile.building.type !== 'tree') {
             const size = getBuildingSize(checkTile.building.type);
             // Check if this building's footprint includes our original tile
@@ -2395,6 +2431,7 @@ export function bulldozeTile(state: GameState, x: number, y: number): GameState 
         if (clearX < state.gridSize && clearY < state.gridSize) {
           newGrid[clearY][clearX].building = createBuilding('grass');
           newGrid[clearY][clearX].zone = 'none';
+          newGrid[clearY][clearX].hasRailOverlay = false; // Clear rail overlay
           // Don't remove subway when bulldozing surface buildings
         }
       }
@@ -2403,6 +2440,7 @@ export function bulldozeTile(state: GameState, x: number, y: number): GameState 
     // Single tile bulldoze
     newGrid[y][x].building = createBuilding('grass');
     newGrid[y][x].zone = 'none';
+    newGrid[y][x].hasRailOverlay = false; // Clear rail overlay
     // Don't remove subway when bulldozing surface buildings
   }
 

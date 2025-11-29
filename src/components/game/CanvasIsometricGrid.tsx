@@ -136,6 +136,23 @@ import {
   TRAFFIC_LIGHT_TIMING,
 } from '@/components/game/trafficSystem';
 import { CrimeType, getCrimeName, getCrimeDescription, getFireDescriptionForTile, getFireNameForTile } from '@/components/game/incidentData';
+import {
+  drawRailTrack,
+  drawRailTracksOnly,
+  isRailTile,
+  isRailStationTile,
+  countRailTiles,
+  findRailStations,
+} from '@/components/game/railSystem';
+import {
+  spawnTrain,
+  updateTrain,
+  drawTrains,
+  MIN_RAIL_TILES_FOR_TRAINS,
+  MAX_TRAINS,
+  TRAIN_SPAWN_INTERVAL,
+} from '@/components/game/trainSystem';
+import { Train } from '@/components/game/types';
 
 // Props interface for CanvasIsometricGrid
 export interface CanvasIsometricGridProps {
@@ -210,6 +227,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const boatsRef = useRef<Boat[]>([]);
   const boatIdRef = useRef(0);
   const boatSpawnTimerRef = useRef(0);
+
+  // Train system refs
+  const trainsRef = useRef<Train[]>([]);
+  const trainIdRef = useRef(0);
+  const trainSpawnTimerRef = useRef(0);
 
   // Navigation light flash timer for planes/helicopters/boats at night
   const navLightFlashTimerRef = useRef(0);
@@ -390,6 +412,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     boatsRef.current = [];
     boatIdRef.current = 0;
     boatSpawnTimerRef.current = 0;
+    
+    // Clear trains
+    trainsRef.current = [];
+    trainIdRef.current = 0;
+    trainSpawnTimerRef.current = 0;
     
     // Clear fireworks
     fireworksRef.current = [];
@@ -1019,6 +1046,56 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     ctx.restore();
   }, [visualHour]);
 
+  // Update trains - spawn, move, and manage lifecycle
+  const updateTrains = useCallback((delta: number) => {
+    const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed } = worldStateRef.current;
+
+    if (!currentGrid || currentGridSize <= 0 || currentSpeed === 0) {
+      return;
+    }
+
+    // Count rail tiles
+    const railTileCount = countRailTiles(currentGrid, currentGridSize);
+    
+    // No trains if not enough rail
+    if (railTileCount < MIN_RAIL_TILES_FOR_TRAINS) {
+      trainsRef.current = [];
+      return;
+    }
+
+    // Calculate max trains based on rail network size
+    const maxTrains = Math.min(MAX_TRAINS, Math.ceil(railTileCount / 25));
+    
+    // Speed multiplier based on game speed
+    const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2 : 3;
+
+    // Spawn timer
+    trainSpawnTimerRef.current -= delta;
+    if (trainsRef.current.length < maxTrains && trainSpawnTimerRef.current <= 0) {
+      const newTrain = spawnTrain(currentGrid, currentGridSize, trainIdRef);
+      if (newTrain) {
+        trainsRef.current.push(newTrain);
+      }
+      trainSpawnTimerRef.current = TRAIN_SPAWN_INTERVAL;
+    }
+
+    // Update existing trains
+    trainsRef.current = trainsRef.current.filter(train => 
+      updateTrain(train, delta, speedMultiplier, currentGrid, currentGridSize)
+    );
+  }, []);
+
+  // Draw trains on the rail network
+  const drawTrainsCallback = useCallback((ctx: CanvasRenderingContext2D) => {
+    const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize, canvasSize: size } = worldStateRef.current;
+
+    if (!currentGrid || currentGridSize <= 0 || trainsRef.current.length === 0) {
+      return;
+    }
+
+    drawTrains(ctx, trainsRef.current, currentOffset, currentZoom, size);
+  }, []);
+
   // Find firework buildings (uses imported utility)
   const findFireworkBuildingsCallback = useCallback((): { x: number; y: number; type: BuildingType }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
@@ -1589,6 +1666,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       if (currentSpritePack.shopsSrc) {
         loadSpriteImage(currentSpritePack.shopsSrc, true).catch(console.error);
       }
+      if (currentSpritePack.stationsSrc) {
+        loadSpriteImage(currentSpritePack.stationsSrc, true).catch(console.error);
+      }
       if (currentSpritePack.modernSrc) {
         loadSpriteImage(currentSpritePack.modernSrc, true).catch(console.error);
       }
@@ -1702,6 +1782,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const buildingQueue: BuildingDraw[] = [];
     const waterQueue: BuildingDraw[] = [];
     const roadQueue: BuildingDraw[] = []; // Roads drawn above water
+    const railQueue: BuildingDraw[] = []; // Rail tracks drawn above water
     const beachQueue: BuildingDraw[] = [];
     const baseTileQueue: BuildingDraw[] = [];
     const greenBaseTileQueue: BuildingDraw[] = [];
@@ -2527,10 +2608,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         return;
       }
       
-      // Check if this building type has a sprite in the tile renderer or parks sheet
+      // Check if this building type has a sprite in the tile renderer, parks sheet, or stations sheet
       const activePack = getActiveSpritePack();
       const hasTileSprite = BUILDING_TO_SPRITE[buildingType] || 
-        (activePack.parksBuildings && activePack.parksBuildings[buildingType]);
+        (activePack.parksBuildings && activePack.parksBuildings[buildingType]) ||
+        (activePack.stationsVariants && activePack.stationsVariants[buildingType]);
       
       if (hasTileSprite) {
         // Special handling for water: use separate water.png image with blending for adjacent water tiles
@@ -2720,6 +2802,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           let useModernVariant: { row: number; col: number } | null = null;
           let useFarmVariant: { row: number; col: number } | null = null;
           let useShopVariant: { row: number; col: number } | null = null;
+          let useStationVariant: { row: number; col: number } | null = null;
           let useParksBuilding: { row: number; col: number } | null = null;
           
           // Check if this is a parks building first
@@ -2799,6 +2882,19 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               useShopVariant = variants[variantIndex];
               spriteSource = activePack.shopsSrc;
             }
+          } else if (activePack.stationsSrc && activePack.stationsVariants && activePack.stationsVariants[buildingType]) {
+            // Check if this building type has station variants available (rail stations)
+            const variants = activePack.stationsVariants[buildingType];
+            // Use deterministic random based on tile position to select variant
+            // This ensures the same building always shows the same variant
+            const seed = (tile.x * 31 + tile.y * 17) % 100;
+            // Always use a station variant if available (100% chance)
+            if (variants.length > 0) {
+              // Select which station variant to use based on position
+              const variantIndex = (tile.x * 7 + tile.y * 13) % variants.length;
+              useStationVariant = variants[variantIndex];
+              spriteSource = activePack.stationsSrc;
+            }
           }
 
           const filteredSpriteSheet = getCachedImage(spriteSource, true) || getCachedImage(spriteSource);
@@ -2808,12 +2904,13 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             const sheetWidth = filteredSpriteSheet.naturalWidth || filteredSpriteSheet.width;
             const sheetHeight = filteredSpriteSheet.naturalHeight || filteredSpriteSheet.height;
             
-            // Get sprite coordinates - either from parks, dense variant, modern variant, farm variant, shop variant, or normal mapping
+            // Get sprite coordinates - either from parks, dense variant, modern variant, farm variant, shop variant, station variant, or normal mapping
             let coords: { sx: number; sy: number; sw: number; sh: number } | null;
             let isDenseVariant = false;
             let isModernVariant = false;
             let isFarmVariant = false;
             let isShopVariant = false;
+            let isStationVariant = false;
             let isParksBuilding = false;
             if (useParksBuilding) {
               isParksBuilding = true;
@@ -2926,6 +3023,36 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 sw: tileWidth,
                 sh: sourceH,
               };
+            } else if (useStationVariant) {
+              isStationVariant = true;
+              // Calculate coordinates directly from station variant row/col
+              const stationsCols = activePack.stationsCols || 5;
+              const stationsRows = activePack.stationsRows || 6;
+              const tileWidth = Math.floor(sheetWidth / stationsCols);
+              const tileHeight = Math.floor(sheetHeight / stationsRows);
+              let sourceY = useStationVariant.row * tileHeight;
+              let sourceH = tileHeight;
+              
+              // Special handling for rows that have content bleeding from row above
+              // Third row (row 2, 0-indexed) - shift down to avoid capturing content from row above
+              if (useStationVariant.row === 2) {
+                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
+              }
+              // Fourth row (row 3, 0-indexed) - shift down to avoid capturing content from row above
+              if (useStationVariant.row === 3) {
+                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
+              }
+              // Fifth row (row 4, 0-indexed) - shift down to avoid capturing content from row above
+              if (useStationVariant.row === 4) {
+                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
+              }
+              
+              coords = {
+                sx: useStationVariant.col * tileWidth,
+                sy: sourceY,
+                sw: tileWidth,
+                sh: sourceH,
+              };
             } else {
               // getSpriteCoords handles building type to sprite key mapping
               coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight);
@@ -3019,6 +3146,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               if (isShopVariant && activePack.shopsScales && buildingType in activePack.shopsScales) {
                 scaleMultiplier *= activePack.shopsScales[buildingType];
               }
+              // Apply station-specific scale if building uses station variant and has custom scale in config
+              if (isStationVariant && activePack.stationsScales && buildingType in activePack.stationsScales) {
+                scaleMultiplier *= activePack.stationsScales[buildingType];
+              }
               // Apply parks-specific scale if building is from parks sheet and has custom scale in config
               if (isParksBuilding && activePack.parksScales && buildingType in activePack.parksScales) {
                 scaleMultiplier *= activePack.parksScales[buildingType];
@@ -3054,6 +3185,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // Apply shop-specific horizontal offset if available
               if (isShopVariant && activePack.shopsHorizontalOffsets && buildingType in activePack.shopsHorizontalOffsets) {
                 horizontalOffset = activePack.shopsHorizontalOffsets[buildingType] * w;
+              }
+              // Apply station-specific horizontal offset if available
+              if (isStationVariant && activePack.stationsHorizontalOffsets && buildingType in activePack.stationsHorizontalOffsets) {
+                horizontalOffset = activePack.stationsHorizontalOffsets[buildingType] * w;
               }
               drawX += horizontalOffset;
               
@@ -3096,6 +3231,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               } else if (isShopVariant && activePack.shopsVerticalOffsets && buildingType in activePack.shopsVerticalOffsets) {
                 // Shop variants may need different positioning than normal
                 extraOffset = activePack.shopsVerticalOffsets[buildingType] * h;
+              } else if (isStationVariant && activePack.stationsVerticalOffsets && buildingType in activePack.stationsVerticalOffsets) {
+                // Station variants may need different positioning than normal
+                extraOffset = activePack.stationsVerticalOffsets[buildingType] * h;
               } else if (activePack.buildingVerticalOffsets && buildingType in activePack.buildingVerticalOffsets) {
                 // Building-type-specific offset (for buildings sharing sprites but needing different positioning)
                 extraOffset = activePack.buildingVerticalOffsets[buildingType] * h;
@@ -3247,6 +3385,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           const depth = x + y;
           roadQueue.push({ screenX, screenY, tile, depth });
         }
+        // Rail tiles - drawn after roads, above water
+        else if (tile.building.type === 'rail') {
+          const depth = x + y;
+          railQueue.push({ screenX, screenY, tile, depth });
+        }
         // Check for beach tiles (grass/empty tiles adjacent to water) - use pre-computed metadata
         else if ((tile.building.type === 'grass' || tile.building.type === 'empty') &&
                  (tileMetadata?.isAdjacentToWater ?? false)) {
@@ -3344,6 +3487,39 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         
         // Draw road markings and sidewalks
         drawBuilding(ctx, screenX, screenY, tile);
+        
+        // If this road has a rail overlay, draw just the rail tracks (ties and rails, no ballast)
+        if (tile.hasRailOverlay) {
+          drawRailTracksOnly(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
+        }
+      });
+    
+    // Draw rail tracks (above water, similar to roads)
+    insertionSortByDepth(railQueue);
+    railQueue.forEach(({ tile, screenX, screenY }) => {
+        // Draw rail base tile first (dark gravel colored diamond)
+        const w = TILE_WIDTH;
+        const h = TILE_HEIGHT;
+        ctx.fillStyle = '#5B6345'; // Dark gravel color for contrast with ballast
+        ctx.beginPath();
+        ctx.moveTo(screenX + w / 2, screenY);
+        ctx.lineTo(screenX + w, screenY + h / 2);
+        ctx.lineTo(screenX + w / 2, screenY + h);
+        ctx.lineTo(screenX, screenY + h / 2);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw edge shading for depth
+        ctx.strokeStyle = '#4B5335';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(screenX + w / 2, screenY + h);
+        ctx.lineTo(screenX, screenY + h / 2);
+        ctx.lineTo(screenX + w / 2, screenY);
+        ctx.stroke();
+        
+        // Draw the rail tracks
+        drawRailTrack(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
       });
     
     // Draw green base tiles for grass/empty tiles adjacent to water (after water, before gray bases)
@@ -3544,6 +3720,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         updateAirplanes(delta); // Update airplanes (airport required)
         updateHelicopters(delta); // Update helicopters (hospital/airport required)
         updateBoats(delta); // Update boats (marina/pier required)
+        updateTrains(delta); // Update trains on rail network
         updateFireworks(delta, visualHour); // Update fireworks (nighttime only)
         updateSmog(delta); // Update factory smog particles
         navLightFlashTimerRef.current += delta * 3; // Update nav light flash timer
@@ -3559,6 +3736,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         drawCars(ctx);
         drawPedestrians(ctx); // Draw pedestrians (zoom-gated)
         drawBoats(ctx); // Draw boats on water
+        drawTrainsCallback(ctx); // Draw trains on rail network
         drawSmog(ctx); // Draw factory smog (above ground, below aircraft)
         drawEmergencyVehicles(ctx); // Draw emergency vehicles!
         drawIncidentIndicators(ctx, delta); // Draw fire/crime incident indicators!
@@ -3570,7 +3748,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
   
   // Day/Night cycle lighting rendering - optimized for performance
   useEffect(() => {
@@ -3862,8 +4040,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             placedRoadTilesRef.current.clear();
             // Place immediately on first click
             placeAtTile(gridX, gridY);
-            // Track initial tile for roads and subways
-            if (selectedTool === 'road' || selectedTool === 'subway') {
+            // Track initial tile for roads, rail, and subways
+            if (selectedTool === 'road' || selectedTool === 'rail' || selectedTool === 'subway') {
               placedRoadTilesRef.current.add(`${gridX},${gridY}`);
             }
           }
@@ -3980,8 +4158,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         if (isDragging && showsDragGrid && dragStartTile) {
           setDragEndTile({ x: gridX, y: gridY });
         }
-        // For roads and subways, use straight-line snapping
-        else if (isDragging && (selectedTool === 'road' || selectedTool === 'subway') && dragStartTile) {
+        // For roads, rail, and subways, use straight-line snapping
+        else if (isDragging && (selectedTool === 'road' || selectedTool === 'rail' || selectedTool === 'subway') && dragStartTile) {
           const dx = Math.abs(gridX - dragStartTile.x);
           const dy = Math.abs(gridY - dragStartTile.y);
           
@@ -4043,9 +4221,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       }
     }
     
-    // After placing roads, check if any cities should be discovered
-    // This happens after any road placement (drag or click) reaches an edge
-    if (isDragging && selectedTool === 'road') {
+    // After placing roads or rail, check if any cities should be discovered
+    // This happens after any road/rail placement (drag or click) reaches an edge
+    if (isDragging && (selectedTool === 'road' || selectedTool === 'rail')) {
       // Use setTimeout to allow state to update first, then check for discoverable cities
       setTimeout(() => {
         checkAndDiscoverCities((discoveredCity) => {
@@ -4081,7 +4259,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     // Calculate new zoom
     const zoomDelta = e.deltaY > 0 ? -0.05 : 0.05;
-    const newZoom = Math.max(0.3, Math.min(2, zoom + zoomDelta));
+    const newZoom = Math.max(0.3, Math.min(5, zoom + zoomDelta));
     
     if (newZoom === zoom) return;
     
@@ -4150,7 +4328,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Pinch to zoom
       const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
       const scale = currentDistance / initialPinchDistanceRef.current;
-      const newZoom = Math.max(0.3, Math.min(2, initialZoomRef.current * scale));
+      const newZoom = Math.max(0.3, Math.min(5, initialZoomRef.current * scale));
 
       const currentCenter = getTouchCenter(e.touches[0], e.touches[1]);
       const rect = containerRef.current?.getBoundingClientRect();

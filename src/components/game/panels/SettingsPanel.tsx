@@ -62,14 +62,14 @@ export function SettingsPanel() {
   }, [getSavedCityInfo]);
   
   // Initialize showSpriteTest from query parameter
-  const spriteTestFromUrl = searchParams.get('spriteTest') === 'true';
+  const spriteTestFromUrl = searchParams?.get('spriteTest') === 'true';
   const [showSpriteTest, setShowSpriteTest] = useState(spriteTestFromUrl);
   const lastUrlValueRef = useRef(spriteTestFromUrl);
   const isUpdatingFromStateRef = useRef(false);
   
   // Sync state with query parameter when URL changes externally
   useEffect(() => {
-    const spriteTestParam = searchParams.get('spriteTest') === 'true';
+    const spriteTestParam = searchParams?.get('spriteTest') === 'true';
     // Only update if URL value actually changed and we're not updating from state
     if (spriteTestParam !== lastUrlValueRef.current && !isUpdatingFromStateRef.current) {
       lastUrlValueRef.current = spriteTestParam;
@@ -79,13 +79,13 @@ export function SettingsPanel() {
   
   // Sync query parameter when showSpriteTest changes (but avoid loops)
   useEffect(() => {
-    const currentParam = searchParams.get('spriteTest') === 'true';
+    const currentParam = searchParams?.get('spriteTest') === 'true';
     if (currentParam === showSpriteTest) return; // Already in sync
     
     isUpdatingFromStateRef.current = true;
     lastUrlValueRef.current = showSpriteTest;
     
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams?.toString() || '');
     if (showSpriteTest) {
       params.set('spriteTest', 'true');
     } else {
@@ -356,19 +356,6 @@ export function SettingsPanel() {
               </p>
             )}
           </div>
-          
-          <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3">Controls</div>
-            <div className="space-y-1 text-xs text-muted-foreground">
-              <div className="flex justify-between"><span>Pan (mouse)</span><span className="text-foreground">Alt + Drag / Middle Click</span></div>
-              <div className="flex justify-between"><span>Pan (keys)</span><span className="text-foreground">W / A / S / D</span></div>
-              <div className="flex justify-between"><span>Zoom</span><span className="text-foreground">Scroll Wheel</span></div>
-              <div className="flex justify-between"><span>Place Multiple</span><span className="text-foreground">Click + Drag</span></div>
-              <div className="flex justify-between"><span>View Tile Info</span><span className="text-foreground">Select Tool + Click</span></div>
-            </div>
-          </div>
-          
-          <Separator />
           
           {/* Restore saved city button - shown if there's a saved city from before viewing a shared city */}
           {savedCityInfo && (

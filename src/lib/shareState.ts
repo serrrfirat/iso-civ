@@ -8,13 +8,13 @@ const ZONE_REVERSE: Record<number, ZoneType> = { 0: 'none', 1: 'residential', 2:
 
 // Building types mapped to numbers for compression
 const BUILDING_TYPES: BuildingType[] = [
-  'empty', 'grass', 'water', 'road', 'tree',
+  'empty', 'grass', 'water', 'road', 'rail', 'tree',
   'house_small', 'house_medium', 'mansion', 'apartment_low', 'apartment_high',
   'shop_small', 'shop_medium', 'office_low', 'office_high', 'mall',
   'factory_small', 'factory_medium', 'factory_large', 'warehouse',
   'police_station', 'fire_station', 'hospital', 'school', 'university',
   'park', 'park_large', 'tennis', 'power_plant', 'water_tower', 'subway_station',
-  'stadium', 'museum', 'airport', 'space_program', 'city_hall', 'amusement_park',
+  'rail_station', 'stadium', 'museum', 'airport', 'space_program', 'city_hall', 'amusement_park',
   'basketball_courts', 'playground_small', 'playground_large', 'baseball_field_small',
   'soccer_field_small', 'football_field', 'baseball_stadium', 'community_center',
   'office_building_small', 'swimming_pool', 'skate_park', 'mini_golf_course',
@@ -34,8 +34,8 @@ const BUILDING_REVERSE: Record<number, BuildingType> = BUILDING_TYPES.reduce((ac
   return acc;
 }, {} as Record<number, BuildingType>);
 
-// Minified tile representation: [zone, buildingType, level, population, jobs, powered, watered, landValue, hasSubway, constructionProgress, abandoned, flipped]
-type MinTile = [number, number, number, number, number, number, number, number, number, number, number, number];
+// Minified tile representation: [zone, buildingType, level, population, jobs, powered, watered, landValue, hasSubway, constructionProgress, abandoned, flipped, hasRailOverlay]
+type MinTile = [number, number, number, number, number, number, number, number, number, number, number, number, number];
 
 // Minified state for sharing
 interface MinState {
@@ -66,6 +66,7 @@ function minifyTile(tile: Tile): MinTile {
     tile.building.constructionProgress ?? 100,
     tile.building.abandoned ? 1 : 0,
     tile.building.flipped ? 1 : 0,
+    tile.hasRailOverlay ? 1 : 0,
   ];
 }
 
@@ -95,6 +96,7 @@ function expandTile(min: MinTile, x: number, y: number): Tile {
     crime: 0,
     traffic: 0,
     hasSubway: min[8] === 1,
+    hasRailOverlay: min[12] === 1,
   };
 }
 
