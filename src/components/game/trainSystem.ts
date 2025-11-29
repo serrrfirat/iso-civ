@@ -10,6 +10,8 @@ import {
   isRailTile,
   isRailStationTile,
   getRailDirectionOptions,
+  getAdjacentRail,
+  getTrackType,
   findRailStations,
   countRailTiles,
   LOCOMOTIVE_COLORS,
@@ -340,7 +342,8 @@ function findRandomRailTile(
 // ============================================================================
 
 /**
- * Pick next direction for train at a junction
+ * Pick next direction for train based on track geometry
+ * Trains can only turn at curve tiles - at junctions they must go straight
  */
 function pickNextDirection(
   previousDirection: CarDirection,
@@ -352,22 +355,74 @@ function pickNextDirection(
   const options = getRailDirectionOptions(grid, gridSize, x, y);
   if (options.length === 0) return null;
   
+  // Get the track type to determine valid movement
+  const connections = getAdjacentRail(grid, gridSize, x, y);
+  const trackType = getTrackType(connections);
+  
   // Don't reverse direction (prefer continuing forward or turning)
   const incoming = OPPOSITE_DIRECTION[previousDirection];
   const filtered = options.filter(dir => dir !== incoming);
   
   // If we can only go back, do so
-  const pool = filtered.length > 0 ? filtered : options;
-  
-  // Prefer continuing straight if possible
-  if (pool.includes(previousDirection)) {
-    // 70% chance to continue straight
-    if (Math.random() < 0.7) {
-      return previousDirection;
-    }
+  if (filtered.length === 0) {
+    return incoming;
   }
   
-  return pool[Math.floor(Math.random() * pool.length)];
+  // Handle based on track type
+  switch (trackType) {
+    // Straight tracks - must continue in same direction
+    case 'straight_ns':
+    case 'straight_ew':
+      // Continue straight
+      if (filtered.includes(previousDirection)) {
+        return previousDirection;
+      }
+      // If can't continue straight (shouldn't happen on straights), pick any valid
+      return filtered[0];
+    
+    // Curve tiles - must turn (only 2 connections, neither is straight through)
+    case 'curve_ne':
+    case 'curve_nw':
+    case 'curve_se':
+    case 'curve_sw':
+      // At curves, take the only available direction (the turn)
+      return filtered[0];
+    
+    // T-junctions - trains must go straight through, no turning
+    case 'junction_t_n':
+    case 'junction_t_e':
+    case 'junction_t_s':
+    case 'junction_t_w':
+      // Must continue straight if possible
+      if (filtered.includes(previousDirection)) {
+        return previousDirection;
+      }
+      // If entering from the branch of the T, must turn onto the main line
+      // Pick the direction that's NOT the incoming direction and NOT the branch
+      // For T-junctions, there are 3 connections; 2 are the "through" line
+      return filtered[0];
+    
+    // Cross intersection - must go straight through
+    case 'junction_cross':
+      // Must continue straight
+      if (filtered.includes(previousDirection)) {
+        return previousDirection;
+      }
+      // If somehow can't go straight, pick any
+      return filtered[0];
+    
+    // Terminus - must reverse
+    case 'terminus_n':
+    case 'terminus_e':
+    case 'terminus_s':
+    case 'terminus_w':
+      return incoming;
+    
+    // Single/isolated - shouldn't happen but handle it
+    case 'single':
+    default:
+      return filtered[0] || incoming;
+  }
 }
 
 /**
