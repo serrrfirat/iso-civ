@@ -173,6 +173,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null); // PERF: Separate canvas for hover/selection highlights
   const carsCanvasRef = useRef<HTMLCanvasElement>(null);
+  const buildingsCanvasRef = useRef<HTMLCanvasElement>(null); // Buildings rendered on top of cars/trains
   const lightingCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const renderPendingRef = useRef<number | null>(null); // PERF: Track pending render frame
@@ -1699,6 +1700,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         if (carsCanvasRef.current) {
           carsCanvasRef.current.style.width = `${rect.width}px`;
           carsCanvasRef.current.style.height = `${rect.height}px`;
+        }
+        if (buildingsCanvasRef.current) {
+          buildingsCanvasRef.current.style.width = `${rect.width}px`;
+          buildingsCanvasRef.current.style.height = `${rect.height}px`;
         }
         if (lightingCanvasRef.current) {
           lightingCanvasRef.current.style.width = `${rect.width}px`;
@@ -3540,10 +3545,40 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     
     // Draw buildings sorted by depth so multi-tile sprites sit above adjacent tiles
+    // NOTE: Building sprites are now drawn on a separate canvas (buildingsCanvasRef) 
+    // that renders on top of cars/trains. We render them here so we can use the same
+    // drawBuilding function and context.
     insertionSortByDepth(buildingQueue);
-    buildingQueue.forEach(({ tile, screenX, screenY }) => {
-      drawBuilding(ctx, screenX, screenY, tile);
-    });
+    
+    // Render buildings on the buildings canvas (on top of cars/trains)
+    const buildingsCanvas = buildingsCanvasRef.current;
+    if (buildingsCanvas) {
+      // Set canvas size in memory (scaled for DPI)
+      buildingsCanvas.width = canvasSize.width;
+      buildingsCanvas.height = canvasSize.height;
+      
+      const buildingsCtx = buildingsCanvas.getContext('2d');
+      if (buildingsCtx) {
+        // Clear buildings canvas
+        buildingsCtx.setTransform(1, 0, 0, 1, 0, 0);
+        buildingsCtx.clearRect(0, 0, buildingsCanvas.width, buildingsCanvas.height);
+        
+        // Apply same transform as main canvas
+        buildingsCtx.scale(dpr, dpr);
+        buildingsCtx.translate(offset.x, offset.y);
+        buildingsCtx.scale(zoom, zoom);
+        
+        // Disable image smoothing for crisp pixel art
+        buildingsCtx.imageSmoothingEnabled = false;
+        
+        // Draw buildings on the buildings canvas
+        buildingQueue.forEach(({ tile, screenX, screenY }) => {
+          drawBuilding(buildingsCtx, screenX, screenY, tile);
+        });
+        
+        buildingsCtx.setTransform(1, 0, 0, 1, 0, 0);
+      }
+    }
     
     // Draw overlays last so they remain visible on top of buildings
     overlayQueue.forEach(({ tile, screenX, screenY }) => {
@@ -4448,6 +4483,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       />
       <canvas
         ref={carsCanvasRef}
+        width={canvasSize.width}
+        height={canvasSize.height}
+        className="absolute top-0 left-0 pointer-events-none"
+      />
+      <canvas
+        ref={buildingsCanvasRef}
         width={canvasSize.width}
         height={canvasSize.height}
         className="absolute top-0 left-0 pointer-events-none"
