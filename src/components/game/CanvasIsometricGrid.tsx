@@ -1098,9 +1098,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       trainSpawnTimerRef.current = TRAIN_SPAWN_INTERVAL;
     }
 
-    // Update existing trains
+    // Update existing trains (pass all trains for collision detection)
+    const allTrains = trainsRef.current;
     trainsRef.current = trainsRef.current.filter(train => 
-      updateTrain(train, delta, speedMultiplier, currentGrid, currentGridSize)
+      updateTrain(train, delta, speedMultiplier, currentGrid, currentGridSize, allTrains)
     );
   }, []);
 

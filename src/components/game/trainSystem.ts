@@ -170,6 +170,12 @@ export const STATION_STOP_DURATION = 2.0;
 /** Train maximum age in seconds */
 export const TRAIN_MAX_AGE = 120;
 
+/** Safe following distance in tile units (triggers slowdown) */
+const SAFE_FOLLOWING_DISTANCE = 0.8;
+
+/** Minimum speed when slowing for train ahead (never fully stop to prevent deadlocks) */
+const MIN_FOLLOWING_SPEED = 0.3;
+
 /** Carriage count for train types */
 export const TRAIN_CARRIAGE_COUNTS = {
   passenger: { min: 5, max: 8 },
@@ -465,6 +471,98 @@ function findRandomRailTile(
 }
 
 // ============================================================================
+// Train Collision Detection
+// ============================================================================
+
+/**
+ * Calculate effective position of a train's front (locomotive) in continuous tile coordinates
+ */
+function getTrainFrontPosition(train: Train): { x: number; y: number } {
+  const meta = DIRECTION_META[train.direction];
+  // Position is tile + progress in direction of travel
+  return {
+    x: train.tileX + meta.step.x * train.progress,
+    y: train.tileY + meta.step.y * train.progress,
+  };
+}
+
+/**
+ * Calculate effective position of a train's rear (last carriage) in continuous tile coordinates
+ */
+function getTrainRearPosition(train: Train): { x: number; y: number } {
+  const lastCarriage = train.carriages[train.carriages.length - 1];
+  if (!lastCarriage) return getTrainFrontPosition(train);
+  
+  const meta = DIRECTION_META[lastCarriage.direction];
+  return {
+    x: lastCarriage.tileX + meta.step.x * lastCarriage.progress,
+    y: lastCarriage.tileY + meta.step.y * lastCarriage.progress,
+  };
+}
+
+/**
+ * Calculate distance from train1's front to train2's rear along the track
+ * Returns positive value if train2 is ahead of train1
+ * Returns Infinity if trains are not on same track or different directions
+ * Note: Trains going opposite directions use separate parallel tracks, so no collision check needed
+ */
+function getDistanceToTrainAhead(
+  train1: Train, 
+  train2: Train,
+  _grid: Tile[][],
+  _gridSize: number
+): number {
+  // Quick rejection - if trains are far apart, no need to check
+  const tileDist = Math.abs(train1.tileX - train2.tileX) + Math.abs(train1.tileY - train2.tileY);
+  if (tileDist > 3) return Infinity;
+  
+  // Only check trains going in the SAME direction (opposite directions use separate tracks)
+  if (train1.direction !== train2.direction) {
+    return Infinity;
+  }
+  
+  // Same direction - check if train2 is ahead of train1
+  const front1 = getTrainFrontPosition(train1);
+  const rear2 = getTrainRearPosition(train2);
+  
+  // Get direction of travel
+  const meta = DIRECTION_META[train1.direction];
+  
+  // Calculate signed distance along direction of travel
+  // Positive means train2 is ahead, negative means behind
+  const alongTrack = (rear2.x - front1.x) * meta.step.x + (rear2.y - front1.y) * meta.step.y;
+  
+  // If train2 is behind us, return Infinity (not blocking)
+  if (alongTrack < -0.3) return Infinity;
+  
+  // Check if they're on the same track (not just parallel)
+  // Perpendicular distance should be very small for same track
+  const perpDist = Math.abs((rear2.x - front1.x) * meta.step.y - (rear2.y - front1.y) * meta.step.x);
+  if (perpDist > 0.5) return Infinity; // On different parallel tracks
+  
+  return alongTrack;
+}
+
+/**
+ * Calculate speed multiplier based on distance to train ahead
+ * Returns 1.0 for full speed, lower values to slow down
+ * Never returns 0 to prevent deadlocks - trains always maintain minimum speed
+ */
+function calculateFollowingSpeedMultiplier(distanceAhead: number): number {
+  if (distanceAhead >= SAFE_FOLLOWING_DISTANCE) {
+    return 1.0; // Full speed - safe distance
+  }
+  
+  if (distanceAhead <= 0.1) {
+    return MIN_FOLLOWING_SPEED; // Very close but never fully stop
+  }
+  
+  // Linear interpolation between min speed and full speed
+  const t = distanceAhead / SAFE_FOLLOWING_DISTANCE;
+  return MIN_FOLLOWING_SPEED + t * (1.0 - MIN_FOLLOWING_SPEED);
+}
+
+// ============================================================================
 // Train Movement
 // ============================================================================
 
@@ -569,13 +667,15 @@ function getDirectionToTile(fromX: number, fromY: number, toX: number, toY: numb
 
 /**
  * Update a single train's position and state
+ * @param allTrains - All trains in the system for collision detection
  */
 export function updateTrain(
   train: Train,
   delta: number,
   speedMultiplier: number,
   grid: Tile[][],
-  gridSize: number
+  gridSize: number,
+  allTrains: Train[] = []
 ): boolean {
   // Update age
   train.age += delta * speedMultiplier;
@@ -598,8 +698,21 @@ export function updateTrain(
     return false; // Track was removed
   }
   
-  // Update progress
-  train.progress += train.speed * delta * speedMultiplier;
+  // Check for trains ahead and calculate speed reduction
+  let collisionSpeedMultiplier = 1.0;
+  for (const otherTrain of allTrains) {
+    if (otherTrain.id === train.id) continue; // Skip self
+    
+    const distance = getDistanceToTrainAhead(train, otherTrain, grid, gridSize);
+    const speedMult = calculateFollowingSpeedMultiplier(distance);
+    collisionSpeedMultiplier = Math.min(collisionSpeedMultiplier, speedMult);
+    
+    // Early exit if we need to stop
+    if (collisionSpeedMultiplier === 0) break;
+  }
+  
+  // Update progress with collision-adjusted speed
+  train.progress += train.speed * delta * speedMultiplier * collisionSpeedMultiplier;
   
   // Move to next tile when progress >= 1
   while (train.progress >= 1) {
@@ -945,10 +1058,10 @@ function drawPassengerCar(ctx: CanvasRenderingContext2D, color: string, scale: n
 }
 
 /**
- * Draw box car
+ * Draw box car (freight)
  */
 function drawBoxCar(ctx: CanvasRenderingContext2D, color: string, scale: number): void {
-  const len = TRAIN_CAR.CAR_LENGTH * scale;
+  const len = TRAIN_CAR.FREIGHT_CAR_LENGTH * scale;
   const wid = TRAIN_CAR.CAR_WIDTH * scale;
   
   // Main body
@@ -974,10 +1087,10 @@ function drawBoxCar(ctx: CanvasRenderingContext2D, color: string, scale: number)
 }
 
 /**
- * Draw tank car
+ * Draw tank car (freight)
  */
 function drawTankCar(ctx: CanvasRenderingContext2D, color: string, scale: number): void {
-  const len = TRAIN_CAR.CAR_LENGTH * scale;
+  const len = TRAIN_CAR.FREIGHT_CAR_LENGTH * scale;
   const wid = TRAIN_CAR.CAR_WIDTH * scale;
   
   // Base frame
@@ -1003,10 +1116,10 @@ function drawTankCar(ctx: CanvasRenderingContext2D, color: string, scale: number
 }
 
 /**
- * Draw flat car
+ * Draw flat car (freight)
  */
 function drawFlatCar(ctx: CanvasRenderingContext2D, color: string, scale: number): void {
-  const len = TRAIN_CAR.CAR_LENGTH * scale;
+  const len = TRAIN_CAR.FREIGHT_CAR_LENGTH * scale;
   const wid = TRAIN_CAR.CAR_WIDTH * scale;
   
   // Flat bed
