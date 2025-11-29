@@ -863,21 +863,13 @@ function updateCarriagePositions(
  */
 function getLocomotiveSmokestackPosition(
   train: Train,
-  grid: Tile[][],
-  gridSize: number
+  _grid: Tile[][],
+  _gridSize: number
 ): { x: number; y: number; angle: number } | null {
   const locomotive = train.carriages[0];
   if (!locomotive || locomotive.type !== 'locomotive') return null;
   
   const { screenX, screenY } = gridToScreen(locomotive.tileX, locomotive.tileY, 0, 0);
-  
-  // Get track type for this tile
-  let trackType: TrackType = 'straight_ns';
-  if (locomotive.tileX >= 0 && locomotive.tileX < gridSize && 
-      locomotive.tileY >= 0 && locomotive.tileY < gridSize) {
-    const connections = getAdjacentRail(grid, gridSize, locomotive.tileX, locomotive.tileY);
-    trackType = getTrackType(connections);
-  }
   
   // Calculate track offset (same logic as drawCarriage)
   const trackSide = getTrackSide(locomotive.direction);
@@ -1550,37 +1542,30 @@ function drawTrainSmoke(
     // Calculate age-based opacity (quick fade in, slow fade out)
     const ageRatio = particle.age / particle.maxAge;
     let ageOpacity: number;
-    if (ageRatio < 0.1) {
+    if (ageRatio < 0.15) {
       // Quick fade in
-      ageOpacity = ageRatio / 0.1;
+      ageOpacity = ageRatio / 0.15;
     } else {
       // Slow fade out
-      ageOpacity = 1 - ((ageRatio - 0.1) / 0.9);
+      ageOpacity = 1 - ((ageRatio - 0.15) / 0.85);
     }
     
     const finalOpacity = particle.opacity * ageOpacity;
     if (finalOpacity <= 0.01) continue;
     
-    // Draw smoke particle as a soft, dark gray puff
-    // Main smoke body
-    ctx.fillStyle = `rgba(50, 50, 55, ${finalOpacity})`;
+    // Draw compact smoke puff - dark gray core
+    ctx.fillStyle = `rgba(40, 40, 45, ${finalOpacity})`;
     ctx.beginPath();
     ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
     ctx.fill();
     
-    // Lighter inner highlight for depth/volume
-    const innerSize = particle.size * 0.5;
-    ctx.fillStyle = `rgba(80, 80, 90, ${finalOpacity * 0.6})`;
-    ctx.beginPath();
-    ctx.arc(particle.x, particle.y - particle.size * 0.15, innerSize, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Very light wispy edge
-    const outerSize = particle.size * 1.3;
-    ctx.fillStyle = `rgba(70, 70, 75, ${finalOpacity * 0.3})`;
-    ctx.beginPath();
-    ctx.arc(particle.x, particle.y, outerSize, 0, Math.PI * 2);
-    ctx.fill();
+    // Subtle lighter center highlight
+    if (particle.size > 2) {
+      ctx.fillStyle = `rgba(70, 70, 80, ${finalOpacity * 0.5})`;
+      ctx.beginPath();
+      ctx.arc(particle.x, particle.y - particle.size * 0.2, particle.size * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 

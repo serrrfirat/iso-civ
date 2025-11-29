@@ -662,9 +662,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // Update existing trains (pass all trains for collision detection)
     const allTrains = trainsRef.current;
     trainsRef.current = trainsRef.current.filter(train => 
-      updateTrain(train, delta, speedMultiplier, currentGrid, currentGridSize, allTrains)
+      updateTrain(train, delta, speedMultiplier, currentGrid, currentGridSize, allTrains, isMobile)
     );
-  }, []);
+  }, [isMobile]);
 
   // Draw trains on the rail network
   const drawTrainsCallback = useCallback((ctx: CanvasRenderingContext2D) => {

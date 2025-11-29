@@ -98,17 +98,17 @@ export const SMOG_MAX_PARTICLES_PER_FACTORY = 25; // Maximum particles per facto
 export const SMOG_MAX_PARTICLES_PER_FACTORY_MOBILE = 12; // Lower limit on mobile
 
 // Train smoke constants (freight locomotives only)
-export const TRAIN_SMOKE_PARTICLE_MAX_AGE = 3.0; // seconds - smoke dissipates faster than factory smog
-export const TRAIN_SMOKE_SPAWN_INTERVAL = 0.12; // seconds between puffs
-export const TRAIN_SMOKE_SPAWN_INTERVAL_MOBILE = 0.25; // Less frequent on mobile
-export const TRAIN_SMOKE_DRIFT_SPEED = 15; // pixels per second horizontal drift (faster than factory)
-export const TRAIN_SMOKE_RISE_SPEED = 25; // pixels per second upward drift
-export const TRAIN_SMOKE_BASE_OPACITY = 0.4; // Higher initial opacity for visibility
-export const TRAIN_SMOKE_PARTICLE_SIZE_MIN = 4; // Smaller particles than factory
-export const TRAIN_SMOKE_PARTICLE_SIZE_MAX = 10;
-export const TRAIN_SMOKE_PARTICLE_GROWTH = 2.5; // Grows faster than factory smog
-export const TRAIN_SMOKE_MAX_PARTICLES = 15; // Max particles per train
-export const TRAIN_SMOKE_MAX_PARTICLES_MOBILE = 8;
+export const TRAIN_SMOKE_PARTICLE_MAX_AGE = 1.8; // seconds - short-lived compact puffs
+export const TRAIN_SMOKE_SPAWN_INTERVAL = 0.15; // seconds between puffs
+export const TRAIN_SMOKE_SPAWN_INTERVAL_MOBILE = 0.3; // Less frequent on mobile
+export const TRAIN_SMOKE_DRIFT_SPEED = 8; // pixels per second horizontal drift (slower)
+export const TRAIN_SMOKE_RISE_SPEED = 18; // pixels per second upward drift
+export const TRAIN_SMOKE_BASE_OPACITY = 0.5; // Higher opacity for compact puffs
+export const TRAIN_SMOKE_PARTICLE_SIZE_MIN = 2; // Tiny puffs
+export const TRAIN_SMOKE_PARTICLE_SIZE_MAX = 4; // Small max size
+export const TRAIN_SMOKE_PARTICLE_GROWTH = 0.8; // Slow growth - stays compact
+export const TRAIN_SMOKE_MAX_PARTICLES = 12; // Max particles per train
+export const TRAIN_SMOKE_MAX_PARTICLES_MOBILE = 6;
 
 // Firework system constants
 export const FIREWORK_BUILDINGS: BuildingType[] = ['baseball_stadium', 'amusement_park', 'marina_docks_small', 'pier_large'];
