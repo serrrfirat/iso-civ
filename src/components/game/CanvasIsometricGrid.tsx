@@ -81,6 +81,7 @@ import {
   getTrafficFlowDirection,
   drawCrosswalks,
   ROAD_COLORS,
+  drawRoadArrow,
 } from '@/components/game/trafficSystem';
 import { CrimeType, getCrimeName, getCrimeDescription, getFireDescriptionForTile, getFireNameForTile } from '@/components/game/incidentData';
 import {
