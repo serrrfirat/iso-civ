@@ -2,6 +2,15 @@ import { Tile } from '@/types/game';
 import { CarDirection, TILE_WIDTH, TILE_HEIGHT } from './types';
 import { OPPOSITE_DIRECTION } from './constants';
 
+// PERF: Pre-allocated typed arrays for BFS pathfinding to reduce GC pressure
+// Max path length of 2048 nodes should be sufficient for most city sizes
+const MAX_PATH_LENGTH = 2048;
+const BFS_QUEUE_X = new Int16Array(MAX_PATH_LENGTH);
+const BFS_QUEUE_Y = new Int16Array(MAX_PATH_LENGTH);
+const BFS_PARENT_X = new Int16Array(MAX_PATH_LENGTH); // Parent index for path reconstruction
+const BFS_PARENT_Y = new Int16Array(MAX_PATH_LENGTH);
+const BFS_VISITED = new Uint8Array(256 * 256); // Max 256x256 grid size
+
 // Get opposite direction
 export function getOppositeDirection(direction: CarDirection): CarDirection {
   return OPPOSITE_DIRECTION[direction];
@@ -39,7 +48,19 @@ export function pickNextDirection(
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+// PERF: Pre-allocated arrays for findNearestRoadToBuilding BFS
+const ROAD_BFS_MAX_SIZE = 4096; // Max tiles to check
+const ROAD_BFS_QUEUE_X = new Int16Array(ROAD_BFS_MAX_SIZE);
+const ROAD_BFS_QUEUE_Y = new Int16Array(ROAD_BFS_MAX_SIZE);
+const ROAD_BFS_QUEUE_DIST = new Int16Array(ROAD_BFS_MAX_SIZE);
+const ROAD_BFS_VISITED = new Uint8Array(256 * 256); // Max 256x256 grid
+
+// Direction offsets for 8-directional search
+const ADJ_DX = [-1, 1, 0, 0, -1, -1, 1, 1];
+const ADJ_DY = [0, 0, -1, 1, -1, 1, -1, 1];
+
 // Find the nearest road tile adjacent to a building
+// PERF: Uses pre-allocated typed arrays and numeric visited keys
 export function findNearestRoadToBuilding(
   gridData: Tile[][],
   gridSizeValue: number,
@@ -47,40 +68,88 @@ export function findNearestRoadToBuilding(
   buildingY: number
 ): { x: number; y: number } | null {
   // Check adjacent tiles first (distance 1) - including diagonals
-  const adjacentOffsets = [
-    { dx: -1, dy: 0 },
-    { dx: 1, dy: 0 },
-    { dx: 0, dy: -1 },
-    { dx: 0, dy: 1 },
-    { dx: -1, dy: -1 },
-    { dx: -1, dy: 1 },
-    { dx: 1, dy: -1 },
-    { dx: 1, dy: 1 },
-  ];
-  
-  for (const { dx, dy } of adjacentOffsets) {
-    const nx = buildingX + dx;
-    const ny = buildingY + dy;
+  for (let d = 0; d < 8; d++) {
+    const nx = buildingX + ADJ_DX[d];
+    const ny = buildingY + ADJ_DY[d];
     if (isRoadTile(gridData, gridSizeValue, nx, ny)) {
       return { x: nx, y: ny };
     }
   }
   
-  // BFS to find nearest road within reasonable distance (increased to 20)
+  // For larger grids or edge cases, use optimized BFS
+  const maxIdx = gridSizeValue * gridSizeValue;
+  if (maxIdx > ROAD_BFS_VISITED.length) {
+    // Fallback to string-based Set for very large grids
+    return findNearestRoadLegacy(gridData, gridSizeValue, buildingX, buildingY);
+  }
+  
+  // Clear visited array for the area we need
+  for (let i = 0; i < maxIdx; i++) {
+    ROAD_BFS_VISITED[i] = 0;
+  }
+  
+  // BFS using pre-allocated arrays
+  let queueHead = 0;
+  let queueTail = 1;
+  ROAD_BFS_QUEUE_X[0] = buildingX;
+  ROAD_BFS_QUEUE_Y[0] = buildingY;
+  ROAD_BFS_QUEUE_DIST[0] = 0;
+  ROAD_BFS_VISITED[buildingY * gridSizeValue + buildingX] = 1;
+  
+  while (queueHead < queueTail && queueTail < ROAD_BFS_MAX_SIZE) {
+    const cx = ROAD_BFS_QUEUE_X[queueHead];
+    const cy = ROAD_BFS_QUEUE_Y[queueHead];
+    const dist = ROAD_BFS_QUEUE_DIST[queueHead];
+    queueHead++;
+    
+    if (dist > 20) break; // Max search distance
+    
+    for (let d = 0; d < 8; d++) {
+      const nx = cx + ADJ_DX[d];
+      const ny = cy + ADJ_DY[d];
+      
+      if (nx < 0 || ny < 0 || nx >= gridSizeValue || ny >= gridSizeValue) continue;
+      
+      const visitedIdx = ny * gridSizeValue + nx;
+      if (ROAD_BFS_VISITED[visitedIdx]) continue;
+      ROAD_BFS_VISITED[visitedIdx] = 1;
+      
+      if (isRoadTile(gridData, gridSizeValue, nx, ny)) {
+        return { x: nx, y: ny };
+      }
+      
+      ROAD_BFS_QUEUE_X[queueTail] = nx;
+      ROAD_BFS_QUEUE_Y[queueTail] = ny;
+      ROAD_BFS_QUEUE_DIST[queueTail] = dist + 1;
+      queueTail++;
+    }
+  }
+  
+  return null;
+}
+
+// Legacy fallback for very large grids
+function findNearestRoadLegacy(
+  gridData: Tile[][],
+  gridSizeValue: number,
+  buildingX: number,
+  buildingY: number
+): { x: number; y: number } | null {
   const queue: { x: number; y: number; dist: number }[] = [{ x: buildingX, y: buildingY, dist: 0 }];
-  const visited = new Set<string>();
-  visited.add(`${buildingX},${buildingY}`);
+  const visited = new Set<number>(); // PERF: Use numeric keys
+  visited.add(buildingY * gridSizeValue + buildingX);
   
   while (queue.length > 0) {
     const current = queue.shift()!;
-    if (current.dist > 20) break; // Increased max search distance
+    if (current.dist > 20) break;
     
-    for (const { dx, dy } of adjacentOffsets) {
-      const nx = current.x + dx;
-      const ny = current.y + dy;
-      const key = `${nx},${ny}`;
+    for (let d = 0; d < 8; d++) {
+      const nx = current.x + ADJ_DX[d];
+      const ny = current.y + ADJ_DY[d];
       
       if (nx < 0 || ny < 0 || nx >= gridSizeValue || ny >= gridSizeValue) continue;
+      
+      const key = ny * gridSizeValue + nx;
       if (visited.has(key)) continue;
       visited.add(key);
       
@@ -96,6 +165,7 @@ export function findNearestRoadToBuilding(
 }
 
 // BFS pathfinding on road network - finds path from start to a tile adjacent to target
+// PERF: Uses pre-allocated typed arrays to avoid GC pressure from path copying
 export function findPathOnRoads(
   gridData: Tile[][],
   gridSizeValue: number,
@@ -117,7 +187,103 @@ export function findPathOnRoads(
     return [{ x: startRoad.x, y: startRoad.y }];
   }
   
-  // BFS from start road to target road
+  // PERF: Clear visited array only for the area we need (faster than full clear)
+  // Using numeric keys: index = y * gridSize + x
+  const maxIdx = gridSizeValue * gridSizeValue;
+  if (maxIdx > BFS_VISITED.length) {
+    // Fallback to old method for very large grids
+    return findPathOnRoadsLegacy(gridData, gridSizeValue, startRoad, targetRoad);
+  }
+  
+  // Clear visited (only the portion we'll use)
+  for (let i = 0; i < maxIdx; i++) {
+    BFS_VISITED[i] = 0;
+  }
+  
+  // BFS using pre-allocated arrays
+  let queueHead = 0;
+  let queueTail = 1;
+  BFS_QUEUE_X[0] = startRoad.x;
+  BFS_QUEUE_Y[0] = startRoad.y;
+  BFS_PARENT_X[0] = -1; // -1 indicates start node
+  BFS_PARENT_Y[0] = -1;
+  BFS_VISITED[startRoad.y * gridSizeValue + startRoad.x] = 1;
+  
+  // Direction offsets
+  const DX = [-1, 1, 0, 0];
+  const DY = [0, 0, -1, 1];
+  
+  let foundIdx = -1;
+  
+  while (queueHead < queueTail && queueTail < MAX_PATH_LENGTH) {
+    const cx = BFS_QUEUE_X[queueHead];
+    const cy = BFS_QUEUE_Y[queueHead];
+    const currentIdx = queueHead;
+    queueHead++;
+    
+    // Check if we reached the target road
+    if (cx === targetRoad.x && cy === targetRoad.y) {
+      foundIdx = currentIdx;
+      break;
+    }
+    
+    for (let d = 0; d < 4; d++) {
+      const nx = cx + DX[d];
+      const ny = cy + DY[d];
+      
+      if (nx < 0 || ny < 0 || nx >= gridSizeValue || ny >= gridSizeValue) continue;
+      
+      const visitedIdx = ny * gridSizeValue + nx;
+      if (BFS_VISITED[visitedIdx]) continue;
+      if (!isRoadTile(gridData, gridSizeValue, nx, ny)) continue;
+      
+      BFS_VISITED[visitedIdx] = 1;
+      BFS_QUEUE_X[queueTail] = nx;
+      BFS_QUEUE_Y[queueTail] = ny;
+      BFS_PARENT_X[queueTail] = cx;
+      BFS_PARENT_Y[queueTail] = cy;
+      queueTail++;
+    }
+  }
+  
+  if (foundIdx === -1) return null;
+  
+  // Reconstruct path by walking back through parents
+  const pathReverse: { x: number; y: number }[] = [];
+  let idx = foundIdx;
+  
+  // Walk back through the BFS tree to reconstruct path
+  while (idx >= 0) {
+    pathReverse.push({ x: BFS_QUEUE_X[idx], y: BFS_QUEUE_Y[idx] });
+    
+    // Find parent index by searching queue
+    const px = BFS_PARENT_X[idx];
+    const py = BFS_PARENT_Y[idx];
+    
+    if (px === -1) break; // Reached start
+    
+    // Search backwards for parent position in queue
+    let parentIdx = -1;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (BFS_QUEUE_X[i] === px && BFS_QUEUE_Y[i] === py) {
+        parentIdx = i;
+        break;
+      }
+    }
+    idx = parentIdx;
+  }
+  
+  // Reverse to get path from start to target
+  return pathReverse.reverse();
+}
+
+// Legacy implementation for very large grids (fallback)
+function findPathOnRoadsLegacy(
+  gridData: Tile[][],
+  gridSizeValue: number,
+  startRoad: { x: number; y: number },
+  targetRoad: { x: number; y: number }
+): { x: number; y: number }[] | null {
   const queue: { x: number; y: number; path: { x: number; y: number }[] }[] = [
     { x: startRoad.x, y: startRoad.y, path: [{ x: startRoad.x, y: startRoad.y }] }
   ];
@@ -134,7 +300,6 @@ export function findPathOnRoads(
   while (queue.length > 0) {
     const current = queue.shift()!;
     
-    // Check if we reached the target road
     if (current.x === targetRoad.x && current.y === targetRoad.y) {
       return current.path;
     }
@@ -157,7 +322,7 @@ export function findPathOnRoads(
     }
   }
   
-  return null; // No path found
+  return null;
 }
 
 // Get direction from current tile to next tile

@@ -262,6 +262,21 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const roadAnalysisCacheRef = useRef<Map<string, ReturnType<typeof analyzeMergedRoad>>>(new Map());
   const roadAnalysisCacheVersionRef = useRef(-1);
 
+  // PERF: Render queue arrays cached across frames to reduce GC pressure
+  // These are cleared at the start of each render frame with .length = 0
+  type BuildingDrawItem = { screenX: number; screenY: number; tile: Tile; depth: number };
+  type OverlayDrawItem = { screenX: number; screenY: number; tile: Tile };
+  const renderQueuesRef = useRef({
+    buildingQueue: [] as BuildingDrawItem[],
+    waterQueue: [] as BuildingDrawItem[],
+    roadQueue: [] as BuildingDrawItem[],
+    railQueue: [] as BuildingDrawItem[],
+    beachQueue: [] as BuildingDrawItem[],
+    baseTileQueue: [] as BuildingDrawItem[],
+    greenBaseTileQueue: [] as BuildingDrawItem[],
+    overlayQueue: [] as OverlayDrawItem[],
+  });
+
   const worldStateRef = useRef<WorldRenderState>({
     grid,
     gridSize,
@@ -1771,28 +1786,26 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const visibleMinSum = Math.max(0, Math.floor((viewTop - TILE_HEIGHT * 6) * 2 / TILE_HEIGHT));
     const visibleMaxSum = Math.min(gridSize * 2 - 2, Math.ceil((viewBottom + TILE_HEIGHT) * 2 / TILE_HEIGHT));
     
-    type BuildingDraw = {
-      screenX: number;
-      screenY: number;
-      tile: Tile;
-      depth: number;
-    };
-    type OverlayDraw = {
-      screenX: number;
-      screenY: number;
-      tile: Tile;
-    };
+    // PERF: Use cached render queue arrays to avoid GC pressure
+    // Clear arrays by setting length = 0 (much faster than recreating)
+    const queues = renderQueuesRef.current;
+    queues.buildingQueue.length = 0;
+    queues.waterQueue.length = 0;
+    queues.roadQueue.length = 0;
+    queues.railQueue.length = 0;
+    queues.beachQueue.length = 0;
+    queues.baseTileQueue.length = 0;
+    queues.greenBaseTileQueue.length = 0;
+    queues.overlayQueue.length = 0;
     
-    // PERF: Reuse queue arrays across frames to avoid GC pressure
-    // Arrays are cleared by setting length = 0 which is faster than recreating
-    const buildingQueue: BuildingDraw[] = [];
-    const waterQueue: BuildingDraw[] = [];
-    const roadQueue: BuildingDraw[] = []; // Roads drawn above water
-    const railQueue: BuildingDraw[] = []; // Rail tracks drawn above water
-    const beachQueue: BuildingDraw[] = [];
-    const baseTileQueue: BuildingDraw[] = [];
-    const greenBaseTileQueue: BuildingDraw[] = [];
-    const overlayQueue: OverlayDraw[] = [];
+    const buildingQueue = queues.buildingQueue;
+    const waterQueue = queues.waterQueue;
+    const roadQueue = queues.roadQueue;
+    const railQueue = queues.railQueue;
+    const beachQueue = queues.beachQueue;
+    const baseTileQueue = queues.baseTileQueue;
+    const greenBaseTileQueue = queues.greenBaseTileQueue;
+    const overlayQueue = queues.overlayQueue;
     
     // PERF: Insertion sort for nearly-sorted arrays (O(n) vs O(n log n) for .sort())
     // Since tiles are iterated in diagonal order, queues are already nearly sorted

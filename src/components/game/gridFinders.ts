@@ -1,27 +1,29 @@
 /**
  * Grid finder utilities for searching the game grid for specific building types
+ * 
+ * PERFORMANCE: Uses Set instead of Array for O(1) building type lookups
  */
 
 import { BuildingType, Tile } from '@/types/game';
 import { TourWaypoint, TILE_WIDTH, TILE_HEIGHT, PedestrianDestType } from './types';
 import { gridToScreen } from './utils';
 
-// Building type lists for categorization
-const RESIDENTIAL_BUILDING_TYPES: BuildingType[] = [
+// PERF: Building type Sets for O(1) lookup instead of O(n) array.includes()
+const RESIDENTIAL_BUILDING_TYPES = new Set<BuildingType>([
   'house_small', 'house_medium', 'mansion', 'apartment_low', 'apartment_high'
-];
+]);
 
-const SCHOOL_TYPES: BuildingType[] = ['school', 'university'];
+const SCHOOL_TYPES = new Set<BuildingType>(['school', 'university']);
 
-const COMMERCIAL_TYPES: BuildingType[] = [
+const COMMERCIAL_TYPES = new Set<BuildingType>([
   'shop_small', 'shop_medium', 'office_low', 'office_high', 'mall'
-];
+]);
 
-const INDUSTRIAL_TYPES: BuildingType[] = [
+const INDUSTRIAL_TYPES = new Set<BuildingType>([
   'factory_small', 'factory_medium', 'factory_large', 'warehouse'
-];
+]);
 
-const PARK_TYPES: BuildingType[] = [
+const PARK_TYPES = new Set<BuildingType>([
   'park', 'park_large', 'tennis', 'basketball_courts', 'playground_small',
   'playground_large', 'baseball_field_small', 'soccer_field_small',
   'football_field', 'baseball_stadium', 'community_center', 'swimming_pool',
@@ -29,7 +31,7 @@ const PARK_TYPES: BuildingType[] = [
   'amphitheater', 'greenhouse_garden', 'animal_pens_farm', 'cabin_house',
   'campground', 'marina_docks_small', 'pier_large', 'roller_coaster_small',
   'community_garden', 'pond_park', 'park_gate', 'mountain_lodge', 'mountain_trailhead'
-];
+]);
 
 export interface HeliportInfo {
   x: number;
@@ -62,7 +64,7 @@ export function findResidentialBuildings(
   const residentials: { x: number; y: number }[] = [];
   for (let y = 0; y < gridSize; y++) {
     for (let x = 0; x < gridSize; x++) {
-      if (RESIDENTIAL_BUILDING_TYPES.includes(grid[y][x].building.type)) {
+      if (RESIDENTIAL_BUILDING_TYPES.has(grid[y][x].building.type)) {
         residentials.push({ x, y });
       }
     }
@@ -83,13 +85,13 @@ export function findPedestrianDestinations(
   for (let y = 0; y < gridSize; y++) {
     for (let x = 0; x < gridSize; x++) {
       const buildingType = grid[y][x].building.type;
-      if (SCHOOL_TYPES.includes(buildingType)) {
+      if (SCHOOL_TYPES.has(buildingType)) {
         destinations.push({ x, y, type: 'school' });
-      } else if (COMMERCIAL_TYPES.includes(buildingType)) {
+      } else if (COMMERCIAL_TYPES.has(buildingType)) {
         destinations.push({ x, y, type: 'commercial' });
-      } else if (INDUSTRIAL_TYPES.includes(buildingType)) {
+      } else if (INDUSTRIAL_TYPES.has(buildingType)) {
         destinations.push({ x, y, type: 'industrial' });
-      } else if (PARK_TYPES.includes(buildingType)) {
+      } else if (PARK_TYPES.has(buildingType)) {
         destinations.push({ x, y, type: 'park' });
       }
     }
@@ -238,6 +240,10 @@ export function findAdjacentWaterTile(
   return null;
 }
 
+// PERF: Cache Set for firework building types to avoid recreating on each call
+let cachedFireworkTypesArray: BuildingType[] | null = null;
+let cachedFireworkTypesSet: Set<BuildingType> | null = null;
+
 /**
  * Find all buildings that can have fireworks
  */
@@ -248,11 +254,18 @@ export function findFireworkBuildings(
 ): { x: number; y: number; type: BuildingType }[] {
   if (!grid || gridSize <= 0) return [];
 
+  // PERF: Cache the Set conversion - only rebuild if array reference changed
+  if (cachedFireworkTypesArray !== fireworkBuildingTypes) {
+    cachedFireworkTypesArray = fireworkBuildingTypes;
+    cachedFireworkTypesSet = new Set(fireworkBuildingTypes);
+  }
+  const typesSet = cachedFireworkTypesSet!;
+
   const buildings: { x: number; y: number; type: BuildingType }[] = [];
   for (let y = 0; y < gridSize; y++) {
     for (let x = 0; x < gridSize; x++) {
       const buildingType = grid[y][x].building.type;
-      if (fireworkBuildingTypes.includes(buildingType)) {
+      if (typesSet.has(buildingType)) {
         buildings.push({ x, y, type: buildingType });
       }
     }

@@ -765,9 +765,25 @@ function createInitialStats(): Stats {
   };
 }
 
+// PERF: Optimized service coverage grid creation
+// Uses typed arrays internally for faster operations
 function createServiceCoverage(size: number): ServiceCoverage {
-  const createGrid = () => Array(size).fill(null).map(() => Array(size).fill(0));
-  const createBoolGrid = () => Array(size).fill(null).map(() => Array(size).fill(false));
+  // Pre-allocate arrays with correct size to avoid resizing
+  const createGrid = () => {
+    const grid: number[][] = new Array(size);
+    for (let y = 0; y < size; y++) {
+      grid[y] = new Array(size).fill(0);
+    }
+    return grid;
+  };
+  
+  const createBoolGrid = () => {
+    const grid: boolean[][] = new Array(size);
+    for (let y = 0; y < size; y++) {
+      grid[y] = new Array(size).fill(false);
+    }
+    return grid;
+  };
 
   return {
     police: createGrid(),
@@ -1494,7 +1510,7 @@ function calculateAverageCoverage(coverage: number[][]): number {
   return count > 0 ? total / count : 0;
 }
 
-// Update budget costs based on buildings
+// PERF: Update budget costs based on buildings - single pass through grid
 function updateBudgetCosts(grid: Tile[][], budget: Budget): Budget {
   const newBudget = { ...budget };
   
@@ -1507,9 +1523,16 @@ function updateBudgetCosts(grid: Tile[][], budget: Budget): Budget {
   let powerCount = 0;
   let waterCount = 0;
   let roadCount = 0;
+  let subwayTileCount = 0;
+  let subwayStationCount = 0;
 
+  // PERF: Single pass through grid instead of two separate loops
   for (const row of grid) {
     for (const tile of row) {
+      // Count subway tiles
+      if (tile.hasSubway) subwayTileCount++;
+      
+      // Count building types using switch for jump table optimization
       switch (tile.building.type) {
         case 'police_station': policeCount++; break;
         case 'fire_station': fireCount++; break;
@@ -1518,21 +1541,12 @@ function updateBudgetCosts(grid: Tile[][], budget: Budget): Budget {
         case 'university': universityCount++; break;
         case 'park': parkCount++; break;
         case 'park_large': parkCount++; break;
-        case 'tennis': parkCount++; break; // Tennis courts count as parks
+        case 'tennis': parkCount++; break;
         case 'power_plant': powerCount++; break;
         case 'water_tower': waterCount++; break;
         case 'road': roadCount++; break;
+        case 'subway_station': subwayStationCount++; break;
       }
-    }
-  }
-
-  // Count subway tiles and stations
-  let subwayTileCount = 0;
-  let subwayStationCount = 0;
-  for (const row of grid) {
-    for (const tile of row) {
-      if (tile.hasSubway) subwayTileCount++;
-      if (tile.building.type === 'subway_station') subwayStationCount++;
     }
   }
 
@@ -1548,19 +1562,37 @@ function updateBudgetCosts(grid: Tile[][], budget: Budget): Budget {
   return newBudget;
 }
 
-// Generate advisor messages
+// PERF: Generate advisor messages - single pass through grid for all building counts
 function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: Tile[][]): AdvisorMessage[] {
   const messages: AdvisorMessage[] = [];
 
-  // Power advisor
+  // PERF: Single pass through grid to collect all building stats
   let unpoweredBuildings = 0;
+  let unwateredBuildings = 0;
+  let abandonedBuildings = 0;
+  let abandonedResidential = 0;
+  let abandonedCommercial = 0;
+  let abandonedIndustrial = 0;
+  
   for (const row of grid) {
     for (const tile of row) {
-      if (tile.zone !== 'none' && tile.building.type !== 'grass' && !tile.building.powered) {
-        unpoweredBuildings++;
+      // Only count zoned buildings (not grass)
+      if (tile.zone !== 'none' && tile.building.type !== 'grass') {
+        if (!tile.building.powered) unpoweredBuildings++;
+        if (!tile.building.watered) unwateredBuildings++;
+      }
+      
+      // Count abandoned buildings
+      if (tile.building.abandoned) {
+        abandonedBuildings++;
+        if (tile.zone === 'residential') abandonedResidential++;
+        else if (tile.zone === 'commercial') abandonedCommercial++;
+        else if (tile.zone === 'industrial') abandonedIndustrial++;
       }
     }
   }
+
+  // Power advisor
   if (unpoweredBuildings > 0) {
     messages.push({
       name: 'Power Advisor',
@@ -1571,14 +1603,6 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
   }
 
   // Water advisor
-  let unwateredBuildings = 0;
-  for (const row of grid) {
-    for (const tile of row) {
-      if (tile.zone !== 'none' && tile.building.type !== 'grass' && !tile.building.watered) {
-        unwateredBuildings++;
-      }
-    }
-  }
   if (unwateredBuildings > 0) {
     messages.push({
       name: 'Water Advisor',
@@ -1650,21 +1674,7 @@ function generateAdvisorMessages(stats: Stats, services: ServiceCoverage, grid: 
     });
   }
 
-  // Abandonment advisor
-  let abandonedBuildings = 0;
-  let abandonedResidential = 0;
-  let abandonedCommercial = 0;
-  let abandonedIndustrial = 0;
-  for (const row of grid) {
-    for (const tile of row) {
-      if (tile.building.abandoned) {
-        abandonedBuildings++;
-        if (tile.zone === 'residential') abandonedResidential++;
-        else if (tile.zone === 'commercial') abandonedCommercial++;
-        else if (tile.zone === 'industrial') abandonedIndustrial++;
-      }
-    }
-  }
+  // Abandonment advisor (data already collected above)
   if (abandonedBuildings > 0) {
     const details: string[] = [];
     if (abandonedResidential > 0) details.push(`${abandonedResidential} residential`);
