@@ -165,21 +165,36 @@ export function isRailTile(grid: Tile[][], gridSize: number, x: number, y: numbe
 }
 
 /**
- * Check if a tile is a rail station
+ * Check if a tile is a rail station (including all tiles of a 2x2 station)
  */
 export function isRailStationTile(grid: Tile[][], gridSize: number, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return false;
-  return grid[y][x].building.type === 'rail_station';
+  const tile = grid[y][x];
+  
+  // Direct rail_station tile (origin)
+  if (tile.building.type === 'rail_station') return true;
+  
+  // Check if this 'empty' tile is part of a 2x2 rail_station
+  if (tile.building.type === 'empty') {
+    // Check tile to the west (this could be origin if we're in east column)
+    if (x > 0 && grid[y][x - 1]?.building.type === 'rail_station') return true;
+    // Check tile to the north (this could be origin if we're in south row)
+    if (y > 0 && grid[y - 1][x]?.building.type === 'rail_station') return true;
+    // Check tile to the northwest (this could be origin if we're in southeast corner)
+    if (x > 0 && y > 0 && grid[y - 1][x - 1]?.building.type === 'rail_station') return true;
+  }
+  
+  return false;
 }
 
 /**
- * Check if a tile has rail (either pure rail tile OR road with rail overlay)
+ * Check if a tile has rail (either pure rail tile OR road with rail overlay OR part of rail station)
  */
 function hasRailAtPosition(grid: Tile[][], gridSize: number, x: number, y: number): boolean {
   if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return false;
   const tile = grid[y][x];
   return tile.building.type === 'rail' || 
-         tile.building.type === 'rail_station' || 
+         isRailStationTile(grid, gridSize, x, y) || 
          (tile.building.type === 'road' && tile.hasRailOverlay === true);
 }
 
@@ -375,13 +390,16 @@ function drawBallast(
   };
 
   // Draw center area for junctions (covers both tracks)
+  // Uses proper isometric diamond aligned with tile grid
   const drawCenterBallast = () => {
     const size = (ballastW + trackSep) * 0.8;
+    // Use exact TILE_HEIGHT/TILE_WIDTH ratio (0.5) for proper isometric alignment
+    const isoRatio = h / w; // Should be 0.5 for 2:1 isometric
     ctx.beginPath();
-    ctx.moveTo(cx, cy - size * 0.5);
-    ctx.lineTo(cx + size, cy);
-    ctx.lineTo(cx, cy + size * 0.5);
-    ctx.lineTo(cx - size, cy);
+    ctx.moveTo(cx, cy - size * isoRatio);  // top
+    ctx.lineTo(cx + size, cy);              // right
+    ctx.lineTo(cx, cy + size * isoRatio);  // bottom
+    ctx.lineTo(cx - size, cy);              // left
     ctx.closePath();
     ctx.fill();
   };
@@ -969,9 +987,9 @@ function drawBufferStop(
   ctx.fillStyle = '#dc2626';
   ctx.fillRect(-size - offset, -size / 2, size, size);
   
-  // White stripe
+  // White stripe (vertical - rotated 90° from before)
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(-size - offset, -size / 4, size, size / 2);
+  ctx.fillRect(-size - offset + size / 4, -size / 2, size / 2, size);
 
   ctx.restore();
 }
@@ -1019,9 +1037,9 @@ export function getAdjacentRailForOverlay(
   const hasRailAt = (checkX: number, checkY: number): boolean => {
     if (checkX < 0 || checkY < 0 || checkX >= gridSize || checkY >= gridSize) return false;
     const tile = grid[checkY][checkX];
-    // Consider a tile as having rail if it's a rail tile, a rail station, or a road with rail overlay
+    // Consider a tile as having rail if it's a rail tile, a rail station (any tile), or a road with rail overlay
     return tile.building.type === 'rail' || 
-           tile.building.type === 'rail_station' || 
+           isRailStationTile(grid, gridSize, checkX, checkY) || 
            (tile.building.type === 'road' && tile.hasRailOverlay === true);
   };
 

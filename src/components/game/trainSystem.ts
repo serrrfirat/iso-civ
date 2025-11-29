@@ -32,7 +32,7 @@ import { gridToScreen } from './utils';
 const ISO_NS = { x: 0.894427, y: 0.447214 };
 const ISO_EW = { x: -0.894427, y: 0.447214 };
 
-/** Get curve endpoints, control point, and perpendicular directions for a curve track type */
+/** Get curve endpoints and control point for a curve track type */
 function getCurveGeometry(
   trackType: TrackType,
   screenX: number,
@@ -41,8 +41,6 @@ function getCurveGeometry(
   from: { x: number; y: number }; 
   to: { x: number; y: number }; 
   control: { x: number; y: number }; 
-  fromPerp: { x: number; y: number };
-  toPerp: { x: number; y: number };
 } | null {
   const w = TILE_WIDTH;
   const h = TILE_HEIGHT;
@@ -56,25 +54,15 @@ function getCurveGeometry(
   const westEdge = { x: screenX + w * 0.25, y: screenY + h * 0.75 };
   const center = { x: cx, y: cy };
 
-  // Perpendicular directions at each edge (matching rail drawing code)
-  // These must match the perpendiculars used in railSystem.ts for track drawing
-  const NEG_ISO_EW = { x: -ISO_EW.x, y: -ISO_EW.y };
-  const NEG_ISO_NS = { x: -ISO_NS.x, y: -ISO_NS.y };
-
-  // The perpendiculars here match those used in drawDoubleCurvedBallast/Rails
   switch (trackType) {
     case 'curve_ne':
-      // from=north, to=east; perps from rail code: ISO_EW, ISO_NS
-      return { from: northEdge, to: eastEdge, control: center, fromPerp: ISO_EW, toPerp: ISO_NS };
+      return { from: northEdge, to: eastEdge, control: center };
     case 'curve_nw':
-      // from=north, to=west; perps from rail code: NEG_ISO_EW, ISO_NS
-      return { from: northEdge, to: westEdge, control: center, fromPerp: NEG_ISO_EW, toPerp: ISO_NS };
+      return { from: northEdge, to: westEdge, control: center };
     case 'curve_se':
-      // from=south, to=east; perps from rail code: ISO_EW, NEG_ISO_NS  
-      return { from: southEdge, to: eastEdge, control: center, fromPerp: ISO_EW, toPerp: NEG_ISO_NS };
+      return { from: southEdge, to: eastEdge, control: center };
     case 'curve_sw':
-      // from=south, to=west; perps from rail code: NEG_ISO_EW, NEG_ISO_NS
-      return { from: southEdge, to: westEdge, control: center, fromPerp: NEG_ISO_EW, toPerp: NEG_ISO_NS };
+      return { from: southEdge, to: westEdge, control: center };
     default:
       return null;
   }
@@ -884,16 +872,9 @@ function drawCarriage(
   
   if (curveGeometry && curveTraversal) {
     // We're on a curve - interpolate position and angle along the bezier
-    const { from, to, control, fromPerp, toPerp } = curveGeometry;
+    const { from, to, control } = curveGeometry;
     const { entryT, exitT, entryDirection } = curveTraversal;
-    
-    // Calculate track sides at entry and exit to ensure smooth transition
-    // The train enters on entryDirection's track side and exits on exitDirection's track side
     const exitDirection = carriage.direction;
-    const entryTrackSide = getTrackSide(entryDirection);
-    const exitTrackSide = getTrackSide(exitDirection);
-    const entryMultiplier = entryTrackSide === 0 ? 1 : -1;
-    const exitMultiplier = exitTrackSide === 0 ? 1 : -1;
     
     // Map progress (0-1) to curve parameter t
     const t = entryT + (exitT - entryT) * carriage.progress;
@@ -904,34 +885,54 @@ function drawCarriage(
     // Get position and angle on the curve
     const bezierResult = bezierPositionAndAngle(from, control, to, t, isReverse);
     
-    // Interpolate perpendicular direction along the curve
-    // For forward traversal: go from fromPerp to toPerp as t goes 0→1
-    // For reverse traversal: go from toPerp to fromPerp as t goes 1→0
-    let interpPerpX: number, interpPerpY: number;
-    if (isReverse) {
-      // Reverse: start at toPerp (t=1), end at fromPerp (t=0)
-      // carriage.progress 0→1 maps to t 1→0, so use t directly for reverse interp
-      interpPerpX = toPerp.x * t + fromPerp.x * (1 - t);
-      interpPerpY = toPerp.y * t + fromPerp.y * (1 - t);
-    } else {
-      // Forward: start at fromPerp (t=0), end at toPerp (t=1)
-      interpPerpX = fromPerp.x * (1 - t) + toPerp.x * t;
-      interpPerpY = fromPerp.y * (1 - t) + toPerp.y * t;
-    }
+    // Get perpendiculars and multipliers for entry and exit directions
+    // For right-hand traffic, trains should be on the RIGHT side relative to direction of travel
+    // EW tracks: east-bound on SOUTH side, west-bound on NORTH side
+    // NS tracks: north-bound on EAST side, south-bound on WEST side
+    //
+    // The track side must be consistent so trains stay on inner/outer through curves:
+    // - West-bound (north side of EW) turning north should stay outer → east side of NS
+    // - East-bound (south side of EW) turning south should stay outer → west side of NS
+    const getOffsetForDirection = (dir: CarDirection) => {
+      const trackSide = getTrackSide(dir);
+      const baseMultiplier = trackSide === 0 ? 1 : -1;
+      
+      if (dir === 'north' || dir === 'south') {
+        // NS tracks: flip the multiplier so north-bound is on EAST side, south-bound on WEST
+        // This maintains inner/outer consistency through curves
+        return { perp: ISO_EW, multiplier: -baseMultiplier };
+      } else {
+        // EW tracks: east-bound on SOUTH side, west-bound on NORTH side
+        return { perp: ISO_NS, multiplier: baseMultiplier };
+      }
+    };
     
-    // Normalize interpolated perpendicular
-    const perpLen = Math.hypot(interpPerpX, interpPerpY);
-    const perpX = perpLen > 0 ? interpPerpX / perpLen : 0;
-    const perpY = perpLen > 0 ? interpPerpY / perpLen : 0;
+    const entryOffset = getOffsetForDirection(entryDirection);
+    const exitOffset = getOffsetForDirection(exitDirection);
     
-    // Interpolate offset multiplier from entry to exit track side
-    // This ensures smooth transition: at progress=0 we match the incoming straight track,
-    // at progress=1 we match the outgoing straight track
-    const curveOffsetMultiplier = entryMultiplier + (exitMultiplier - entryMultiplier) * carriage.progress;
+    // Compute entry and exit offset vectors
+    const entryOffsetX = entryOffset.perp.x * entryOffset.multiplier;
+    const entryOffsetY = entryOffset.perp.y * entryOffset.multiplier;
+    const exitOffsetX = exitOffset.perp.x * exitOffset.multiplier;
+    const exitOffsetY = exitOffset.perp.y * exitOffset.multiplier;
+    
+    // Use smooth interpolation (ease in/out) instead of linear
+    // This keeps the train closer to the correct track at entry/exit
+    // and smoothly transitions through the middle
+    const smoothProgress = carriage.progress * carriage.progress * (3 - 2 * carriage.progress);
+    
+    // Interpolate offset vectors with smooth blending
+    const offsetX = entryOffsetX + (exitOffsetX - entryOffsetX) * smoothProgress;
+    const offsetY = entryOffsetY + (exitOffsetY - entryOffsetY) * smoothProgress;
+    
+    // Normalize the interpolated offset to maintain constant distance from center
+    const offsetLen = Math.hypot(offsetX, offsetY);
+    const normalizedOffsetX = offsetLen > 0 ? offsetX / offsetLen : 0;
+    const normalizedOffsetY = offsetLen > 0 ? offsetY / offsetLen : 0;
     
     // Apply track offset
-    carX = bezierResult.x + perpX * trackOffset * curveOffsetMultiplier;
-    carY = bezierResult.y + perpY * trackOffset * curveOffsetMultiplier;
+    carX = bezierResult.x + normalizedOffsetX * trackOffset;
+    carY = bezierResult.y + normalizedOffsetY * trackOffset;
     carAngle = bezierResult.angle;
   } else {
     // Straight track or unknown - use linear interpolation
@@ -939,18 +940,25 @@ function drawCarriage(
     const centerY = screenY + TILE_HEIGHT / 2;
     const meta = DIRECTION_META[carriage.direction];
     
-    // Get perpendicular direction for offset
+    // Get perpendicular direction and multiplier for offset
+    // Must match the curve logic for consistent track assignment:
+    // - NS tracks: north-bound on EAST side, south-bound on WEST side
+    // - EW tracks: east-bound on SOUTH side, west-bound on NORTH side
     let perpX = 0, perpY = 0;
+    let correctedMultiplier = offsetMultiplier;
+    
     if (carriage.direction === 'north' || carriage.direction === 'south') {
       perpX = ISO_EW.x;
       perpY = ISO_EW.y;
+      // Flip multiplier for NS tracks to maintain inner/outer consistency with curves
+      correctedMultiplier = -offsetMultiplier;
     } else {
       perpX = ISO_NS.x;
       perpY = ISO_NS.y;
     }
     
-    const offsetX = perpX * trackOffset * offsetMultiplier;
-    const offsetY = perpY * trackOffset * offsetMultiplier;
+    const offsetX = perpX * trackOffset * correctedMultiplier;
+    const offsetY = perpY * trackOffset * correctedMultiplier;
     
     carX = centerX + meta.vec.dx * carriage.progress + offsetX;
     carY = centerY + meta.vec.dy * carriage.progress + offsetY;
