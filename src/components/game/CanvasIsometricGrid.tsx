@@ -17,18 +17,15 @@ import {
   TILE_HEIGHT,
   KEY_PAN_SPEED,
   Car,
-  CarDirection,
   Airplane,
   Helicopter,
   EmergencyVehicle,
-  EmergencyVehicleType,
   Boat,
   Barge,
   TourWaypoint,
   FactorySmog,
   OverlayMode,
   Pedestrian,
-  PedestrianDestType,
   Firework,
   WorldRenderState,
 } from '@/components/game/types';
@@ -41,11 +38,6 @@ import {
   SIDEWALK_MIN_ZOOM_MOBILE,
 } from '@/components/game/constants';
 import {
-  isRoadTile,
-  getDirectionOptions,
-  pickNextDirection,
-  findPathOnRoads,
-  getDirectionToTile,
   gridToScreen,
   screenToGrid,
 } from '@/components/game/utils';
@@ -1549,8 +1541,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       
       // Determine tile colors (top face and shading)
       let topColor = '#4a7c3f'; // grass
-      let leftColor = '#3d6634';
-      let rightColor = '#5a8f4f';
       let strokeColor = '#2d4a26';
 
       // PERF: Use pre-computed tile metadata for grey base check (O(1) lookup)
@@ -1566,57 +1556,37 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       
       if (tile.building.type === 'water') {
         topColor = '#2563eb';
-        leftColor = '#1d4ed8';
-        rightColor = '#3b82f6';
         strokeColor = '#1e3a8a';
       } else if (tile.building.type === 'road') {
         topColor = '#4a4a4a';
-        leftColor = '#3a3a3a';
-        rightColor = '#5a5a5a';
         strokeColor = '#333';
       } else if (isPark) {
         topColor = '#4a7c3f';
-        leftColor = '#3d6634';
-        rightColor = '#5a8f4f';
         strokeColor = '#2d4a26';
       } else if (hasGreyBase && !skipGreyBase) {
         // Grey/concrete base tiles for ALL buildings (except parks)
         // Skip if skipGreyBase is true (will be drawn later after water)
         topColor = '#6b7280';
-        leftColor = '#4b5563';
-        rightColor = '#9ca3af';
         strokeColor = '#374151';
       } else if (tile.zone === 'residential') {
         if (tile.building.type !== 'grass' && tile.building.type !== 'empty') {
           topColor = '#3d7c3f';
-          leftColor = '#2d6634';
-          rightColor = '#4d8f4f';
         } else {
           topColor = '#2d5a2d';
-          leftColor = '#1d4a1d';
-          rightColor = '#3d6a3d';
         }
         strokeColor = '#22c55e';
       } else if (tile.zone === 'commercial') {
         if (tile.building.type !== 'grass' && tile.building.type !== 'empty') {
           topColor = '#3a5c7c';
-          leftColor = '#2a4c6c';
-          rightColor = '#4a6c8c';
         } else {
           topColor = '#2a4a6a';
-          leftColor = '#1a3a5a';
-          rightColor = '#3a5a7a';
         }
         strokeColor = '#3b82f6';
       } else if (tile.zone === 'industrial') {
         if (tile.building.type !== 'grass' && tile.building.type !== 'empty') {
           topColor = '#7c5c3a';
-          leftColor = '#6c4c2a';
-          rightColor = '#8c6c4a';
         } else {
           topColor = '#6a4a2a';
-          leftColor = '#5a3a1a';
-          rightColor = '#7a5a3a';
         }
         strokeColor = '#f59e0b';
       }
