@@ -230,9 +230,9 @@ export function useSeaplaneSystem(
         }
         
         case 'taking_off': {
-          // Accelerate and climb
-          seaplane.speed = Math.min(SEAPLANE_FLIGHT_SPEED_MAX, seaplane.speed + delta * 30);
-          seaplane.altitude = Math.min(1, seaplane.altitude + delta * 0.3);
+          // Accelerate and climb (faster takeoff)
+          seaplane.speed = Math.min(SEAPLANE_FLIGHT_SPEED_MAX, seaplane.speed + delta * 50);
+          seaplane.altitude = Math.min(1, seaplane.altitude + delta * 0.6);
           
           nextX = seaplane.x + Math.cos(seaplane.angle) * seaplane.speed * delta * speedMultiplier;
           nextY = seaplane.y + Math.sin(seaplane.angle) * seaplane.speed * delta * speedMultiplier;

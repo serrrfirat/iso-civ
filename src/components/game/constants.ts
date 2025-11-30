@@ -85,7 +85,7 @@ export const PLANE_DIRECTION_COLS: Record<string, { col: number; mirrorX: boolea
   'w': { col: 2, mirrorX: false, mirrorY: false, baseAngle: Math.PI },                    // 180° - West (col 2)
   'n': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 },          // 270° - North top-down (col 3)
   // Derived directions through mirroring
-  'se': { col: 1, mirrorX: false, mirrorY: true, baseAngle: (3 * Math.PI) / 4 - 0.26 },   // NE mirrored vertically = SE (~120°)
+  'se': { col: 0, mirrorX: true, mirrorY: false, baseAngle: Math.PI / 4 - 0.26 },         // SW mirrored horizontally = SE
   'nw': { col: 1, mirrorX: false, mirrorY: true, baseAngle: Math.PI / 4 - 0.26 },         // NE mirrored vertically then rotated = NW (~30°)
   'e': { col: 2, mirrorX: true, mirrorY: false, baseAngle: 0 },                           // 0° - East (W mirrored horizontally)
   's': { col: 3, mirrorX: false, mirrorY: true, baseAngle: Math.PI / 2 },                 // 90° - South (N mirrored vertically)
@@ -107,7 +107,7 @@ export const PLANE_SCALES: Record<string, number> = {
   '747': 0.196,
   'a380': 0.224,
   'g650': 0.112,
-  'seaplane': 0.16, // Similar to 737
+  'seaplane': 0.112, // Scaled down 30%
 };
 
 // Seaplane system constants
