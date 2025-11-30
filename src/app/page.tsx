@@ -1,43 +1,60 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { GameProvider, useGame } from '@/context/GameContext';
+import { GameProvider } from '@/context/GameContext';
 import Game from '@/components/Game';
-import Image from 'next/image';
 import { useMobile } from '@/hooks/useMobile';
-import { getStateFromUrl, decompressGameState } from '@/lib/shareState';
+import { getSpritePack, getSpriteCoords, DEFAULT_SPRITE_PACK_ID } from '@/lib/renderConfig';
 
 const STORAGE_KEY = 'isocity-game-state';
 
-// Building assets to display
-const BUILDINGS = [
-  'residential.png',
-  'commercial.png',
-  'industrial.png',
-  'park.png',
-  'school.png',
-  'hospital.png',
-  'police_station.png',
-  'fire_station.png',
-  'powerplant.png',
-  'watertower.png',
-  'university.png',
-  'stadium.png',
-  'airport.png',
-  'trees.png',
-];
+// Background color to filter from sprite sheets (red)
+const BACKGROUND_COLOR = { r: 255, g: 0, b: 0 };
+const COLOR_THRESHOLD = 155;
 
-// Fewer buildings for mobile
-const MOBILE_BUILDINGS = [
-  'residential.png',
-  'commercial.png',
-  'industrial.png',
-  'park.png',
-  'hospital.png',
-  'powerplant.png',
-];
+// Filter red background from sprite sheet
+function filterBackgroundColor(img: HTMLImageElement): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    
+    const distance = Math.sqrt(
+      Math.pow(r - BACKGROUND_COLOR.r, 2) +
+      Math.pow(g - BACKGROUND_COLOR.g, 2) +
+      Math.pow(b - BACKGROUND_COLOR.b, 2)
+    );
+    
+    if (distance <= COLOR_THRESHOLD) {
+      data[i + 3] = 0; // Make transparent
+    }
+  }
+  
+  ctx.putImageData(imageData, 0, 0);
+  return canvas;
+}
+
+// Shuffle array using Fisher-Yates algorithm
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
 
 // Check if there's a saved game in localStorage
 function hasSavedGame(): boolean {
@@ -48,31 +65,138 @@ function hasSavedGame(): boolean {
       const parsed = JSON.parse(saved);
       return parsed.grid && parsed.gridSize && parsed.stats;
     }
-  } catch (e) {
+  } catch {
     return false;
   }
   return false;
 }
 
-// Get current city name from localStorage
-function getCurrentCityName(): string {
-  if (typeof window === 'undefined') return 'your city';
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return parsed.cityName || 'your city';
-    }
-  } catch (e) {
-    return 'your city';
-  }
-  return 'your city';
+// Sprite Gallery component that renders sprites using canvas (like SpriteTestPanel)
+function SpriteGallery({ count = 16, cols = 4 }: { count?: number; cols?: number }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [filteredSheet, setFilteredSheet] = useState<HTMLCanvasElement | null>(null);
+  const spritePack = useMemo(() => getSpritePack(DEFAULT_SPRITE_PACK_ID), []);
+  
+  // Get random sprite keys from the sprite order, pre-validated to have valid coords
+  const randomSpriteKeys = useMemo(() => {
+    // Filter to only sprites that have valid building type mappings
+    const validSpriteKeys = spritePack.spriteOrder.filter(spriteKey => {
+      // Check if this sprite key has a building type mapping
+      const hasBuildingMapping = Object.values(spritePack.buildingToSprite).includes(spriteKey);
+      return hasBuildingMapping;
+    });
+    const shuffled = shuffleArray([...validSpriteKeys]);
+    return shuffled.slice(0, count);
+  }, [spritePack.spriteOrder, spritePack.buildingToSprite, count]);
+  
+  // Load and filter sprite sheet
+  useEffect(() => {
+    const img = new Image();
+    img.onload = () => {
+      const filtered = filterBackgroundColor(img);
+      setFilteredSheet(filtered);
+    };
+    img.src = spritePack.src;
+  }, [spritePack.src]);
+  
+  // Pre-compute sprite data with valid coords
+  const spriteData = useMemo(() => {
+    if (!filteredSheet) return [];
+    
+    const sheetWidth = filteredSheet.width;
+    const sheetHeight = filteredSheet.height;
+    
+    return randomSpriteKeys.map(spriteKey => {
+      const buildingType = Object.entries(spritePack.buildingToSprite).find(
+        ([, value]) => value === spriteKey
+      )?.[0] || spriteKey;
+      
+      const coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, spritePack);
+      return coords ? { spriteKey, coords } : null;
+    }).filter((item): item is { spriteKey: string; coords: { sx: number; sy: number; sw: number; sh: number } } => item !== null);
+  }, [filteredSheet, randomSpriteKeys, spritePack]);
+  
+  // Draw sprites to canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !filteredSheet || spriteData.length === 0) return;
+    
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) return;
+    
+    const dpr = window.devicePixelRatio || 1;
+    const rows = Math.ceil(spriteData.length / cols);
+    const cellSize = 120;
+    const padding = 10;
+    
+    const canvasWidth = cols * cellSize;
+    const canvasHeight = rows * cellSize;
+    
+    canvas.width = canvasWidth * dpr;
+    canvas.height = canvasHeight * dpr;
+    canvas.style.width = `${canvasWidth}px`;
+    canvas.style.height = `${canvasHeight}px`;
+    
+    ctx.scale(dpr, dpr);
+    ctx.imageSmoothingEnabled = false;
+    
+    // Clear canvas (transparent)
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    
+    // Draw each sprite
+    spriteData.forEach(({ coords }, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      const cellX = col * cellSize;
+      const cellY = row * cellSize;
+      
+      // Draw cell background
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(cellX + 2, cellY + 2, cellSize - 4, cellSize - 4, 4);
+      ctx.fill();
+      ctx.stroke();
+      
+      // Calculate destination size preserving aspect ratio
+      const maxSize = cellSize - padding * 2;
+      const aspectRatio = coords.sh / coords.sw;
+      let destWidth = maxSize;
+      let destHeight = destWidth * aspectRatio;
+      
+      if (destHeight > maxSize) {
+        destHeight = maxSize;
+        destWidth = destHeight / aspectRatio;
+      }
+      
+      // Center sprite in cell
+      const drawX = cellX + (cellSize - destWidth) / 2;
+      const drawY = cellY + (cellSize - destHeight) / 2 + destHeight * 0.1; // Slight offset down
+      
+      // Draw sprite
+      ctx.drawImage(
+        filteredSheet,
+        coords.sx, coords.sy, coords.sw, coords.sh,
+        Math.round(drawX), Math.round(drawY),
+        Math.round(destWidth), Math.round(destHeight)
+      );
+    });
+  }, [filteredSheet, spriteData, cols]);
+  
+  return (
+    <canvas
+      ref={canvasRef}
+      className="opacity-80 hover:opacity-100 transition-opacity"
+      style={{ imageRendering: 'pixelated' }}
+    />
+  );
 }
 
 export default function HomePage() {
   const [showGame, setShowGame] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
-  const { isMobileDevice, isSmallScreen, orientation } = useMobile();
+  const { isMobileDevice, isSmallScreen } = useMobile();
   const isMobile = isMobileDevice || isSmallScreen;
 
   // Check for saved game after mount (client-side only)
@@ -110,71 +234,35 @@ export default function HomePage() {
     return (
       <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 safe-area-top safe-area-bottom">
         {/* Title */}
-        <h1 className="text-5xl sm:text-6xl font-light tracking-wider text-white/90 mb-4 animate-fadeIn">
+        <h1 className="text-5xl sm:text-6xl font-light tracking-wider text-white/90 mb-6">
           IsoCity
         </h1>
         
-        {/* Tagline */}
-        <p className="text-white/50 text-sm mb-8 text-center">
-          Build your dream city on mobile
-        </p>
-        
-        {/* Building preview - compact grid for mobile */}
-        <div className="grid grid-cols-3 gap-2 mb-8 max-w-xs">
-          {MOBILE_BUILDINGS.map((building, index) => (
-            <div 
-              key={building}
-              className="aspect-square bg-white/5 border border-white/10 p-2 rounded-lg"
-              style={{
-                animation: 'fadeIn 0.4s ease-out forwards',
-                animationDelay: `${index * 80}ms`,
-                opacity: 0,
-              }}
-            >
-              <div className="w-full h-full relative opacity-80">
-                <Image
-                  src={`/assets/buildings/${building}`}
-                  alt={building.replace('.png', '').replace('_', ' ')}
-                  fill
-                  className="object-contain"
-                />
-              </div>
-            </div>
-          ))}
+        {/* Sprite Gallery */}
+        <div className="mb-6">
+          <SpriteGallery count={9} cols={3} />
         </div>
         
-        {/* Start Button */}
-        <Button 
-          onClick={() => setShowGame(true)}
-          className="w-full max-w-xs px-8 py-6 text-xl font-medium tracking-wide bg-primary/90 hover:bg-primary text-white border-0 rounded-xl transition-all duration-300 shadow-lg shadow-primary/20"
-        >
-          Play Now
-        </Button>
-        
-        {/* Load Example Button */}
-        <Button 
-          onClick={async () => {
-            const { default: exampleState } = await import('@/resources/example_state_8.json');
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(exampleState));
-            setShowGame(true);
-          }}
-          variant="outline"
-          className="w-full max-w-xs px-8 py-4 text-lg font-medium tracking-wide bg-transparent hover:bg-white/10 text-white/70 hover:text-white border border-white/20 rounded-xl transition-all duration-300 mt-3"
-        >
-          Load Example
-        </Button>
-        
-        {/* Orientation hint for landscape */}
-        {orientation === 'portrait' && (
-          <p className="text-white/30 text-xs mt-6 text-center">
-            Tip: Rotate for a wider view
-          </p>
-        )}
-        
-        {/* Touch hint */}
-        <div className="text-white/40 text-xs mt-4 text-center flex flex-col gap-1">
-          <span>Tap to place • Pinch to zoom</span>
-          <span>Drag to pan</span>
+        {/* Buttons */}
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <Button 
+            onClick={() => setShowGame(true)}
+            className="w-full py-6 text-xl font-light tracking-wide bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none transition-all duration-300"
+          >
+            Start
+          </Button>
+          
+          <Button 
+            onClick={async () => {
+              const { default: exampleState } = await import('@/resources/example_state_8.json');
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(exampleState));
+              setShowGame(true);
+            }}
+            variant="outline"
+            className="w-full py-6 text-xl font-light tracking-wide bg-white/5 hover:bg-white/15 text-white/60 hover:text-white border border-white/15 rounded-none transition-all duration-300"
+          >
+            Load Example
+          </Button>
         </div>
       </main>
     );
@@ -190,45 +278,30 @@ export default function HomePage() {
           <h1 className="text-8xl font-light tracking-wider text-white/90">
             IsoCity
           </h1>
-          <Button 
-            onClick={() => setShowGame(true)}
-            className="px-12 py-8 text-2xl font-light tracking-wide bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none transition-all duration-300"
-          >
-            Start
-          </Button>
-          <Button 
-            onClick={async () => {
-              const { default: exampleState } = await import('@/resources/example_state_8.json');
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(exampleState));
-              setShowGame(true);
-            }}
-            variant="outline"
-            className="px-12 py-6 text-xl font-light tracking-wide bg-transparent hover:bg-white/10 text-white/60 hover:text-white border border-white/15 rounded-none transition-all duration-300"
-          >
-            Load Example
-          </Button>
+          <div className="flex flex-col gap-3">
+            <Button 
+              onClick={() => setShowGame(true)}
+              className="w-64 py-8 text-2xl font-light tracking-wide bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none transition-all duration-300"
+            >
+              Start
+            </Button>
+            <Button 
+              onClick={async () => {
+                const { default: exampleState } = await import('@/resources/example_state_8.json');
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(exampleState));
+                setShowGame(true);
+              }}
+              variant="outline"
+              className="w-64 py-8 text-2xl font-light tracking-wide bg-white/5 hover:bg-white/15 text-white/60 hover:text-white border border-white/15 rounded-none transition-all duration-300"
+            >
+              Load Example
+            </Button>
+          </div>
         </div>
 
-        {/* Right - Building Gallery */}
-        <div className="grid grid-cols-4 gap-4">
-          {BUILDINGS.map((building, index) => (
-            <div 
-              key={building}
-              className="aspect-square bg-white/5 border border-white/10 p-3 hover:bg-white/10 transition-all duration-300 group"
-              style={{
-                animationDelay: `${index * 50}ms`,
-              }}
-            >
-              <div className="w-full h-full relative opacity-70 group-hover:opacity-100 transition-opacity">
-                <Image
-                  src={`/assets/buildings/${building}`}
-                  alt={building.replace('.png', '').replace('_', ' ')}
-                  fill
-                  className="object-contain"
-                />
-              </div>
-            </div>
-          ))}
+        {/* Right - Sprite Gallery */}
+        <div className="flex justify-center lg:justify-end">
+          <SpriteGallery count={16} />
         </div>
       </div>
     </main>

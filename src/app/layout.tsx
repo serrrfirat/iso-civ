@@ -23,10 +23,10 @@ export const metadata: Metadata = {
       : 'http://localhost:3000'
   ),
   title: 'ISOCITY — Metropolis Builder',
-  description: 'A richly detailed isometric city builder. Zone districts and manage resources with cars, planes, helicopters, boats, trains, citizens, and more.',
+  description: 'A richly detailed isometric city builder. Build your metropolis and manage resources with cars, planes, helicopters, boats, trains, citizens, and more.',
   openGraph: {
     title: 'ISOCITY — Metropolis Builder',
-    description: 'A richly detailed isometric city builder. Zone districts and manage resources with cars, planes, helicopters, boats, trains, citizens, and more.',
+    description: 'A richly detailed isometric city builder. Build your metropolis and manage resources with cars, planes, helicopters, boats, trains, citizens, and more.',
     type: 'website',
     images: [
       {
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'ISOCITY — Metropolis Builder',
-    description: 'A richly detailed isometric city builder. Zone districts and manage resources with cars, planes, helicopters, boats, trains, citizens, and more.',
+    description: 'A richly detailed isometric city builder. Build your metropolis and manage resources with cars, planes, helicopters, boats, trains, citizens, and more.',
     images: [
       {
         url: '/og-image.png',
