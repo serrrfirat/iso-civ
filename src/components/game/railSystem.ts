@@ -1557,6 +1557,7 @@ export function drawCrossingSignal(
 /**
  * Draw a railroad crossing gate arm
  * Gate goes straight up when open (angle=0) and down when closed (angle=90)
+ * @param swingDirOverride - Optional override for swing direction (1 = right, -1 = left)
  */
 export function drawCrossingGate(
   ctx: CanvasRenderingContext2D,
@@ -1564,7 +1565,8 @@ export function drawCrossingGate(
   y: number,
   position: 'nw' | 'ne' | 'sw' | 'se',
   gateAngle: number, // 0 = up (open), 90 = down (closed)
-  zoom: number
+  zoom: number,
+  swingDirOverride?: number
 ): void {
   if (zoom < 0.6) return;
   
@@ -1572,14 +1574,14 @@ export function drawCrossingGate(
   const h = TILE_HEIGHT;
   
   // Position gates at corners (same as signals but slightly offset)
-  // Direction: gates on left side (nw, sw) swing right, gates on right side (ne, se) swing left
+  // Direction: default swing directions, can be overridden
   // Tilt: top gates (nw, ne) tilt up when closed, bottom gates (sw, se) tilt down when closed
   // Left gates moved down 0.1, right gates moved up 0.1
   const offsets = {
-    nw: { x: w * 0.15, y: h * 0.50, dir: 1, tilt: -30 },   // swings right, tilts up, moved down
-    ne: { x: w * 0.55, y: h * 0.05, dir: -1, tilt: -30 },  // swings left, tilts up, moved up
-    sw: { x: w * 0.45, y: h * 0.95, dir: 1, tilt: 30 },    // swings right, tilts down, moved down
-    se: { x: w * 0.85, y: h * 0.50, dir: -1, tilt: 30 },   // swings left, tilts down, moved up
+    nw: { x: w * 0.15, y: h * 0.50, dir: 1, tilt: -30 },   // default swings right, tilts up
+    ne: { x: w * 0.55, y: h * 0.05, dir: -1, tilt: -30 },  // default swings left, tilts up
+    sw: { x: w * 0.45, y: h * 0.95, dir: 1, tilt: 30 },    // default swings right, tilts down
+    se: { x: w * 0.85, y: h * 0.50, dir: -1, tilt: 30 },   // default swings left, tilts down
   };
   
   const offset = offsets[position];
@@ -1600,8 +1602,9 @@ export function drawCrossingGate(
   
   // When open (angle=0): gate points straight up (-Y direction)
   // When closed (angle=90): gate extends with tilt (up for top gates, down for bottom gates)
-  // dir determines which way the gate swings (left or right)
-  const gateEndX = gateX + offset.dir * Math.sin(angleRad) * gateLength;
+  // dir determines which way the gate swings (left or right), can be overridden
+  const swingDir = swingDirOverride ?? offset.dir;
+  const gateEndX = gateX + swingDir * Math.sin(angleRad) * gateLength;
   const gateEndY = gateY - Math.cos(angleRad) * gateLength;
   
   ctx.save();
@@ -1655,27 +1658,40 @@ export function drawRailroadCrossing(
   // Determine rail orientation to place signals/gates appropriately
   const orientation = getCrossingRailOrientation(grid, gridSize, gridX, gridY);
   
-  // For NS tracks: signals on NE and SW corners (controlling EW road traffic)
-  // For EW tracks: signals on NW and SE corners (controlling NS road traffic)
+  // For NS tracks (rail goes top-left to bottom-right): signals on NE and SW corners
+  // For EW tracks (rail goes top-right to bottom-left): signals on NW and SE corners
   // For cross: all four corners
   
-  if (orientation === 'ns' || orientation === 'cross') {
-    // Signals for east-west road traffic
+  if (orientation === 'cross') {
+    // All four corners for cross tracks
     drawCrossingSignal(ctx, x, y, 'ne', flashTimer, isActive, zoom);
     drawCrossingSignal(ctx, x, y, 'sw', flashTimer, isActive, zoom);
-    
-    if (zoom >= 0.7) {
-      drawCrossingGate(ctx, x, y, 'ne', gateAngle, zoom);
-      drawCrossingGate(ctx, x, y, 'sw', gateAngle, zoom);
-    }
-  }
-  
-  if (orientation === 'ew' || orientation === 'cross') {
-    // Signals for north-south road traffic
     drawCrossingSignal(ctx, x, y, 'nw', flashTimer, isActive, zoom);
     drawCrossingSignal(ctx, x, y, 'se', flashTimer, isActive, zoom);
     
     if (zoom >= 0.7) {
+      drawCrossingGate(ctx, x, y, 'ne', gateAngle, zoom);
+      drawCrossingGate(ctx, x, y, 'sw', gateAngle, zoom);
+      drawCrossingGate(ctx, x, y, 'nw', gateAngle, zoom);
+      drawCrossingGate(ctx, x, y, 'se', gateAngle, zoom);
+    }
+  } else if (orientation === 'ns') {
+    // NS rail (goes top-left to bottom-right) - gates on NW and SE to block EW road traffic
+    drawCrossingSignal(ctx, x, y, 'nw', flashTimer, isActive, zoom);
+    drawCrossingSignal(ctx, x, y, 'se', flashTimer, isActive, zoom);
+    
+    if (zoom >= 0.7) {
+      // Use default swing directions (nw swings right, se swings left - both toward center)
+      drawCrossingGate(ctx, x, y, 'nw', gateAngle, zoom);
+      drawCrossingGate(ctx, x, y, 'se', gateAngle, zoom);
+    }
+  } else {
+    // EW rail (goes top-right to bottom-left) - gates on NW and SE to block NS road traffic
+    drawCrossingSignal(ctx, x, y, 'nw', flashTimer, isActive, zoom);
+    drawCrossingSignal(ctx, x, y, 'se', flashTimer, isActive, zoom);
+    
+    if (zoom >= 0.7) {
+      // Use default swing directions (nw swings right, se swings left - both toward center)
       drawCrossingGate(ctx, x, y, 'nw', gateAngle, zoom);
       drawCrossingGate(ctx, x, y, 'se', gateAngle, zoom);
     }
