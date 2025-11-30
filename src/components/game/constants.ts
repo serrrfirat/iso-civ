@@ -97,7 +97,7 @@ export const COL1_OVERRIDE_PLANE_TYPES = ['seaplane', 'g650'];
 export const COL1_DIRECTION_OVERRIDES: Record<string, { col: number; mirrorX: boolean; mirrorY: boolean; baseAngle: number }> = {
   'ne': { col: 3, mirrorX: true, mirrorY: false, baseAngle: -Math.PI / 4 - 0.69 },        // Use N sprite rotated for NE
   'se': { col: 3, mirrorX: true, mirrorY: true, baseAngle: (3 * Math.PI) / 4 - 0.78 },    // Use N sprite rotated for SE (30° clockwise)
-  'nw': { col: 3, mirrorX: false, mirrorY: true, baseAngle: (5 * Math.PI) / 4 + 0.26 },   // Use N sprite rotated for NW
+  'nw': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 },         // Use N sprite (facing 270°) without mirroring, rotation handles NW
 };
 // Plane scale factors by type (larger planes are bigger)
 // Scaled down 20% from previous values
