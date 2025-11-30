@@ -779,6 +779,149 @@ export function generateTourWaypoints(
 }
 
 /**
+ * Bay information for seaplane operations
+ */
+export interface BayInfo {
+  centerX: number; // Tile X of approximate center
+  centerY: number; // Tile Y of approximate center
+  screenX: number; // Screen X coordinate of center
+  screenY: number; // Screen Y coordinate of center
+  size: number; // Number of water tiles in the bay
+  waterTiles: { x: number; y: number }[]; // All water tiles in this bay
+}
+
+/**
+ * Find all bays (large inland water bodies) suitable for seaplane operations
+ * A bay is a connected body of water that is NOT connected to the ocean (map edges)
+ * and has at least minSize tiles
+ */
+export function findBays(
+  grid: Tile[][],
+  gridSize: number,
+  minSize: number = 15
+): BayInfo[] {
+  if (!grid || gridSize <= 0) return [];
+
+  // First, find all water tiles connected to edges (ocean)
+  const oceanWaterTiles = new Set<string>();
+  const visitedOcean = new Set<string>();
+  const oceanQueue: { x: number; y: number }[] = [];
+
+  // Start BFS from all edge water tiles
+  for (let i = 0; i < gridSize; i++) {
+    const edgeTiles = [
+      { x: 0, y: i },
+      { x: gridSize - 1, y: i },
+      { x: i, y: 0 },
+      { x: i, y: gridSize - 1 },
+    ];
+    
+    for (const tile of edgeTiles) {
+      if (grid[tile.y][tile.x].building.type === 'water') {
+        const key = `${tile.x},${tile.y}`;
+        if (!visitedOcean.has(key)) {
+          oceanQueue.push(tile);
+          visitedOcean.add(key);
+        }
+      }
+    }
+  }
+
+  // BFS to mark all ocean-connected water
+  const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  while (oceanQueue.length > 0) {
+    const { x, y } = oceanQueue.shift()!;
+    oceanWaterTiles.add(`${x},${y}`);
+
+    for (const [dx, dy] of directions) {
+      const nx = x + dx;
+      const ny = y + dy;
+      const key = `${nx},${ny}`;
+      
+      if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize && !visitedOcean.has(key)) {
+        if (grid[ny][nx].building.type === 'water') {
+          visitedOcean.add(key);
+          oceanQueue.push({ x: nx, y: ny });
+        }
+      }
+    }
+  }
+
+  // Now find all inland water bodies (not connected to ocean)
+  const visitedAll = new Set<string>(oceanWaterTiles); // Start with ocean tiles as visited
+  const bays: BayInfo[] = [];
+
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const key = `${x},${y}`;
+      
+      // Skip if already visited or not water
+      if (visitedAll.has(key) || grid[y][x].building.type !== 'water') {
+        continue;
+      }
+
+      // BFS to find this inland water body
+      const bayTiles: { x: number; y: number }[] = [];
+      const bayQueue: { x: number; y: number }[] = [{ x, y }];
+      visitedAll.add(key);
+
+      while (bayQueue.length > 0) {
+        const tile = bayQueue.shift()!;
+        bayTiles.push(tile);
+
+        for (const [dx, dy] of directions) {
+          const nx = tile.x + dx;
+          const ny = tile.y + dy;
+          const nkey = `${nx},${ny}`;
+          
+          if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize && !visitedAll.has(nkey)) {
+            if (grid[ny][nx].building.type === 'water') {
+              visitedAll.add(nkey);
+              bayQueue.push({ x: nx, y: ny });
+            }
+          }
+        }
+      }
+
+      // Only add if bay is large enough
+      if (bayTiles.length >= minSize) {
+        // Calculate center of bay
+        const centerX = Math.round(bayTiles.reduce((sum, t) => sum + t.x, 0) / bayTiles.length);
+        const centerY = Math.round(bayTiles.reduce((sum, t) => sum + t.y, 0) / bayTiles.length);
+        
+        // Convert to screen coordinates
+        const { screenX, screenY } = gridToScreen(centerX, centerY, 0, 0);
+        
+        bays.push({
+          centerX,
+          centerY,
+          screenX: screenX + TILE_WIDTH / 2,
+          screenY: screenY + TILE_HEIGHT / 2,
+          size: bayTiles.length,
+          waterTiles: bayTiles,
+        });
+      }
+    }
+  }
+
+  return bays;
+}
+
+/**
+ * Get a random water tile from a bay for seaplane positioning
+ */
+export function getRandomBayTile(bay: BayInfo): { x: number; y: number; screenX: number; screenY: number } {
+  const tile = bay.waterTiles[Math.floor(Math.random() * bay.waterTiles.length)];
+  const { screenX, screenY } = gridToScreen(tile.x, tile.y, 0, 0);
+  return {
+    x: tile.x,
+    y: tile.y,
+    screenX: screenX + TILE_WIDTH / 2,
+    screenY: screenY + TILE_HEIGHT / 2,
+  };
+}
+
+/**
  * Calculate total population from the grid (with caching support)
  */
 export function calculateTotalPopulation(

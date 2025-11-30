@@ -59,35 +59,43 @@ export const CONTRAIL_SPAWN_INTERVAL = 0.02; // seconds between contrail particl
 export const AIRPLANE_SPRITE_SRC = '/assets/sprites_red_water_new_planes.png';
 export const AIRPLANE_SPRITE_COLS = 5; // 5 columns per row
 export const AIRPLANE_SPRITE_ROWS = 6; // 6 rows total
-// Plane types by row (0-indexed): 737, 777, 747, a380, (skip row 4), g650
+// Plane types by row (0-indexed): 737, 777, 747, a380, seaplane, g650
 export const PLANE_TYPE_ROWS: Record<string, number> = {
   '737': 0,
   '777': 1,
   '747': 2,
   'a380': 3,
-  'g650': 5, // Skip row 4
+  'seaplane': 4, // Row 4 is the seaplane
+  'g650': 5,
 };
 // Available plane types (weighted toward smaller planes for variety)
-export const PLANE_TYPES: Array<'737' | '777' | '747' | 'a380' | 'g650'> = ['737', '737', '737', '777', '777', '747', 'a380', 'g650'];
-// Column mapping for each direction (SE, SW, W, N)
-// Col 0: SE, Col 1: SW, Col 2: W, Col 3: N (top-down), Col 4: unused
+export const PLANE_TYPES: Array<'737' | '777' | '747' | 'a380' | 'g650'> = ['737', '737', '737', '777', '777', '747', 'g650'];
+// Column mapping for each direction
+// Col 0: SW (South West), Col 1: NE (North East), Col 2: W (West), Col 3: N (North top-down), Col 4: unused
 // For opposite directions, mirror the sprite appropriately:
 // - W→E: horizontal flip (mirrorX)
 // - N→S: vertical flip (mirrorY)
-// - NW and NE: use the N sprite (col 3) and rely on rotation offset
+// - SE: use NE sprite (col 1) with vertical flip
+// - NW: use SW sprite (col 0) with vertical flip
 // baseAngle = the angle the sprite visually faces; rotationOffset = planeAngle - baseAngle
 export const PLANE_DIRECTION_COLS: Record<string, { col: number; mirrorX: boolean; mirrorY: boolean; baseAngle: number }> = {
   // Original sprites - baseAngle is what direction the sprite is drawn facing
-  'se': { col: 0, mirrorX: false, mirrorY: false, baseAngle: Math.PI / 4 - 0.26 },        // ~30° - South East (sprite faces ~15° more south)
-  'sw': { col: 1, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 4 + 0.26 },  // ~150° - South West (sprite faces ~15° more west)
-  'w': { col: 2, mirrorX: false, mirrorY: false, baseAngle: Math.PI },                    // 180° - West
-  'n': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 },          // 270° - North (top-down)
-  // Mirrored/rotated sprites for opposite directions
-  'e': { col: 2, mirrorX: true, mirrorY: false, baseAngle: 0 },                           // 0° - East (mirror of W)
-  's': { col: 3, mirrorX: false, mirrorY: true, baseAngle: Math.PI / 2 },                 // 90° - South (vertical flip of N)
-  // NW uses SE sprite (col 0) mirrored horizontally, NE uses SW sprite (col 1) mirrored horizontally
-  'nw': { col: 0, mirrorX: true, mirrorY: false, baseAngle: (3 * Math.PI) / 4 + 0.26 },    // ~150° - horizontal flip of SE, +15° CCW adjustment
-  'ne': { col: 1, mirrorX: true, mirrorY: false, baseAngle: Math.PI / 4 - 0.26 },          // ~30° - horizontal flip of SW, +15° clockwise adjustment
+  'sw': { col: 0, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 4 + 0.26 },  // ~150° - South West (col 0)
+  'ne': { col: 1, mirrorX: false, mirrorY: false, baseAngle: -Math.PI / 4 + 0.17 },        // ~-35° - North East (col 1)
+  'w': { col: 2, mirrorX: false, mirrorY: false, baseAngle: Math.PI },                    // 180° - West (col 2)
+  'n': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 },          // 270° - North top-down (col 3)
+  // Derived directions through mirroring
+  'se': { col: 1, mirrorX: false, mirrorY: true, baseAngle: (3 * Math.PI) / 4 - 0.26 },   // NE mirrored vertically = SE (~120°)
+  'nw': { col: 1, mirrorX: false, mirrorY: true, baseAngle: (5 * Math.PI) / 4 + 0.26 },   // NE mirrored vertically then rotated = NW (~240°)
+  'e': { col: 2, mirrorX: true, mirrorY: false, baseAngle: 0 },                           // 0° - East (W mirrored horizontally)
+  's': { col: 3, mirrorX: false, mirrorY: true, baseAngle: Math.PI / 2 },                 // 90° - South (N mirrored vertically)
+};
+
+// Seaplane-specific direction overrides: cannot use col 1 (NE), use col 3 (N) instead
+export const SEAPLANE_DIRECTION_OVERRIDES: Record<string, { col: number; mirrorX: boolean; mirrorY: boolean; baseAngle: number }> = {
+  'ne': { col: 3, mirrorX: true, mirrorY: false, baseAngle: Math.PI / 4 - 0.26 },         // Use N sprite rotated for NE
+  'se': { col: 3, mirrorX: true, mirrorY: true, baseAngle: (3 * Math.PI) / 4 - 0.26 },    // Use N sprite rotated for SE
+  'nw': { col: 3, mirrorX: false, mirrorY: true, baseAngle: (5 * Math.PI) / 4 + 0.26 },   // Use N sprite rotated for NW
 };
 // Plane scale factors by type (larger planes are bigger)
 // Scaled down 20% from previous values
@@ -97,7 +105,25 @@ export const PLANE_SCALES: Record<string, number> = {
   '747': 0.196,
   'a380': 0.224,
   'g650': 0.112,
+  'seaplane': 0.16, // Similar to 737
 };
+
+// Seaplane system constants
+export const SEAPLANE_MIN_POPULATION = 5000; // Minimum population for seaplanes
+export const SEAPLANE_MIN_BAY_SIZE = 15; // Minimum water tiles for a bay to support seaplanes
+export const SEAPLANE_COLORS = ['#ffffff', '#1e40af', '#dc2626', '#f97316', '#059669']; // Seaplane liveries
+export const MAX_SEAPLANES = 12; // Maximum seaplanes in the city
+export const SEAPLANE_SPAWN_INTERVAL_MIN = 3; // Minimum seconds between spawns
+export const SEAPLANE_SPAWN_INTERVAL_MAX = 8; // Maximum seconds between spawns
+export const SEAPLANE_TAXI_TIME_MIN = 3; // Minimum seconds taxiing on water before takeoff
+export const SEAPLANE_TAXI_TIME_MAX = 8; // Maximum seconds taxiing
+export const SEAPLANE_FLIGHT_TIME_MIN = 20; // Minimum flight time in seconds
+export const SEAPLANE_FLIGHT_TIME_MAX = 40; // Maximum flight time
+export const SEAPLANE_WATER_SPEED = 20; // Speed when taxiing on water (px/sec)
+export const SEAPLANE_TAKEOFF_SPEED = 60; // Speed during takeoff run
+export const SEAPLANE_FLIGHT_SPEED_MIN = 70; // Minimum cruising speed
+export const SEAPLANE_FLIGHT_SPEED_MAX = 100; // Maximum cruising speed
+export const SEAPLANE_MIN_ZOOM = 0.3; // Minimum zoom to show seaplanes
 
 // Helicopter system constants
 export const HELICOPTER_MIN_POPULATION = 3000; // Minimum population required for helicopter activity

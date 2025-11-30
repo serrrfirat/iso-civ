@@ -19,6 +19,7 @@ import {
   Car,
   Airplane,
   Helicopter,
+  Seaplane,
   EmergencyVehicle,
   Boat,
   Barge,
@@ -64,12 +65,13 @@ import {
   isOverWater,
   generateTourWaypoints,
 } from '@/components/game/gridFinders';
-import { drawAirplanes as drawAirplanesUtil, drawHelicopters as drawHelicoptersUtil } from '@/components/game/drawAircraft';
+import { drawAirplanes as drawAirplanesUtil, drawHelicopters as drawHelicoptersUtil, drawSeaplanes as drawSeaplanesUtil } from '@/components/game/drawAircraft';
 import { useVehicleSystems, VehicleSystemRefs, VehicleSystemState } from '@/components/game/vehicleSystems';
 import { useBuildingHelpers } from '@/components/game/buildingHelpers';
 import { useAircraftSystems, AircraftSystemRefs, AircraftSystemState } from '@/components/game/aircraftSystems';
 import { useBargeSystem, BargeSystemRefs, BargeSystemState } from '@/components/game/bargeSystem';
 import { useBoatSystem, BoatSystemRefs, BoatSystemState } from '@/components/game/boatSystem';
+import { useSeaplaneSystem, SeaplaneSystemRefs, SeaplaneSystemState } from '@/components/game/seaplaneSystem';
 import { useEffectsSystems, EffectsSystemRefs, EffectsSystemState } from '@/components/game/effectsSystems';
 import {
   analyzeMergedRoad,
@@ -169,6 +171,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const helicoptersRef = useRef<Helicopter[]>([]);
   const helicopterIdRef = useRef(0);
   const helicopterSpawnTimerRef = useRef(0);
+
+  // Seaplane system refs
+  const seaplanesRef = useRef<Seaplane[]>([]);
+  const seaplaneIdRef = useRef(0);
+  const seaplaneSpawnTimerRef = useRef(0);
 
   // Boat system refs
   const boatsRef = useRef<Boat[]>([]);
@@ -325,6 +332,24 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     updateHelicopters,
   } = useAircraftSystems(aircraftSystemRefs, aircraftSystemState);
 
+  // Use extracted seaplane system
+  const seaplaneSystemRefs: SeaplaneSystemRefs = {
+    seaplanesRef,
+    seaplaneIdRef,
+    seaplaneSpawnTimerRef,
+  };
+
+  const seaplaneSystemState: SeaplaneSystemState = {
+    worldStateRef,
+    gridVersionRef,
+    cachedPopulationRef,
+    isMobile,
+  };
+
+  const {
+    updateSeaplanes,
+  } = useSeaplaneSystem(seaplaneSystemRefs, seaplaneSystemState);
+
   // Use extracted barge system
   const bargeSystemRefs: BargeSystemRefs = {
     bargesRef,
@@ -436,7 +461,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     helicoptersRef.current = [];
     helicopterIdRef.current = 0;
     helicopterSpawnTimerRef.current = 0;
-    
+    seaplanesRef.current = [];
+    seaplaneIdRef.current = 0;
+    seaplaneSpawnTimerRef.current = 0;
+
     // Clear boats
     boatsRef.current = [];
     boatIdRef.current = 0;
@@ -635,6 +663,36 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     ctx.restore();
   }, [visualHour, isMobile]);
 
+  // Draw seaplanes with wakes and contrails (uses extracted utility)
+  const drawSeaplanes = useCallback((ctx: CanvasRenderingContext2D) => {
+    const { offset: currentOffset, zoom: currentZoom, grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    const canvas = ctx.canvas;
+    const dpr = window.devicePixelRatio || 1;
+
+    // Early exit if no seaplanes
+    if (!currentGrid || currentGridSize <= 0 || seaplanesRef.current.length === 0) {
+      return;
+    }
+
+    ctx.save();
+    ctx.scale(dpr * currentZoom, dpr * currentZoom);
+    ctx.translate(currentOffset.x / currentZoom, currentOffset.y / currentZoom);
+
+    const viewWidth = canvas.width / (dpr * currentZoom);
+    const viewHeight = canvas.height / (dpr * currentZoom);
+    const viewBounds = {
+      viewLeft: -currentOffset.x / currentZoom - 200,
+      viewTop: -currentOffset.y / currentZoom - 200,
+      viewRight: viewWidth - currentOffset.x / currentZoom + 200,
+      viewBottom: viewHeight - currentOffset.y / currentZoom + 200,
+    };
+
+    // Use extracted utility function for drawing
+    drawSeaplanesUtil(ctx, seaplanesRef.current, viewBounds, visualHour, navLightFlashTimerRef.current, isMobile);
+
+    ctx.restore();
+  }, [visualHour, isMobile]);
+
   // Boats are now handled by useBoatSystem hook (see above)
 
   // Update trains - spawn, move, and manage lifecycle
@@ -745,7 +803,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         loadSpriteImage(currentSpritePack.modernSrc, true).catch(console.error);
       }
       // Load airplane sprite sheet (always loaded, not dependent on sprite pack)
-      loadSpriteImage(AIRPLANE_SPRITE_SRC, true).catch(console.error);
+      loadSpriteImage(AIRPLANE_SPRITE_SRC, false).catch(console.error);
     };
     
     // Load secondary sheets after 50ms to prioritize first paint
@@ -2848,6 +2906,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         updatePedestrians(delta); // Update pedestrians (zoom-gated)
         updateAirplanes(delta); // Update airplanes (airport required)
         updateHelicopters(delta); // Update helicopters (hospital/airport required)
+        updateSeaplanes(delta); // Update seaplanes (bay/large water required)
         updateBoats(delta); // Update boats (marina/pier required)
         updateBarges(delta); // Update ocean barges (ocean marinas required)
         updateTrains(delta); // Update trains on rail network
@@ -2888,6 +2947,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         
         if (!skipSmallElements) {
           drawHelicopters(airCtx); // Draw helicopters (skip when panning zoomed out on desktop)
+          drawSeaplanes(airCtx); // Draw seaplanes (skip when panning zoomed out on desktop)
         }
         drawAirplanes(airCtx); // Draw airplanes above everything
         drawFireworks(airCtx); // Draw fireworks above everything (nighttime only)
@@ -2896,7 +2956,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateBoats, drawBoats, updateBarges, drawBarges, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateSeaplanes, drawSeaplanes, updateBoats, drawBoats, updateBarges, drawBarges, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
   
   // Day/Night cycle lighting rendering - optimized for performance
   useEffect(() => {

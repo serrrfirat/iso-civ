@@ -3,17 +3,18 @@
  * Extracted from CanvasIsometricGrid for better modularity
  */
 
-import { Airplane, Helicopter, TILE_WIDTH, TILE_HEIGHT, PlaneType } from './types';
+import { Airplane, Helicopter, Seaplane, TILE_WIDTH, TILE_HEIGHT, PlaneType } from './types';
 import {
   AIRPLANE_SPRITE_COLS,
   AIRPLANE_SPRITE_ROWS,
   PLANE_TYPE_ROWS,
   PLANE_DIRECTION_COLS,
+  SEAPLANE_DIRECTION_OVERRIDES,
   PLANE_SCALES,
 } from './constants';
 import { getCachedImage } from './imageLoader';
 
-// Cache key for the filtered planes sprite sheet
+// Cache key for the planes sprite sheet (no red filter needed)
 const AIRPLANE_SPRITE_CACHE_KEY = '/assets/sprites_red_water_new_planes.png';
 
 /**
@@ -67,6 +68,7 @@ function getRotationOffset(angle: number, baseAngle: number): number {
 
 /**
  * Get sprite coordinates for a plane type and direction
+ * For seaplanes, uses special overrides to avoid using col 1 (NE asset)
  */
 function getPlaneSprite(
   planeType: PlaneType,
@@ -77,17 +79,31 @@ function getPlaneSprite(
   const row = PLANE_TYPE_ROWS[planeType];
   if (row === undefined) return null;
   
-  const dirInfo = PLANE_DIRECTION_COLS[direction];
+  // For seaplanes, check if we need to use direction overrides
+  let dirInfo = PLANE_DIRECTION_COLS[direction];
+  if (planeType === 'seaplane' && SEAPLANE_DIRECTION_OVERRIDES[direction]) {
+    dirInfo = SEAPLANE_DIRECTION_OVERRIDES[direction];
+  }
   if (!dirInfo) return null;
   
   const tileWidth = spriteWidth / AIRPLANE_SPRITE_COLS;
   const tileHeight = spriteHeight / AIRPLANE_SPRITE_ROWS;
   
+  // Crop adjustments for specific plane types
+  let topCrop = 0;
+  let bottomCrop = 0;
+  if (planeType === '747') {
+    topCrop = 8; // Pixels to crop from top to remove artifact from row above
+  }
+  if (planeType === 'seaplane') {
+    bottomCrop = 12; // Pixels to crop from bottom to remove artifact from row below
+  }
+  
   return {
     sx: dirInfo.col * tileWidth,
-    sy: row * tileHeight,
+    sy: row * tileHeight + topCrop,
     sw: tileWidth,
-    sh: tileHeight,
+    sh: tileHeight - topCrop - bottomCrop,
     mirrorX: dirInfo.mirrorX,
     mirrorY: dirInfo.mirrorY,
     baseAngle: dirInfo.baseAngle,
@@ -108,7 +124,7 @@ export function drawAirplanes(
   if (airplanes.length === 0) return;
 
   // Try to get the cached planes sprite sheet
-  const planeSprite = getCachedImage(AIRPLANE_SPRITE_CACHE_KEY, true);
+  const planeSprite = getCachedImage(AIRPLANE_SPRITE_CACHE_KEY, false);
 
   for (const plane of airplanes) {
     // Draw contrails first (behind plane)
@@ -817,4 +833,433 @@ export function drawHelicopters(
       ctx.restore();
     }
   }
+}
+
+/**
+ * Draw seaplanes with wakes (on water) and contrails (in air) using sprite sheet
+ */
+export function drawSeaplanes(
+  ctx: CanvasRenderingContext2D,
+  seaplanes: Seaplane[],
+  viewBounds: { viewLeft: number; viewTop: number; viewRight: number; viewBottom: number },
+  hour: number,
+  navLightFlashTimer: number,
+  isMobile: boolean = false
+): void {
+  if (seaplanes.length === 0) return;
+
+  // Try to get the cached planes sprite sheet (seaplane is row 4)
+  const planeSprite = getCachedImage(AIRPLANE_SPRITE_CACHE_KEY, false);
+
+  for (const seaplane of seaplanes) {
+    // Draw wake particles first (when on water)
+    if (seaplane.wake.length > 0) {
+      ctx.save();
+      for (const particle of seaplane.wake) {
+        // Skip if outside viewport
+        if (
+          particle.x < viewBounds.viewLeft ||
+          particle.x > viewBounds.viewRight ||
+          particle.y < viewBounds.viewTop ||
+          particle.y > viewBounds.viewBottom
+        ) {
+          continue;
+        }
+
+        // Wake particles expand and fade over time
+        const size = 1.5 + particle.age * 3;
+        const opacity = particle.opacity * 0.5;
+
+        ctx.fillStyle = `rgba(200, 220, 255, ${opacity})`;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Draw contrails (when flying at altitude)
+    if (seaplane.contrail.length > 0 && seaplane.altitude > 0.5) {
+      ctx.save();
+      for (const particle of seaplane.contrail) {
+        // Skip if outside viewport
+        if (
+          particle.x < viewBounds.viewLeft ||
+          particle.x > viewBounds.viewRight ||
+          particle.y < viewBounds.viewTop ||
+          particle.y > viewBounds.viewBottom
+        ) {
+          continue;
+        }
+
+        const size = 3 + particle.age * 8;
+        const opacity = particle.opacity * 0.4 * seaplane.altitude;
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.beginPath();
+        ctx.arc(particle.x, particle.y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Skip seaplane rendering if outside viewport
+    if (
+      seaplane.x < viewBounds.viewLeft - 80 ||
+      seaplane.x > viewBounds.viewRight + 80 ||
+      seaplane.y < viewBounds.viewTop - 80 ||
+      seaplane.y > viewBounds.viewBottom + 80
+    ) {
+      continue;
+    }
+
+    // Get direction from angle
+    const direction = angleToDirection(seaplane.angle);
+    
+    // Draw shadow (when flying at altitude)
+    if (seaplane.altitude > 0.1 && seaplane.altitude < 0.8) {
+      const shadowOffset = (1 - seaplane.altitude) * 18;
+      const shadowOpacity = 0.25 * (1 - seaplane.altitude);
+      const baseScale = PLANE_SCALES['seaplane'] || 0.16;
+      const shadowScale = (0.55 + seaplane.altitude * 0.35) * baseScale;
+
+      ctx.save();
+      ctx.translate(seaplane.x + shadowOffset, seaplane.y + shadowOffset * 0.5);
+      ctx.scale(shadowScale, shadowScale * 0.5);
+      ctx.fillStyle = `rgba(0, 0, 0, ${shadowOpacity})`;
+      
+      // Simple ellipse shadow
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 50, 20, 0, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.restore();
+    }
+
+    // Draw water splash/spray when taking off or landing on water
+    if ((seaplane.state === 'taking_off' || seaplane.state === 'splashdown') && seaplane.altitude < 0.3 && seaplane.speed > 15) {
+      const sprayOpacity = Math.min(0.6, seaplane.speed / 80);
+      ctx.save();
+      ctx.translate(seaplane.x, seaplane.y);
+      ctx.rotate(seaplane.angle);
+      
+      // Draw spray on both sides
+      ctx.fillStyle = `rgba(200, 220, 255, ${sprayOpacity})`;
+      const sprayLength = 8 + seaplane.speed * 0.2;
+      const sprayWidth = 4 + seaplane.speed * 0.1;
+      
+      // Left spray
+      ctx.beginPath();
+      ctx.moveTo(-8, 6);
+      ctx.quadraticCurveTo(-sprayLength, 10, -sprayLength * 1.5, sprayWidth + 5);
+      ctx.quadraticCurveTo(-sprayLength * 0.8, 5, -8, 6);
+      ctx.fill();
+      
+      // Right spray
+      ctx.beginPath();
+      ctx.moveTo(-8, -6);
+      ctx.quadraticCurveTo(-sprayLength, -10, -sprayLength * 1.5, -sprayWidth - 5);
+      ctx.quadraticCurveTo(-sprayLength * 0.8, -5, -8, -6);
+      ctx.fill();
+      
+      ctx.restore();
+    }
+
+    // Draw seaplane sprite
+    if (planeSprite) {
+      const spriteInfo = getPlaneSprite(
+        'seaplane' as PlaneType,
+        direction,
+        planeSprite.naturalWidth || planeSprite.width,
+        planeSprite.naturalHeight || planeSprite.height
+      );
+      
+      if (spriteInfo) {
+        ctx.save();
+        ctx.translate(seaplane.x, seaplane.y);
+        
+        // Calculate rotation offset to fine-tune to exact angle
+        const rotationOffset = getRotationOffset(seaplane.angle, spriteInfo.baseAngle);
+        ctx.rotate(rotationOffset);
+        
+        // Scale based on altitude and plane type
+        const baseScale = PLANE_SCALES['seaplane'] || 0.16;
+        const altitudeScale = seaplane.altitude > 0.1 ? 0.7 + seaplane.altitude * 0.5 : 0.85; // Slightly smaller when on water
+        const totalScale = baseScale * altitudeScale;
+        
+        // Apply mirroring if needed
+        const scaleX = spriteInfo.mirrorX ? -totalScale : totalScale;
+        const scaleY = spriteInfo.mirrorY ? -totalScale : totalScale;
+        ctx.scale(scaleX, scaleY);
+        
+        // Draw the sprite centered
+        ctx.drawImage(
+          planeSprite,
+          spriteInfo.sx,
+          spriteInfo.sy,
+          spriteInfo.sw,
+          spriteInfo.sh,
+          -spriteInfo.sw / 2,
+          -spriteInfo.sh / 2,
+          spriteInfo.sw,
+          spriteInfo.sh
+        );
+        
+        ctx.restore();
+        
+        // Draw navigation lights at night (on top of sprite)
+        const isNight = hour >= 20 || hour < 6;
+        if (isNight) {
+          drawSeaplaneNavigationLights(ctx, seaplane, navLightFlashTimer, isMobile, totalScale);
+        }
+      } else {
+        // Fallback to simple drawing
+        drawFallbackSeaplane(ctx, seaplane, hour, navLightFlashTimer, isMobile);
+      }
+    } else {
+      // Fallback to simple drawing if sprite not loaded
+      drawFallbackSeaplane(ctx, seaplane, hour, navLightFlashTimer, isMobile);
+    }
+  }
+}
+
+/**
+ * Draw navigation lights for seaplanes
+ */
+function drawSeaplaneNavigationLights(
+  ctx: CanvasRenderingContext2D,
+  seaplane: Seaplane,
+  navLightFlashTimer: number,
+  isMobile: boolean,
+  scale: number
+): void {
+  const strobeOn = Math.sin(navLightFlashTimer * 8) > 0.85;
+  const beaconOn = Math.sin(navLightFlashTimer * 4) > 0.7;
+  
+  // Light sizes in world space
+  const lightSize = isMobile ? 1.25 : 1;
+  const glowSize = lightSize * 1.8;
+  
+  // Offsets scaled by plane size
+  const wingOffset = 30 * scale;
+  const tailOffset = 12 * scale;
+  const forwardOffset = 10 * scale;
+  
+  // Calculate positions based on seaplane's angle
+  const perpAngle = seaplane.angle - Math.PI / 2;
+  
+  // Forward position
+  const forwardX = seaplane.x + Math.cos(seaplane.angle) * forwardOffset;
+  const forwardY = seaplane.y + Math.sin(seaplane.angle) * forwardOffset;
+  
+  // Wing positions
+  const leftWingX = forwardX + Math.cos(perpAngle) * wingOffset;
+  const leftWingY = forwardY + Math.sin(perpAngle) * wingOffset;
+  const rightWingX = forwardX - Math.cos(perpAngle) * wingOffset;
+  const rightWingY = forwardY - Math.sin(perpAngle) * wingOffset;
+  
+  // Tail position
+  const tailX = seaplane.x - Math.cos(seaplane.angle) * tailOffset;
+  const tailY = seaplane.y - Math.sin(seaplane.angle) * tailOffset;
+  
+  // Normalize angle
+  let normalizedAngle = seaplane.angle % (Math.PI * 2);
+  if (normalizedAngle < 0) normalizedAngle += Math.PI * 2;
+  const degrees = (normalizedAngle * 180) / Math.PI;
+  
+  // Determine visible lights based on direction
+  const showRedLight = degrees >= 315 || degrees < 135;
+  const showGreenLight = degrees >= 135 && degrees < 315;
+  const showTailLight = degrees >= 180 && degrees < 360;
+  
+  ctx.save();
+  
+  // Red (port/left) nav light
+  if (showRedLight) {
+    ctx.fillStyle = '#ff3333';
+    if (!isMobile) {
+      ctx.shadowColor = '#ff0000';
+      ctx.shadowBlur = 12;
+    }
+    ctx.beginPath();
+    ctx.arc(leftWingX, leftWingY, lightSize, 0, Math.PI * 2);
+    ctx.fill();
+    
+    if (strobeOn) {
+      ctx.fillStyle = '#ffffff';
+      if (!isMobile) {
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 25;
+      }
+      ctx.beginPath();
+      ctx.arc(leftWingX, leftWingY, glowSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Green (starboard/right) nav light
+  if (showGreenLight) {
+    ctx.fillStyle = '#33ff33';
+    if (!isMobile) {
+      ctx.shadowColor = '#00ff00';
+      ctx.shadowBlur = 12;
+    }
+    ctx.beginPath();
+    ctx.arc(rightWingX, rightWingY, lightSize, 0, Math.PI * 2);
+    ctx.fill();
+    
+    if (strobeOn) {
+      ctx.fillStyle = '#ffffff';
+      if (!isMobile) {
+        ctx.shadowColor = '#ffffff';
+        ctx.shadowBlur = 25;
+      }
+      ctx.beginPath();
+      ctx.arc(rightWingX, rightWingY, glowSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // White tail light
+  if (showTailLight) {
+    ctx.fillStyle = '#ffffff';
+    if (!isMobile) {
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 8;
+    }
+    ctx.beginPath();
+    ctx.arc(tailX, tailY, lightSize * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Red beacon
+  if (beaconOn) {
+    ctx.fillStyle = '#ff4444';
+    if (!isMobile) {
+      ctx.shadowColor = '#ff0000';
+      ctx.shadowBlur = 15;
+    }
+    ctx.beginPath();
+    ctx.arc(seaplane.x, seaplane.y, lightSize, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+/**
+ * Fallback seaplane drawing when sprite is not available
+ */
+function drawFallbackSeaplane(
+  ctx: CanvasRenderingContext2D,
+  seaplane: Seaplane,
+  hour: number,
+  navLightFlashTimer: number,
+  isMobile: boolean
+): void {
+  ctx.save();
+  ctx.translate(seaplane.x, seaplane.y);
+  ctx.rotate(seaplane.angle);
+
+  // Scale based on altitude
+  const altitudeScale = seaplane.altitude > 0.1 ? 0.7 + seaplane.altitude * 0.5 : 0.85;
+  ctx.scale(altitudeScale, altitudeScale);
+
+  // Seaplane body color
+  ctx.fillStyle = seaplane.color;
+  
+  // Pontoons (floats)
+  ctx.fillStyle = '#4a5568';
+  ctx.beginPath();
+  ctx.ellipse(-2, 8, 12, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(-2, -8, 12, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Fuselage
+  ctx.fillStyle = seaplane.color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 15, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Wings (high-wing design typical of seaplanes)
+  ctx.beginPath();
+  ctx.moveTo(2, -3);
+  ctx.lineTo(-6, -18);
+  ctx.lineTo(-10, -16);
+  ctx.lineTo(-6, -3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(2, 3);
+  ctx.lineTo(-6, 18);
+  ctx.lineTo(-10, 16);
+  ctx.lineTo(-6, 3);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Tail
+  ctx.beginPath();
+  ctx.moveTo(-12, 0);
+  ctx.lineTo(-16, 4);
+  ctx.lineTo(-18, 3);
+  ctx.lineTo(-15, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Navigation lights at night
+  const isNight = hour >= 20 || hour < 6;
+  if (isNight) {
+    const strobeOn = Math.sin(navLightFlashTimer * 8) > 0.85;
+    
+    // Red port light
+    ctx.fillStyle = '#ff3333';
+    if (!isMobile) {
+      ctx.shadowColor = '#ff0000';
+      ctx.shadowBlur = 15;
+    }
+    ctx.beginPath();
+    ctx.arc(-8, -16, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Green starboard light
+    ctx.fillStyle = '#33ff33';
+    if (!isMobile) {
+      ctx.shadowColor = '#00ff00';
+      ctx.shadowBlur = 15;
+    }
+    ctx.beginPath();
+    ctx.arc(-8, 16, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // White tail light
+    ctx.fillStyle = '#ffffff';
+    if (!isMobile) {
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 10;
+    }
+    ctx.beginPath();
+    ctx.arc(-18, 0, 1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Strobe lights
+    if (strobeOn) {
+      ctx.fillStyle = '#ffffff';
+      if (!isMobile) {
+        ctx.shadowBlur = 30;
+      }
+      ctx.beginPath();
+      ctx.arc(-9, -15, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(-9, 15, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.shadowBlur = 0;
+  }
+
+  ctx.restore();
 }

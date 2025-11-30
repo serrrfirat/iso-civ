@@ -26,7 +26,7 @@ export type Car = {
 export type AirplaneState = 'flying' | 'landing' | 'taking_off' | 'taxiing';
 
 // Plane model types from the sprite sheet
-export type PlaneType = '737' | '777' | '747' | 'a380' | 'g650';
+export type PlaneType = '737' | '777' | '747' | 'a380' | 'g650' | 'seaplane';
 
 export type ContrailParticle = {
   x: number;
@@ -63,6 +63,48 @@ export type Airplane = {
   color: string;
   // Plane model type from sprite sheet
   planeType: PlaneType;
+};
+
+// Seaplane types for bay/water operations
+export type SeaplaneState = 'taxiing_water' | 'taking_off' | 'flying' | 'landing' | 'splashdown';
+
+export type Seaplane = {
+  id: number;
+  // Screen position (isometric coordinates)
+  x: number;
+  y: number;
+  // Flight/movement direction in radians
+  angle: number;
+  // Target angle for smooth turning (on water)
+  targetAngle: number;
+  // Current state
+  state: SeaplaneState;
+  // Speed (pixels per second in screen space)
+  speed: number;
+  // Altitude (0 = on water, 1 = cruising altitude)
+  altitude: number;
+  // Target altitude for transitions
+  targetAltitude: number;
+  // Bay tile coordinates (home bay for landing reference)
+  bayTileX: number;
+  bayTileY: number;
+  // Bay screen position (center of bay)
+  bayScreenX: number;
+  bayScreenY: number;
+  // Progress for state transitions
+  stateProgress: number;
+  // Contrail particles (when flying at altitude)
+  contrail: ContrailParticle[];
+  // Wake particles (when on water)
+  wake: WakeParticle[];
+  // Wake spawn progress
+  wakeSpawnProgress: number;
+  // Time until state change
+  lifeTime: number;
+  // Time spent taxiing on water before takeoff
+  taxiTime: number;
+  // Seaplane color/style
+  color: string;
 };
 
 // Helicopter types for hospital/airport transport
