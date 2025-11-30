@@ -39,6 +39,7 @@ import {
   SKIP_SMALL_ELEMENTS_ZOOM_THRESHOLD,
   ZOOM_MIN,
   ZOOM_MAX,
+  WATER_ASSET_PATH,
 } from '@/components/game/constants';
 import {
   gridToScreen,
@@ -710,7 +711,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     loadSpriteImage(currentSpritePack.src, true).catch(console.error);
     
     // High priority - water texture
-    loadImage('/assets/water.png').catch(console.error);
+    loadImage(WATER_ASSET_PATH).catch(console.error);
     
     // Medium priority - load secondary sheets after a small delay
     // This allows the main content to render first
@@ -1675,7 +1676,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       if (hasTileSprite) {
         // Special handling for water: use separate water.png image with blending for adjacent water tiles
         if (buildingType === 'water') {
-          const waterImage = getCachedImage('/assets/water.png');
+          const waterImage = getCachedImage(WATER_ASSET_PATH);
           
           // Check which adjacent tiles are also water for blending
           const gridX = tile.x;
@@ -2656,29 +2657,30 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // NOTE: Recreation pedestrians are now drawn in the animation loop on the air canvas
         // so their animations are smooth (the buildings canvas only updates when grid changes)
         
+        // Draw overlays on the buildings canvas so they appear ON TOP of buildings
+        // (The buildings canvas is layered above the main canvas, so overlays must be drawn here)
+        overlayQueue.forEach(({ tile, screenX, screenY }) => {
+          // Get service coverage for this tile
+          const coverage = {
+            fire: state.services.fire[tile.y][tile.x],
+            police: state.services.police[tile.y][tile.x],
+            health: state.services.health[tile.y][tile.x],
+            education: state.services.education[tile.y][tile.x],
+          };
+          
+          buildingsCtx.fillStyle = getOverlayFillStyle(overlayMode, tile, coverage);
+          buildingsCtx.beginPath();
+          buildingsCtx.moveTo(screenX + TILE_WIDTH / 2, screenY);
+          buildingsCtx.lineTo(screenX + TILE_WIDTH, screenY + TILE_HEIGHT / 2);
+          buildingsCtx.lineTo(screenX + TILE_WIDTH / 2, screenY + TILE_HEIGHT);
+          buildingsCtx.lineTo(screenX, screenY + TILE_HEIGHT / 2);
+          buildingsCtx.closePath();
+          buildingsCtx.fill();
+        });
+        
         buildingsCtx.setTransform(1, 0, 0, 1, 0, 0);
       }
     }
-    
-    // Draw overlays last so they remain visible on top of buildings
-    overlayQueue.forEach(({ tile, screenX, screenY }) => {
-      // Get service coverage for this tile
-      const coverage = {
-        fire: state.services.fire[tile.y][tile.x],
-        police: state.services.police[tile.y][tile.x],
-        health: state.services.health[tile.y][tile.x],
-        education: state.services.education[tile.y][tile.x],
-      };
-      
-      ctx.fillStyle = getOverlayFillStyle(overlayMode, tile, coverage);
-      ctx.beginPath();
-      ctx.moveTo(screenX + TILE_WIDTH / 2, screenY);
-      ctx.lineTo(screenX + TILE_WIDTH, screenY + TILE_HEIGHT / 2);
-      ctx.lineTo(screenX + TILE_WIDTH / 2, screenY + TILE_HEIGHT);
-      ctx.lineTo(screenX, screenY + TILE_HEIGHT / 2);
-      ctx.closePath();
-      ctx.fill();
-    });
     
     // Draw water body names (after everything else so they're on top)
     if (waterBodies && waterBodies.length > 0) {

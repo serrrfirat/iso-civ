@@ -61,6 +61,9 @@ export const HELICOPTER_COLORS = ['#dc2626', '#ffffff', '#1e3a8a', '#f97316', '#
 export const ROTOR_WASH_MAX_AGE = 1.0; // seconds - shorter than plane contrails
 export const ROTOR_WASH_SPAWN_INTERVAL = 0.04; // seconds between rotor wash particles
 
+// Water asset path
+export const WATER_ASSET_PATH = '/assets/water.png';
+
 // Boat system constants
 export const BOAT_COLORS = ['#ffffff', '#1e3a5f', '#8b4513', '#2f4f4f', '#c41e3a', '#1e90ff']; // Various boat hull colors
 export const BOAT_MIN_ZOOM = 0.3; // Minimum zoom level to show boats
