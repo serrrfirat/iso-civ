@@ -183,7 +183,7 @@ export type EmergencyVehicle = {
 };
 
 // Pedestrian types, destinations, and behaviors
-export type PedestrianDestType = 'school' | 'commercial' | 'industrial' | 'park' | 'home';
+export type PedestrianDestType = 'school' | 'commercial' | 'industrial' | 'park' | 'beach' | 'home';
 
 // Pedestrian behavioral states
 export type PedestrianState =
@@ -192,6 +192,7 @@ export type PedestrianState =
   | 'inside_building'   // Inside a building (invisible)
   | 'exiting_building'  // Exiting a building (fading in animation)
   | 'at_recreation'     // At a recreational area doing an activity
+  | 'at_beach'          // At the beach (swimming or on mat)
   | 'idle'              // Standing still, waiting
   | 'socializing';      // Chatting with other pedestrians
 
@@ -203,6 +204,8 @@ export type PedestrianActivity =
   | 'playing_soccer'
   | 'playing_baseball'
   | 'swimming'
+  | 'beach_swimming'
+  | 'lying_on_mat'
   | 'skateboarding'
   | 'sitting_bench'
   | 'picnicking'
@@ -267,6 +270,12 @@ export type Pedestrian = {
   hasBall: boolean;          // Carrying a ball
   hasDog: boolean;           // Walking a dog
   hasBag: boolean;           // Shopping bag or briefcase
+  // Beach-specific properties
+  hasBeachMat: boolean;      // Has a beach mat
+  matColor: string;          // Color of the beach mat
+  beachTileX: number;        // Beach water tile X (for swimming position)
+  beachTileY: number;        // Beach water tile Y (for swimming position)
+  beachEdge: 'north' | 'east' | 'south' | 'west' | null; // Which edge of water tile is beach
 };
 
 // Boat types for water navigation

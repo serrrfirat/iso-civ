@@ -35,6 +35,10 @@ import {
   PEDESTRIAN_BAG_CHANCE,
   PEDESTRIAN_HAT_CHANCE,
   PEDESTRIAN_IDLE_CHANCE,
+  PEDESTRIAN_BEACH_MIN_TIME,
+  PEDESTRIAN_BEACH_MAX_TIME,
+  PEDESTRIAN_BEACH_SWIM_CHANCE,
+  PEDESTRIAN_MAT_COLORS,
 } from './constants';
 import { isRoadTile, getDirectionOptions, findPathOnRoads, getDirectionToTile, findNearestRoadToBuilding } from './utils';
 
@@ -211,6 +215,12 @@ export function createPedestrian(
     hasBall: false,
     hasDog,
     hasBag,
+    // Beach properties
+    hasBeachMat: false,
+    matColor: PEDESTRIAN_MAT_COLORS[Math.floor(Math.random() * PEDESTRIAN_MAT_COLORS.length)],
+    beachTileX: -1,
+    beachTileY: -1,
+    beachEdge: null,
   };
 }
 
@@ -299,6 +309,9 @@ export function updatePedestrianState(
     
     case 'at_recreation':
       return updateRecreationState(ped, delta, speedMultiplier, grid, gridSize);
+    
+    case 'at_beach':
+      return updateBeachState(ped, delta, speedMultiplier, grid, gridSize);
     
     case 'idle':
       return updateIdleState(ped, delta, speedMultiplier);
@@ -531,6 +544,66 @@ function updateRecreationState(
     // Done with activity, head home
     ped.hasBall = false;
     ped.activity = 'none';
+    
+    const returnPath = findPathOnRoads(grid, gridSize, ped.destX, ped.destY, ped.homeX, ped.homeY);
+    if (returnPath && returnPath.length > 0) {
+      ped.path = returnPath;
+      ped.pathIndex = 0;
+      ped.progress = 0;
+      ped.tileX = returnPath[0].x;
+      ped.tileY = returnPath[0].y;
+      ped.state = 'walking';
+      ped.returningHome = true;
+      
+      if (returnPath.length > 1) {
+        const nextTile = returnPath[1];
+        const dir = getDirectionToTile(returnPath[0].x, returnPath[0].y, nextTile.x, nextTile.y);
+        if (dir) ped.direction = dir;
+      }
+    } else {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+/**
+ * Update beach state (swimming or lying on mat)
+ */
+function updateBeachState(
+  ped: Pedestrian,
+  delta: number,
+  speedMultiplier: number,
+  grid: Tile[][],
+  gridSize: number
+): boolean {
+  ped.activityProgress += delta * speedMultiplier / ped.activityDuration;
+  
+  // Animate based on activity
+  if (ped.activity === 'beach_swimming') {
+    // Swimmers bob and move in the water
+    ped.walkOffset += delta * 3;
+    // Gentle movement in the water, staying near the shore
+    const swimRadius = 6;
+    ped.activityOffsetX += (Math.sin(ped.activityAnimTimer * 0.3) * 0.1 - ped.activityOffsetX * 0.02) * delta * 10;
+    ped.activityOffsetY += (Math.cos(ped.activityAnimTimer * 0.2) * 0.05 - ped.activityOffsetY * 0.02) * delta * 10;
+    // Clamp to stay in reasonable area
+    ped.activityOffsetX = Math.max(-swimRadius, Math.min(swimRadius, ped.activityOffsetX));
+    ped.activityOffsetY = Math.max(-swimRadius * 0.5, Math.min(swimRadius * 0.5, ped.activityOffsetY));
+  } else if (ped.activity === 'lying_on_mat') {
+    // Person on mat barely moves - occasional shift
+    if (Math.random() < 0.001) {
+      ped.activityOffsetX += (Math.random() - 0.5) * 0.5;
+      ped.activityOffsetY += (Math.random() - 0.5) * 0.25;
+    }
+  }
+  
+  if (ped.activityProgress >= 1) {
+    // Done at beach, head home
+    ped.activity = 'none';
+    ped.hasBeachMat = false;
+    ped.beachEdge = null;
     
     const returnPath = findPathOnRoads(grid, gridSize, ped.destX, ped.destY, ped.homeX, ped.homeY);
     if (returnPath && returnPath.length > 0) {
@@ -797,4 +870,160 @@ export function getPedestrianOpacity(ped: Pedestrian): number {
     default:
       return 1;
   }
+}
+
+// ============================================================================
+// Beach/Swimming Functions
+// ============================================================================
+
+/**
+ * Beach tile info with edge direction
+ */
+export type BeachTileInfo = {
+  waterX: number;      // Water tile X
+  waterY: number;      // Water tile Y
+  landX: number;       // Adjacent land tile X
+  landY: number;       // Adjacent land tile Y
+  edge: 'north' | 'east' | 'south' | 'west'; // Which edge of water tile faces land
+};
+
+/**
+ * Find all beach tiles (water tiles with adjacent land, excluding marinas/piers)
+ */
+export function findBeachTiles(
+  grid: Tile[][],
+  gridSize: number
+): BeachTileInfo[] {
+  const beachTiles: BeachTileInfo[] = [];
+  
+  // Marina/pier building types to exclude
+  const marinaPierTypes: BuildingType[] = ['marina_docks_small', 'pier_large'];
+  
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const tile = grid[y]?.[x];
+      if (!tile || tile.building.type !== 'water') continue;
+      
+      // Check each adjacent tile for land
+      const adjacentChecks: { dx: number; dy: number; edge: 'north' | 'east' | 'south' | 'west' }[] = [
+        { dx: -1, dy: 0, edge: 'north' },
+        { dx: 0, dy: -1, edge: 'east' },
+        { dx: 1, dy: 0, edge: 'south' },
+        { dx: 0, dy: 1, edge: 'west' },
+      ];
+      
+      for (const check of adjacentChecks) {
+        const adjX = x + check.dx;
+        const adjY = y + check.dy;
+        
+        // Check bounds
+        if (adjX < 0 || adjX >= gridSize || adjY < 0 || adjY >= gridSize) continue;
+        
+        const adjTile = grid[adjY]?.[adjX];
+        if (!adjTile) continue;
+        
+        // Is it land (not water) and not a marina/pier?
+        if (adjTile.building.type !== 'water' && 
+            !marinaPierTypes.includes(adjTile.building.type)) {
+          beachTiles.push({
+            waterX: x,
+            waterY: y,
+            landX: adjX,
+            landY: adjY,
+            edge: check.edge,
+          });
+        }
+      }
+    }
+  }
+  
+  return beachTiles;
+}
+
+/**
+ * Get a random beach tile from the list
+ */
+export function getRandomBeachTile(beachTiles: BeachTileInfo[]): BeachTileInfo | null {
+  if (beachTiles.length === 0) return null;
+  return beachTiles[Math.floor(Math.random() * beachTiles.length)];
+}
+
+/**
+ * Spawn a pedestrian at the beach already swimming or on a mat
+ */
+export function spawnPedestrianAtBeach(
+  id: number,
+  beachInfo: BeachTileInfo,
+  grid: Tile[][],
+  gridSize: number,
+  homeX: number,
+  homeY: number
+): Pedestrian | null {
+  // Find a road near the land tile adjacent to beach for path home
+  const roadTile = findNearestRoadToBuilding(grid, gridSize, beachInfo.landX, beachInfo.landY);
+  if (!roadTile) return null;
+  
+  // Find path home (for when they're done)
+  const path = findPathOnRoads(grid, gridSize, roadTile.x, roadTile.y, homeX, homeY);
+  if (!path || path.length === 0) return null;
+  
+  const ped = createPedestrian(
+    id,
+    homeX,
+    homeY,
+    beachInfo.landX,  // Destination is the land tile they'll return to
+    beachInfo.landY,
+    'beach',
+    path,
+    0,
+    'south'
+  );
+  
+  // Decide activity: swimming or lying on mat
+  const isSwimming = Math.random() < PEDESTRIAN_BEACH_SWIM_CHANCE;
+  
+  ped.state = 'at_beach';
+  ped.activity = isSwimming ? 'beach_swimming' : 'lying_on_mat';
+  ped.activityProgress = Math.random() * 0.3; // Already partway through
+  ped.activityDuration = PEDESTRIAN_BEACH_MIN_TIME +
+    Math.random() * (PEDESTRIAN_BEACH_MAX_TIME - PEDESTRIAN_BEACH_MIN_TIME);
+  
+  // Store beach tile info
+  ped.beachTileX = beachInfo.waterX;
+  ped.beachTileY = beachInfo.waterY;
+  ped.beachEdge = beachInfo.edge;
+  
+  // Position based on activity
+  if (isSwimming) {
+    // Swimmers are in the water, slightly away from shore
+    // Random position within the water tile but biased toward the beach edge
+    const offset = getRandomActivityOffset();
+    ped.activityOffsetX = offset.x * 0.5; // Reduced randomness
+    ped.activityOffsetY = offset.y * 0.5;
+  } else {
+    // Mat users are on the beach (on land tile)
+    ped.hasBeachMat = true;
+    // Position on the beach edge
+    const offset = getRandomActivityOffset();
+    ped.activityOffsetX = offset.x * 0.8;
+    ped.activityOffsetY = offset.y * 0.4;
+  }
+  
+  // Position at the beach water tile for swimmers, land tile for mat users
+  if (isSwimming) {
+    ped.tileX = beachInfo.waterX;
+    ped.tileY = beachInfo.waterY;
+  } else {
+    ped.tileX = beachInfo.landX;
+    ped.tileY = beachInfo.landY;
+  }
+  
+  return ped;
+}
+
+/**
+ * Check if a pedestrian is a beach-goer (for filtering in draw calls)
+ */
+export function isBeachPedestrian(ped: Pedestrian): boolean {
+  return ped.state === 'at_beach';
 }

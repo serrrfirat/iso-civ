@@ -85,9 +85,14 @@ export function drawPedestrians(
   
   // Apply filter mode
   if (filterMode === 'recreation') {
-    visiblePedestrians = visiblePedestrians.filter(ped => ped.state === 'at_recreation');
+    // Include both recreation and beach activities
+    visiblePedestrians = visiblePedestrians.filter(ped => 
+      ped.state === 'at_recreation' || ped.state === 'at_beach'
+    );
   } else if (filterMode === 'non-recreation') {
-    visiblePedestrians = visiblePedestrians.filter(ped => ped.state !== 'at_recreation');
+    visiblePedestrians = visiblePedestrians.filter(ped => 
+      ped.state !== 'at_recreation' && ped.state !== 'at_beach'
+    );
   }
   
   if (visiblePedestrians.length === 0) return;
@@ -110,6 +115,19 @@ export function drawPedestrians(
       const { screenX, screenY } = gridToScreen(ped.destX, ped.destY, 0, 0);
       pedX = screenX + TILE_WIDTH / 2 + ped.activityOffsetX;
       pedY = screenY + TILE_HEIGHT / 2 + ped.activityOffsetY;
+    } else if (ped.state === 'at_beach') {
+      // At beach - position depends on activity (swimming in water, mat on land)
+      if (ped.activity === 'beach_swimming') {
+        // Swimmers are in the water tile, centered with small random offset
+        const { screenX, screenY } = gridToScreen(ped.beachTileX, ped.beachTileY, 0, 0);
+        pedX = screenX + TILE_WIDTH / 2 + ped.activityOffsetX * 0.5;
+        pedY = screenY + TILE_HEIGHT / 2 + ped.activityOffsetY * 0.5;
+      } else {
+        // Mat users are on the land tile (beach), stay centered on their tile
+        const { screenX, screenY } = gridToScreen(ped.tileX, ped.tileY, 0, 0);
+        pedX = screenX + TILE_WIDTH / 2 + ped.activityOffsetX * 0.3;
+        pedY = screenY + TILE_HEIGHT / 2 + ped.activityOffsetY * 0.3;
+      }
     } else if (ped.state === 'entering_building' || ped.state === 'exiting_building') {
       // Near building entrance
       const { screenX, screenY } = gridToScreen(ped.destX, ped.destY, 0, 0);
@@ -204,6 +222,12 @@ export function drawPedestrians(
         break;
       case 'swimming':
         drawSwimmer(ctx, ped);
+        break;
+      case 'beach_swimming':
+        drawBeachSwimmer(ctx, ped);
+        break;
+      case 'lying_on_mat':
+        drawBeachMat(ctx, ped);
         break;
       case 'skateboarding':
         drawSkateboarder(ctx, ped);
@@ -1219,4 +1243,268 @@ function drawIdlePerson(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
     ctx.fillStyle = '#8B4513';
     ctx.fillRect(3 * scale, (-4 + breathe) * scale, 2 * scale, 3 * scale);
   }
+}
+
+// ============================================================================
+// Beach Activity Drawing Functions
+// ============================================================================
+
+/**
+ * Draw a beach swimmer (person swimming in open water near shore)
+ * Different from pool swimmer - more realistic ocean swimming
+ */
+function drawBeachSwimmer(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
+  const scale = 0.24;
+  const swim = Math.sin(ped.activityAnimTimer * 1.8);
+  const bob = Math.sin(ped.activityAnimTimer * 1.2) * 1.5;
+  const wave = Math.sin(ped.activityAnimTimer * 0.8) * 0.5;
+
+  // Water ripples around swimmer
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+  ctx.beginPath();
+  ctx.ellipse(0, 2 * scale, 10 * scale + Math.abs(swim) * 2, 4 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Darker water effect
+  ctx.fillStyle = 'rgba(30, 100, 180, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(0, 1 * scale, 9 * scale, 3.5 * scale, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Head bobbing in water
+  ctx.fillStyle = ped.skinColor;
+  ctx.beginPath();
+  ctx.arc(wave * scale, (-2 + bob) * scale, 3.2 * scale, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wet hair
+  const hairColor = HAIR_COLORS[ped.id % HAIR_COLORS.length];
+  ctx.fillStyle = hairColor;
+  ctx.beginPath();
+  ctx.arc(wave * scale, (-3.5 + bob) * scale, 3 * scale, Math.PI, 0);
+  ctx.fill();
+
+  // Swimming arms - freestyle stroke motion
+  ctx.strokeStyle = ped.skinColor;
+  ctx.lineWidth = 2 * scale;
+  
+  // Left arm
+  const leftArmPhase = ped.activityAnimTimer * 1.8;
+  const leftArmUp = Math.sin(leftArmPhase) > 0;
+  if (leftArmUp) {
+    // Arm coming out of water
+    ctx.beginPath();
+    ctx.moveTo((-3 + wave) * scale, (0 + bob) * scale);
+    ctx.quadraticCurveTo(
+      (-6 + Math.sin(leftArmPhase) * 4) * scale,
+      (-3 + Math.cos(leftArmPhase) * 2 + bob) * scale,
+      (-8 + Math.sin(leftArmPhase) * 2) * scale,
+      (1 + bob) * scale
+    );
+    ctx.stroke();
+  }
+  
+  // Right arm (offset phase)
+  const rightArmPhase = ped.activityAnimTimer * 1.8 + Math.PI;
+  const rightArmUp = Math.sin(rightArmPhase) > 0;
+  if (rightArmUp) {
+    ctx.beginPath();
+    ctx.moveTo((3 + wave) * scale, (0 + bob) * scale);
+    ctx.quadraticCurveTo(
+      (6 + Math.sin(rightArmPhase) * 4) * scale,
+      (-3 + Math.cos(rightArmPhase) * 2 + bob) * scale,
+      (8 + Math.sin(rightArmPhase) * 2) * scale,
+      (1 + bob) * scale
+    );
+    ctx.stroke();
+  }
+
+  // Splash effects when arm enters water
+  if (Math.sin(leftArmPhase) < -0.8) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.beginPath();
+    ctx.arc((-7 + wave) * scale, (1 + bob) * scale, 2 * scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (Math.sin(rightArmPhase) < -0.8) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.beginPath();
+    ctx.arc((7 + wave) * scale, (1 + bob) * scale, 2 * scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Kick splash behind
+  const kickSplash = Math.abs(Math.sin(ped.activityAnimTimer * 3.5)) * 0.4;
+  if (kickSplash > 0.2) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(0, 6 * scale, 4 * scale, 2 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * Draw a person lying on a beach mat/towel
+ */
+function drawBeachMat(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
+  const scale = 0.22;
+  const breathe = Math.sin(ped.activityAnimTimer * 0.3) * 0.3;
+  
+  // Determine mat orientation based on beach edge
+  // The mat should be parallel to the water's edge
+  let matAngle = 0;
+  switch (ped.beachEdge) {
+    case 'north':
+      matAngle = Math.PI / 4; // 45 degrees
+      break;
+    case 'east':
+      matAngle = -Math.PI / 4;
+      break;
+    case 'south':
+      matAngle = Math.PI / 4;
+      break;
+    case 'west':
+      matAngle = -Math.PI / 4;
+      break;
+  }
+  
+  ctx.save();
+  ctx.rotate(matAngle);
+  
+  // Beach mat/towel - colorful striped design
+  const matWidth = 20 * scale;
+  const matHeight = 10 * scale;
+  
+  // Mat shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.beginPath();
+  ctx.ellipse(1 * scale, 2 * scale, matWidth * 0.55, matHeight * 0.55, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Main mat color
+  ctx.fillStyle = ped.matColor;
+  ctx.fillRect(-matWidth / 2, -matHeight / 2, matWidth, matHeight);
+  
+  // Stripes on mat
+  const stripeColor = adjustColorBrightness(ped.matColor, -30);
+  ctx.fillStyle = stripeColor;
+  ctx.fillRect(-matWidth / 2, -matHeight / 2 + matHeight * 0.2, matWidth, matHeight * 0.15);
+  ctx.fillRect(-matWidth / 2, -matHeight / 2 + matHeight * 0.55, matWidth, matHeight * 0.15);
+  ctx.fillRect(-matWidth / 2, -matHeight / 2 + matHeight * 0.85, matWidth, matHeight * 0.15);
+  
+  // Mat border/fringe
+  ctx.strokeStyle = adjustColorBrightness(ped.matColor, -50);
+  ctx.lineWidth = 0.5 * scale;
+  ctx.strokeRect(-matWidth / 2, -matHeight / 2, matWidth, matHeight);
+
+  // Person lying face down or on back (random based on ID)
+  const faceDown = ped.id % 2 === 0;
+  
+  if (faceDown) {
+    // Lying face down - sunbathing
+    // Body (torso) - horizontal
+    ctx.fillStyle = ped.shirtColor;
+    ctx.beginPath();
+    ctx.ellipse(0, breathe * scale, 3 * scale, 5 * scale, Math.PI / 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Head
+    ctx.fillStyle = ped.skinColor;
+    ctx.beginPath();
+    ctx.arc(-6 * scale, breathe * scale, 2.5 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Hair on back of head
+    const hairColor = HAIR_COLORS[ped.id % HAIR_COLORS.length];
+    ctx.fillStyle = hairColor;
+    ctx.beginPath();
+    ctx.arc(-6 * scale, breathe * scale, 2.5 * scale, Math.PI * 0.3, Math.PI * 1.7);
+    ctx.fill();
+    
+    // Arms stretched out or by sides
+    ctx.strokeStyle = ped.skinColor;
+    ctx.lineWidth = 1.5 * scale;
+    ctx.beginPath();
+    ctx.moveTo(-2 * scale, (breathe - 2) * scale);
+    ctx.lineTo(-8 * scale, (breathe - 3) * scale);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-2 * scale, (breathe + 2) * scale);
+    ctx.lineTo(-8 * scale, (breathe + 3) * scale);
+    ctx.stroke();
+    
+    // Legs
+    ctx.fillStyle = ped.pantsColor;
+    ctx.beginPath();
+    ctx.ellipse(5 * scale, breathe * scale, 2 * scale, 3 * scale, Math.PI / 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Feet
+    ctx.fillStyle = ped.skinColor;
+    ctx.beginPath();
+    ctx.arc(8 * scale, (breathe - 1) * scale, 1 * scale, 0, Math.PI * 2);
+    ctx.arc(8 * scale, (breathe + 1) * scale, 1 * scale, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Lying on back - relaxing
+    // Body (torso) - horizontal
+    ctx.fillStyle = ped.shirtColor;
+    ctx.beginPath();
+    ctx.ellipse(0, breathe * scale, 3 * scale, 5 * scale, Math.PI / 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Head
+    ctx.fillStyle = ped.skinColor;
+    ctx.beginPath();
+    ctx.arc(-6 * scale, breathe * scale, 2.5 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Face details (simple)
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    // Eyes closed
+    ctx.moveTo(-7 * scale, (breathe - 0.5) * scale);
+    ctx.lineTo(-6.5 * scale, (breathe - 0.5) * scale);
+    ctx.moveTo(-5.5 * scale, (breathe - 0.5) * scale);
+    ctx.lineTo(-5 * scale, (breathe - 0.5) * scale);
+    ctx.stroke();
+    
+    // Arms by sides
+    ctx.strokeStyle = ped.skinColor;
+    ctx.lineWidth = 1.5 * scale;
+    ctx.beginPath();
+    ctx.moveTo(-2 * scale, (breathe - 2.5) * scale);
+    ctx.lineTo(3 * scale, (breathe - 4) * scale);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-2 * scale, (breathe + 2.5) * scale);
+    ctx.lineTo(3 * scale, (breathe + 4) * scale);
+    ctx.stroke();
+    
+    // Legs
+    ctx.fillStyle = ped.pantsColor;
+    ctx.beginPath();
+    ctx.ellipse(5 * scale, breathe * scale, 2 * scale, 3 * scale, Math.PI / 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Feet
+    ctx.fillStyle = ped.skinColor;
+    ctx.beginPath();
+    ctx.arc(8 * scale, (breathe - 1.5) * scale, 1 * scale, 0, Math.PI * 2);
+    ctx.arc(8 * scale, (breathe + 1.5) * scale, 1 * scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  ctx.restore();
+}
+
+/**
+ * Adjust color brightness
+ */
+function adjustColorBrightness(hex: string, amount: number): string {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, Math.max(0, (num >> 16) + amount));
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amount));
+  const b = Math.min(255, Math.max(0, (num & 0x0000ff) + amount));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }

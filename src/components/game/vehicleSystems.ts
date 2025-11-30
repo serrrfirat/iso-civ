@@ -12,6 +12,9 @@ import {
   updatePedestrianState,
   spawnPedestrianAtRecreation,
   spawnPedestrianFromBuilding,
+  findBeachTiles,
+  getRandomBeachTile,
+  spawnPedestrianAtBeach,
 } from './pedestrianSystem';
 
 export interface VehicleSystemRefs {
@@ -132,6 +135,12 @@ export function useVehicleSystems(
     return findEnterableBuildings(currentGrid, currentGridSize);
   }, [worldStateRef]);
 
+  // Find beach tiles (water tiles adjacent to land)
+  const findBeachTilesCallback = useCallback(() => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    return findBeachTiles(currentGrid, currentGridSize);
+  }, [worldStateRef]);
+
   const spawnPedestrian = useCallback(() => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     if (!currentGrid || currentGridSize <= 0) return false;
@@ -149,8 +158,33 @@ export function useVehicleSystems(
     // Choose spawn type - more variety in pedestrian spawning
     const spawnType = Math.random();
     
-    // 60% - Normal walking pedestrian heading to a destination
-    if (spawnType < 0.6) {
+    // 10% - Pedestrian at the beach (swimming or on mat)
+    if (spawnType < 0.10) {
+      const beachTiles = findBeachTilesCallback();
+      if (beachTiles.length > 0) {
+        const beachInfo = getRandomBeachTile(beachTiles);
+        if (beachInfo) {
+          const home = residentials[Math.floor(Math.random() * residentials.length)];
+          const ped = spawnPedestrianAtBeach(
+            pedestrianIdRef.current++,
+            beachInfo,
+            currentGrid,
+            currentGridSize,
+            home.x,
+            home.y
+          );
+          
+          if (ped) {
+            pedestriansRef.current.push(ped);
+            return true;
+          }
+        }
+      }
+      // If no beach tiles, fall through to other spawn types
+    }
+    
+    // 55% - Normal walking pedestrian heading to a destination
+    if (spawnType < 0.65) {
       const home = residentials[Math.floor(Math.random() * residentials.length)];
       
       let dest = destinations[Math.floor(Math.random() * destinations.length)];
@@ -205,8 +239,8 @@ export function useVehicleSystems(
       return true;
     }
     
-    // 25% - Pedestrian already at a recreation area
-    if (spawnType < 0.85) {
+    // 22% - Pedestrian already at a recreation area
+    if (spawnType < 0.87) {
       const recreationAreas = findRecreationAreasCallback();
       if (recreationAreas.length === 0) return false;
       
@@ -262,7 +296,7 @@ export function useVehicleSystems(
       return true;
     }
     return false;
-  }, [worldStateRef, findResidentialBuildingsCallback, findPedestrianDestinationsCallback, findRecreationAreasCallback, findEnterableBuildingsCallback, pedestriansRef, pedestrianIdRef]);
+  }, [worldStateRef, findResidentialBuildingsCallback, findPedestrianDestinationsCallback, findRecreationAreasCallback, findEnterableBuildingsCallback, findBeachTilesCallback, pedestriansRef, pedestrianIdRef]);
 
   const findStationsCallback = useCallback((type: 'fire_station' | 'police_station'): { x: number; y: number }[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;

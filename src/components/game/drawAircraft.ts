@@ -18,10 +18,26 @@ import { getCachedImage } from './imageLoader';
 // Cache key for the planes sprite sheet (no red filter needed)
 const AIRPLANE_SPRITE_CACHE_KEY = '/assets/sprites_red_water_new_planes.png';
 
+// Cache for last direction to prevent rapid flipping (hysteresis)
+const lastDirectionCache = new WeakMap<any, string>();
+
+// Helper for boundary angles
+const boundaryOrder: Record<string, number[]> = {
+  'e': [337.5, 22.5],
+  'se': [22.5, 67.5],
+  's': [67.5, 112.5],
+  'sw': [112.5, 157.5],
+  'w': [157.5, 202.5],
+  'nw': [202.5, 247.5],
+  'n': [247.5, 292.5],
+  'ne': [292.5, 337.5],
+};
+
 /**
  * Convert an angle (radians) to one of 8 compass directions
+ * Uses hysteresis to prevent rapid direction flips
  */
-function angleToDirection(angle: number): string {
+function angleToDirection(angle: number, cacheKey?: any): string {
   // Normalize angle to 0-2PI
   let normalizedAngle = angle % (Math.PI * 2);
   if (normalizedAngle < 0) normalizedAngle += Math.PI * 2;
@@ -38,14 +54,59 @@ function angleToDirection(angle: number): string {
   // - Angle PI is West (left)
   // - Angle 3*PI/2 is North (up)
   
-  if (degrees >= 337.5 || degrees < 22.5) return 'e';
-  if (degrees >= 22.5 && degrees < 67.5) return 'se';
-  if (degrees >= 67.5 && degrees < 112.5) return 's';
-  if (degrees >= 112.5 && degrees < 157.5) return 'sw';
-  if (degrees >= 157.5 && degrees < 202.5) return 'w';
-  if (degrees >= 202.5 && degrees < 247.5) return 'nw';
-  if (degrees >= 247.5 && degrees < 292.5) return 'n';
-  return 'ne'; // 292.5 to 337.5
+  let newDirection: string;
+  if (degrees >= 337.5 || degrees < 22.5) newDirection = 'e';
+  else if (degrees >= 22.5 && degrees < 67.5) newDirection = 'se';
+  else if (degrees >= 67.5 && degrees < 112.5) newDirection = 's';
+  else if (degrees >= 112.5 && degrees < 157.5) newDirection = 'sw';
+  else if (degrees >= 157.5 && degrees < 202.5) newDirection = 'w';
+  else if (degrees >= 202.5 && degrees < 247.5) newDirection = 'nw';
+  else if (degrees >= 247.5 && degrees < 292.5) newDirection = 'n';
+  else newDirection = 'ne'; // 292.5 to 337.5
+  
+  // Apply hysteresis: if we have a cached direction and the new direction is adjacent,
+  // only switch if we've moved significantly past the boundary (5 degree deadband)
+  if (cacheKey && lastDirectionCache.has(cacheKey)) {
+    const lastDirection = lastDirectionCache.get(cacheKey)!;
+    if (lastDirection !== newDirection) {
+      // Check if this is an adjacent direction (could cause flickering)
+      const directionOrder = ['e', 'se', 's', 'sw', 'w', 'nw', 'n', 'ne'];
+      const lastIdx = directionOrder.indexOf(lastDirection);
+      const newIdx = directionOrder.indexOf(newDirection);
+      
+      // Calculate if this is an adjacent direction (including wraparound)
+      const isAdjacent = Math.abs(newIdx - lastIdx) === 1 || 
+                        (lastIdx === 0 && newIdx === 7) || 
+                        (lastIdx === 7 && newIdx === 0);
+      
+      if (isAdjacent) {
+        const deadband = 5; // degrees
+        const [boundaryLow, boundaryHigh] = boundaryOrder[lastDirection] || [0, 360];
+        
+        // Check if we're far enough from the boundary to switch
+        const distFromLowBoundary = Math.min(
+          Math.abs(degrees - boundaryLow),
+          Math.abs(degrees - (boundaryLow + 360))
+        );
+        const distFromHighBoundary = Math.min(
+          Math.abs(degrees - boundaryHigh),
+          Math.abs(degrees - (boundaryHigh - 360))
+        );
+        
+        // Only switch if we're more than deadband degrees away from the boundary
+        if (distFromLowBoundary < deadband || distFromHighBoundary < deadband) {
+          return lastDirection; // Keep previous direction
+        }
+      }
+    }
+  }
+  
+  // Update cache if provided
+  if (cacheKey) {
+    lastDirectionCache.set(cacheKey, newDirection);
+  }
+  
+  return newDirection;
 }
 
 /**
@@ -189,8 +250,8 @@ export function drawAirplanes(
       continue;
     }
 
-    // Get direction from angle
-    const direction = angleToDirection(plane.angle);
+    // Get direction from angle (with hysteresis to prevent flickering)
+    const direction = angleToDirection(plane.angle, plane);
     
     // Draw shadow (when low altitude)
     if (plane.altitude < 0.8) {
@@ -940,8 +1001,8 @@ export function drawSeaplanes(
       continue;
     }
 
-    // Get direction from angle
-    const direction = angleToDirection(seaplane.angle);
+    // Get direction from angle (with hysteresis to prevent flickering)
+    const direction = angleToDirection(seaplane.angle, seaplane);
     
     // Draw shadow (when flying at altitude)
     if (seaplane.altitude > 0.1 && seaplane.altitude < 0.8) {

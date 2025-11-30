@@ -181,23 +181,68 @@ export function useSeaplaneSystem(
           // Taxi around on water like a boat
           seaplane.taxiTime -= delta;
           
+          // Normalize current angle to 0-2PI to prevent wraparound issues
+          let normalizedAngle = seaplane.angle % (Math.PI * 2);
+          if (normalizedAngle < 0) normalizedAngle += Math.PI * 2;
+          seaplane.angle = normalizedAngle;
+          
+          // Normalize target angle
+          let normalizedTargetAngle = seaplane.targetAngle % (Math.PI * 2);
+          if (normalizedTargetAngle < 0) normalizedTargetAngle += Math.PI * 2;
+          seaplane.targetAngle = normalizedTargetAngle;
+          
           // Calculate distance from bay center
           const distFromCenter = Math.hypot(seaplane.x - seaplane.bayScreenX, seaplane.y - seaplane.bayScreenY);
           const angleToBayCenter = Math.atan2(seaplane.bayScreenY - seaplane.y, seaplane.bayScreenX - seaplane.x);
           
+          // Normalize angleToBayCenter
+          let normalizedAngleToCenter = angleToBayCenter % (Math.PI * 2);
+          if (normalizedAngleToCenter < 0) normalizedAngleToCenter += Math.PI * 2;
+          
           // If too far from center (>100px), steer back toward center
           if (distFromCenter > 100) {
-            seaplane.targetAngle = angleToBayCenter + (Math.random() - 0.5) * 0.5; // Slight randomness
-          } else if (Math.random() < 0.02) {
-            // Gentle random turning while taxiing near center
-            seaplane.targetAngle = seaplane.angle + (Math.random() - 0.5) * Math.PI / 2;
+            seaplane.targetAngle = normalizedAngleToCenter + (Math.random() - 0.5) * 0.5; // Slight randomness
+            // Normalize again after adding randomness
+            seaplane.targetAngle = seaplane.targetAngle % (Math.PI * 2);
+            if (seaplane.targetAngle < 0) seaplane.targetAngle += Math.PI * 2;
+          } else if (distFromCenter > 50) {
+            // When moderately close to center, allow gentle random turning but less frequently
+            if (Math.random() < 0.01) {
+              // Smaller random turns to prevent flickering
+              seaplane.targetAngle = seaplane.angle + (Math.random() - 0.5) * Math.PI / 4; // Reduced from PI/2
+              // Normalize
+              seaplane.targetAngle = seaplane.targetAngle % (Math.PI * 2);
+              if (seaplane.targetAngle < 0) seaplane.targetAngle += Math.PI * 2;
+            }
+          } else {
+            // When very close to center (<50px), stabilize and reduce turning to prevent flickering
+            // Only update target angle if current angle is significantly different
+            let angleDiff = normalizedAngleToCenter - seaplane.angle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            
+            // Only adjust if angle difference is large enough to prevent micro-oscillations
+            // Use a larger threshold (45 degrees) when very close to center
+            if (Math.abs(angleDiff) > Math.PI / 4) {
+              seaplane.targetAngle = normalizedAngleToCenter;
+            }
+            // Otherwise keep current targetAngle to maintain stability
           }
           
-          // Smooth turning
+          // Smooth turning with maximum rate limit to prevent rapid flipping
           let angleDiff = seaplane.targetAngle - seaplane.angle;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-          seaplane.angle += angleDiff * Math.min(1, delta * 2);
+          
+          // Limit maximum angle change per frame to prevent rapid flipping
+          // Reduced from 1.5 to 1.0 for smoother, slower turning
+          const maxAngleChange = Math.PI * delta * 1.0; // Max ~180 degrees per second
+          const clampedAngleDiff = Math.max(-maxAngleChange, Math.min(maxAngleChange, angleDiff));
+          seaplane.angle += clampedAngleDiff * Math.min(1, delta * 2);
+          
+          // Normalize angle after update
+          seaplane.angle = seaplane.angle % (Math.PI * 2);
+          if (seaplane.angle < 0) seaplane.angle += Math.PI * 2;
           
           // Move forward slowly
           nextX = seaplane.x + Math.cos(seaplane.angle) * seaplane.speed * delta * speedMultiplier;

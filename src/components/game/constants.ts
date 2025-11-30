@@ -23,6 +23,15 @@ export const PEDESTRIAN_BAG_CHANCE = 0.15;          // Chance of carrying a bag
 export const PEDESTRIAN_HAT_CHANCE = 0.15;          // Chance of wearing a hat
 export const PEDESTRIAN_IDLE_CHANCE = 0.01;         // Chance to stop and idle briefly (reduced for perf)
 
+// Beach/swimming pedestrian constants
+export const PEDESTRIAN_BEACH_CHANCE = 0.15;        // Chance a park-bound pedestrian goes to beach instead
+export const PEDESTRIAN_BEACH_MIN_TIME = 30.0;      // Minimum time at beach
+export const PEDESTRIAN_BEACH_MAX_TIME = 180.0;     // Maximum time at beach
+export const PEDESTRIAN_BEACH_SWIM_CHANCE = 0.6;    // Chance of swimming vs lying on mat
+export const PEDESTRIAN_MAT_COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#ff69b4'];
+export const MAX_BEACH_SWIMMERS_PER_TILE = 3;       // Max swimmers per water tile
+export const MAX_BEACH_MATS_PER_EDGE = 2;           // Max mats per beach edge
+
 // Pedestrian performance limits
 export const PEDESTRIAN_MAX_COUNT = 800;            // Maximum pedestrians (hard cap)
 export const PEDESTRIAN_ROAD_TILE_DENSITY = 2.4;    // Target pedestrians per road tile (reduced from 3)

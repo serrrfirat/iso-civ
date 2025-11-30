@@ -2059,6 +2059,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
               } else if (buildingType === 'go_kart_track') {
                 sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
+              } else if (buildingType === 'greenhouse_garden') {
+                sourceY += tileHeight * 0.1; // Shift down 10% to crop asset above it
+                sourceH = tileHeight * 0.9; // Reduce height by 10% to maintain proper aspect
               }
               
               // Special handling for buildings that need more height to avoid bottom clipping
@@ -2252,6 +2255,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               if (buildingType === 'fire_station') {
                 scaleMultiplier *= 0.97; // Scale down by 3%
               }
+              // Special scale adjustment for hospital (scaled down 10%)
+              if (buildingType === 'hospital') {
+                scaleMultiplier *= 0.9; // Scale down by 10%
+              }
               // Special scale adjustment for house_small (scaled up 8%)
               if (buildingType === 'house_small') {
                 scaleMultiplier *= 1.08; // Scale up by 8%
@@ -2384,6 +2391,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 extraOffset = activePack.buildingVerticalOffsets[buildingType] * h;
               } else if (spriteKey && SPRITE_VERTICAL_OFFSETS[spriteKey]) {
                 extraOffset = SPRITE_VERTICAL_OFFSETS[spriteKey] * h;
+              }
+              // Special vertical offset adjustment for hospital (shift up 0.1 tiles)
+              if (buildingType === 'hospital') {
+                extraOffset -= 0.1 * h; // Shift up by 0.1 tiles
               }
               verticalPush += extraOffset;
               
