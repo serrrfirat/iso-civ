@@ -237,93 +237,92 @@ export function MobileTopBar({
 
         {/* Tax Slider Row */}
         {showTaxSlider && !selectedTile && (
-          <div className="border-t border-sidebar-border/50 bg-secondary/30 px-3 py-0.5">
-            <div className="flex items-center gap-2 text-[10px]">
-              <span className="text-muted-foreground whitespace-nowrap">Tax Rate</span>
-              <Slider
-                value={[taxRate]}
-                onValueChange={(value) => setTaxRate(value[0])}
-                min={0}
-                max={100}
-                step={1}
-                className="flex-1"
-              />
-              <span className="font-mono text-foreground w-8 text-right">{taxRate}%</span>
-              <button 
-                onClick={() => setShowTaxSlider(false)} 
-                className="text-muted-foreground hover:text-foreground transition-colors ml-1"
-              >
-                <CloseIcon size={12} />
-              </button>
-            </div>
+          <div className="border-t border-sidebar-border/50 bg-secondary/30 px-3 py-0.5 flex items-center gap-2 text-[10px]">
+            <span className="text-muted-foreground whitespace-nowrap">Tax Rate</span>
+            <Slider
+              value={[taxRate]}
+              onValueChange={(value) => setTaxRate(value[0])}
+              min={0}
+              max={100}
+              step={1}
+              className="flex-1"
+            />
+            <span className="font-mono text-foreground w-8 text-right shrink-0">{taxRate}%</span>
+            <button 
+              onClick={() => setShowTaxSlider(false)} 
+              className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            >
+              <CloseIcon size={12} />
+            </button>
           </div>
         )}
 
         {/* Tile Info Row - Mobile Only */}
         {selectedTile && (
-          <div className="border-t border-sidebar-border/50 bg-gradient-to-b from-secondary/60 to-secondary/20 px-3 py-0.5">
-            <div className="flex items-center gap-2 text-[10px]">
-              {/* Name */}
-              <div className="flex items-center gap-1.5">
-                <div className={`w-2 h-2 rounded-full ${
-                  selectedTile.zone === 'residential' ? 'bg-green-500' :
-                  selectedTile.zone === 'commercial' ? 'bg-blue-500' :
-                  selectedTile.zone === 'industrial' ? 'bg-amber-500' : 'bg-muted-foreground/40'
-                }`} />
-                <span className="text-xs font-medium text-foreground capitalize">
-                  {selectedTile.building.type === 'empty' 
-                    ? (selectedTile.zone === 'none' ? 'Empty Lot' : `${selectedTile.zone} Zone`)
-                    : selectedTile.building.type.replace(/_/g, ' ')}
-                </span>
-              </div>
-              
-              {/* Population & Jobs */}
-              {selectedTile.building.population > 0 && (
-                <div className="flex items-center gap-1">
-                  <PopulationIcon size={10} className="text-muted-foreground" />
-                  <span className="text-foreground font-mono">{selectedTile.building.population}</span>
-                </div>
-              )}
-              {selectedTile.building.jobs > 0 && (
-                <span className="text-foreground font-mono">{selectedTile.building.jobs} jobs</span>
-              )}
-              
-              {/* Utilities */}
-              <span className={selectedTile.building.powered ? 'text-yellow-400' : 'text-muted-foreground/60'}>
-                {selectedTile.building.powered ? 'Has power' : 'No power'}
+          <div className="border-t border-sidebar-border/50 bg-gradient-to-b from-secondary/60 to-secondary/20 px-3 py-0.5 flex items-center gap-2 text-[10px]">
+            {/* Name */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className={`w-2 h-2 rounded-full ${
+                selectedTile.zone === 'residential' ? 'bg-green-500' :
+                selectedTile.zone === 'commercial' ? 'bg-blue-500' :
+                selectedTile.zone === 'industrial' ? 'bg-amber-500' : 'bg-muted-foreground/40'
+              }`} />
+              <span className="text-xs font-medium text-foreground capitalize">
+                {selectedTile.building.type === 'empty' 
+                  ? (selectedTile.zone === 'none' ? 'Empty Lot' : `${selectedTile.zone} Zone`)
+                  : selectedTile.building.type.replace(/_/g, ' ')}
               </span>
-              <span className={selectedTile.building.watered ? 'text-cyan-400' : 'text-muted-foreground/60'}>
-                {selectedTile.building.watered ? 'Has water' : 'No water'}
-              </span>
-              
-              {/* Land value */}
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <MoneyIcon size={10} />
-                <span className="font-mono text-foreground">{selectedTile.landValue}</span>
-              </div>
-              
-              {/* Pollution */}
-              {selectedTile.pollution > 0 && (
-                <div className="flex items-center gap-1">
-                  <div className={`w-1.5 h-1.5 rounded-full ${
-                    selectedTile.pollution > 50 ? 'bg-red-500' : 
-                    selectedTile.pollution > 25 ? 'bg-amber-500' : 'bg-green-500'
-                  }`} />
-                  <span className={`font-mono ${
-                    selectedTile.pollution > 50 ? 'text-red-400' : 
-                    selectedTile.pollution > 25 ? 'text-amber-400' : 'text-green-400'
-                  }`}>{Math.round(selectedTile.pollution)}%</span>
-                </div>
-              )}
-              
-              {/* Close button */}
-              <button 
-                onClick={onCloseTile} 
-                className="text-muted-foreground hover:text-foreground transition-colors ml-auto"
-              >
-                <CloseIcon size={12} />
-              </button>
             </div>
+            
+            {/* Population & Jobs */}
+            {selectedTile.building.population > 0 && (
+              <div className="flex items-center gap-1 shrink-0">
+                <PopulationIcon size={10} className="text-muted-foreground" />
+                <span className="text-foreground font-mono">{selectedTile.building.population}</span>
+              </div>
+            )}
+            {selectedTile.building.jobs > 0 && (
+              <span className="text-foreground font-mono shrink-0">{selectedTile.building.jobs} jobs</span>
+            )}
+            
+            {/* Utilities */}
+            <span className={`shrink-0 ${selectedTile.building.powered ? 'text-yellow-400' : 'text-muted-foreground/60'}`}>
+              {selectedTile.building.powered ? 'Has power' : 'No power'}
+            </span>
+            <span className={`shrink-0 ${selectedTile.building.watered ? 'text-cyan-400' : 'text-muted-foreground/60'}`}>
+              {selectedTile.building.watered ? 'Has water' : 'No water'}
+            </span>
+            
+            {/* Land value */}
+            <div className="flex items-center gap-1 text-muted-foreground shrink-0">
+              <MoneyIcon size={10} />
+              <span className="font-mono text-foreground">{selectedTile.landValue}</span>
+            </div>
+            
+            {/* Pollution */}
+            {selectedTile.pollution > 0 && (
+              <div className="flex items-center gap-1 shrink-0">
+                <div className={`w-1.5 h-1.5 rounded-full ${
+                  selectedTile.pollution > 50 ? 'bg-red-500' : 
+                  selectedTile.pollution > 25 ? 'bg-amber-500' : 'bg-green-500'
+                }`} />
+                <span className={`font-mono ${
+                  selectedTile.pollution > 50 ? 'text-red-400' : 
+                  selectedTile.pollution > 25 ? 'text-amber-400' : 'text-green-400'
+                }`}>{Math.round(selectedTile.pollution)}%</span>
+              </div>
+            )}
+            
+            {/* Spacer to push close button right */}
+            <div className="flex-1" />
+            
+            {/* Close button */}
+            <button 
+              onClick={onCloseTile} 
+              className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            >
+              <CloseIcon size={12} />
+            </button>
           </div>
         )}
       </Card>
