@@ -230,7 +230,7 @@ export function drawAirplanes(
 
 /**
  * Draw navigation lights on top of the plane sprite
- * Uses the same rotation/mirroring as the sprite for proper alignment
+ * Draws in world space using the plane's actual flight angle
  */
 function drawNavigationLights(
   ctx: CanvasRenderingContext2D,
@@ -238,73 +238,76 @@ function drawNavigationLights(
   navLightFlashTimer: number,
   isMobile: boolean,
   scale: number,
-  baseAngle: number,
-  mirrorX: boolean,
-  mirrorY: boolean
+  _baseAngle: number,
+  _mirrorX: boolean,
+  _mirrorY: boolean
 ): void {
   const strobeOn = Math.sin(navLightFlashTimer * 8) > 0.85;
   const beaconOn = Math.sin(navLightFlashTimer * 4) > 0.7;
   
+  // Light sizes in world space
+  const lightSize = isMobile ? 2.5 : 2;
+  const glowSize = lightSize * 1.8;
+  
+  // Offsets scaled by plane size
+  const wingOffset = 12 * scale;
+  const tailOffset = 15 * scale;
+  
+  // Calculate positions based on plane's flight angle
+  // perpAngle is 90° to the left of flight direction
+  const perpAngle = plane.angle - Math.PI / 2;
+  
+  // Wing positions (perpendicular to flight direction)
+  const leftWingX = plane.x + Math.cos(perpAngle) * wingOffset;
+  const leftWingY = plane.y + Math.sin(perpAngle) * wingOffset;
+  const rightWingX = plane.x - Math.cos(perpAngle) * wingOffset;
+  const rightWingY = plane.y - Math.sin(perpAngle) * wingOffset;
+  
+  // Tail position (behind plane)
+  const tailX = plane.x - Math.cos(plane.angle) * tailOffset;
+  const tailY = plane.y - Math.sin(plane.angle) * tailOffset;
+  
   ctx.save();
-  ctx.translate(plane.x, plane.y);
   
-  // Apply the same rotation as the sprite
-  const rotationOffset = getRotationOffset(plane.angle, baseAngle);
-  ctx.rotate(rotationOffset);
-  
-  // Apply the same mirroring as the sprite
-  const scaleX = mirrorX ? -scale : scale;
-  const scaleY = mirrorY ? -scale : scale;
-  ctx.scale(scaleX, scaleY);
-  
-  // Light size (not affected by plane scale since we're in transformed space)
-  const lightSize = isMobile ? 3 : 2.5;
-  const glowSize = lightSize * 1.5;
-  
-  // Wing offset in sprite space (sprite faces a fixed direction)
-  // The sprite's "forward" is along the positive X axis after transforms
-  const wingOffset = 25;
-  
-  // Red (port/left) nav light - left wingtip (negative Y in sprite space)
+  // Red (port/left) nav light - left wingtip
   ctx.fillStyle = '#ff3333';
   if (!isMobile) {
     ctx.shadowColor = '#ff0000';
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 12;
   }
   ctx.beginPath();
-  ctx.arc(0, -wingOffset, lightSize, 0, Math.PI * 2);
+  ctx.arc(leftWingX, leftWingY, lightSize, 0, Math.PI * 2);
   ctx.fill();
 
-  // Green (starboard/right) nav light - right wingtip (positive Y in sprite space)
+  // Green (starboard/right) nav light - right wingtip
   ctx.fillStyle = '#33ff33';
   if (!isMobile) {
     ctx.shadowColor = '#00ff00';
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 12;
   }
   ctx.beginPath();
-  ctx.arc(0, wingOffset, lightSize, 0, Math.PI * 2);
+  ctx.arc(rightWingX, rightWingY, lightSize, 0, Math.PI * 2);
   ctx.fill();
 
-  // White tail light (behind plane - negative X in sprite space)
-  const tailOffset = 30;
+  // White tail light
   ctx.fillStyle = '#ffffff';
   if (!isMobile) {
     ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 8;
   }
   ctx.beginPath();
-  ctx.arc(-tailOffset, 0, lightSize * 0.8, 0, Math.PI * 2);
+  ctx.arc(tailX, tailY, lightSize * 0.8, 0, Math.PI * 2);
   ctx.fill();
 
-  // Red beacon (flashing) - on top of fuselage (center, slightly toward tail)
+  // Red beacon (flashing) - on fuselage center
   if (beaconOn) {
     ctx.fillStyle = '#ff4444';
     if (!isMobile) {
       ctx.shadowColor = '#ff0000';
-      ctx.shadowBlur = 20;
+      ctx.shadowBlur = 15;
     }
     ctx.beginPath();
-    ctx.arc(-5, 0, lightSize, 0, Math.PI * 2);
+    ctx.arc(plane.x, plane.y, lightSize, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -313,29 +316,15 @@ function drawNavigationLights(
     ctx.fillStyle = '#ffffff';
     if (!isMobile) {
       ctx.shadowColor = '#ffffff';
-      ctx.shadowBlur = 40;
+      ctx.shadowBlur = 25;
     }
     ctx.beginPath();
-    ctx.arc(0, -wingOffset, glowSize, 0, Math.PI * 2);
+    ctx.arc(leftWingX, leftWingY, glowSize, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(0, wingOffset, glowSize, 0, Math.PI * 2);
+    ctx.arc(rightWingX, rightWingY, glowSize, 0, Math.PI * 2);
     ctx.fill();
   }
-
-  // Landing lights (bright, forward-facing - on wing roots)
-  ctx.fillStyle = '#fffde7';
-  if (!isMobile) {
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 25;
-  }
-  const landingLightOffset = 10;
-  ctx.beginPath();
-  ctx.arc(landingLightOffset, -8, lightSize * 0.8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(landingLightOffset, 8, lightSize * 0.8, 0, Math.PI * 2);
-  ctx.fill();
 
   ctx.shadowBlur = 0;
   ctx.restore();

@@ -88,7 +88,7 @@ export const PLANE_DIRECTION_COLS: Record<string, { col: number; mirrorX: boolea
   // NW and NE use the N sprite (top-down view) with rotation
   // N sprite faces 270°, so baseAngle = 270° and rotation naturally adjusts to target
   'nw': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 },          // 270° - N sprite, rotation handles direction
-  'ne': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 + 0.52 },  // ~300° - needs extra CCW rotation
+  'ne': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 },          // 270° - N sprite, rotation handles direction
 };
 // Plane scale factors by type (larger planes are bigger)
 // Scaled down 30% from previous values
