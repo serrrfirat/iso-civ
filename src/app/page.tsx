@@ -151,6 +151,19 @@ export default function HomePage() {
           Play Now
         </Button>
         
+        {/* Load Example Button */}
+        <Button 
+          onClick={async () => {
+            const { default: exampleState } = await import('@/resources/example_state_8.json');
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(exampleState));
+            setShowGame(true);
+          }}
+          variant="outline"
+          className="w-full max-w-xs px-8 py-4 text-lg font-medium tracking-wide bg-transparent hover:bg-white/10 text-white/70 hover:text-white border border-white/20 rounded-xl transition-all duration-300 mt-3"
+        >
+          Load Example
+        </Button>
+        
         {/* Orientation hint for landscape */}
         {orientation === 'portrait' && (
           <p className="text-white/30 text-xs mt-6 text-center">
@@ -182,6 +195,17 @@ export default function HomePage() {
             className="px-12 py-8 text-2xl font-light tracking-wide bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none transition-all duration-300"
           >
             Start
+          </Button>
+          <Button 
+            onClick={async () => {
+              const { default: exampleState } = await import('@/resources/example_state_8.json');
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(exampleState));
+              setShowGame(true);
+            }}
+            variant="outline"
+            className="px-12 py-6 text-xl font-light tracking-wide bg-transparent hover:bg-white/10 text-white/60 hover:text-white border border-white/15 rounded-none transition-all duration-300"
+          >
+            Load Example
           </Button>
         </div>
 
