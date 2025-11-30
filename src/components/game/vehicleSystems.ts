@@ -6,6 +6,7 @@ import { findResidentialBuildings, findPedestrianDestinations, findStations, fin
 import { drawPedestrians as drawPedestriansUtil } from './drawPedestrians';
 import { BuildingType, Tile } from '@/types/game';
 import { getTrafficLightState, canProceedThroughIntersection, TRAFFIC_LIGHT_TIMING } from './trafficSystem';
+import { isRailroadCrossing, shouldStopAtCrossing } from './railSystem';
 import { CrimeType, getRandomCrimeType, getCrimeDuration } from './incidentData';
 import {
   createPedestrian,
@@ -16,6 +17,15 @@ import {
   getRandomBeachTile,
   spawnPedestrianAtBeach,
 } from './pedestrianSystem';
+
+/** Train type for crossing detection (minimal interface) */
+export interface TrainForCrossing {
+  tileX: number;
+  tileY: number;
+  direction: CarDirection;
+  progress: number;
+  carriages: { tileX: number; tileY: number }[];
+}
 
 export interface VehicleSystemRefs {
   carsRef: React.MutableRefObject<Car[]>;
@@ -32,6 +42,7 @@ export interface VehicleSystemRefs {
   pedestrianIdRef: React.MutableRefObject<number>;
   pedestrianSpawnTimerRef: React.MutableRefObject<number>;
   trafficLightTimerRef: React.MutableRefObject<number>;
+  trainsRef: React.MutableRefObject<TrainForCrossing[]>;
 }
 
 export interface VehicleSystemState {
@@ -68,6 +79,7 @@ export function useVehicleSystems(
     pedestrianIdRef,
     pedestrianSpawnTimerRef,
     trafficLightTimerRef,
+    trainsRef,
   } = refs;
 
   const { worldStateRef, gridVersionRef, cachedRoadTileCountRef, state, isMobile } = systemState;
@@ -776,6 +788,31 @@ export function useVehicleSystems(
         // Check immediately and stop well before the intersection
         if (!canProceedThroughIntersection(car.direction, lightState)) {
           shouldStop = true;
+        }
+      }
+      
+      // Check for railroad crossing ahead
+      // Stop if approaching a crossing with a train nearby
+      if (!shouldStop) {
+        const trains = trainsRef.current;
+        
+        // Check current tile (if we're about to enter a crossing)
+        if (isRailroadCrossing(currentGrid, currentGridSize, car.tileX, car.tileY)) {
+          // We're on a crossing - check if a train is approaching/occupying it
+          if (shouldStopAtCrossing(trains, car.tileX, car.tileY)) {
+            // If we're early in crossing, stop immediately
+            if (car.progress < 0.3) {
+              shouldStop = true;
+            }
+            // Otherwise, keep moving through to clear the crossing
+          }
+        }
+        
+        // Check next tile (approaching a crossing)
+        if (!shouldStop && car.progress > 0.5 && isRailroadCrossing(currentGrid, currentGridSize, nextX, nextY)) {
+          if (shouldStopAtCrossing(trains, nextX, nextY)) {
+            shouldStop = true;
+          }
         }
       }
       

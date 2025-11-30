@@ -1338,6 +1338,351 @@ function drawInsetRails(
 }
 
 // ============================================================================
+// Railroad Crossing Types and Detection
+// ============================================================================
+
+/** Railroad crossing state */
+export type CrossingState = 'open' | 'warning' | 'closed';
+
+/** Railroad crossing information */
+export interface RailroadCrossing {
+  tileX: number;
+  tileY: number;
+  state: CrossingState;
+  gateAngle: number; // 0 = up (open), 90 = down (closed)
+  flashTimer: number; // For alternating lights
+  trainApproaching: boolean;
+  trainDistance: number; // Distance in tiles to nearest approaching train
+}
+
+/** Detection radius for triggering crossing warning */
+export const CROSSING_WARNING_DISTANCE = 3; // tiles
+
+/** Gate animation speed (degrees per second) */
+export const GATE_ANIMATION_SPEED = 180; // Takes 0.5s to close/open
+
+/** Crossing light flash interval */
+export const CROSSING_FLASH_INTERVAL = 0.5; // seconds
+
+/**
+ * Check if a tile has road at position (for crossing detection)
+ */
+function hasRoadAtPosition(grid: Tile[][], gridSize: number, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return false;
+  return grid[y][x].building.type === 'road';
+}
+
+/**
+ * Get road direction at a tile (NS, EW, or intersection)
+ */
+function getRoadDirection(grid: Tile[][], gridSize: number, x: number, y: number): 'ns' | 'ew' | 'intersection' | 'none' {
+  if (!hasRoadAtPosition(grid, gridSize, x, y)) return 'none';
+  
+  const hasNorth = hasRoadAtPosition(grid, gridSize, x - 1, y);
+  const hasSouth = hasRoadAtPosition(grid, gridSize, x + 1, y);
+  const hasEast = hasRoadAtPosition(grid, gridSize, x, y - 1);
+  const hasWest = hasRoadAtPosition(grid, gridSize, x, y + 1);
+  
+  const hasNS = hasNorth || hasSouth;
+  const hasEW = hasEast || hasWest;
+  
+  if (hasNS && hasEW) return 'intersection';
+  if (hasNS) return 'ns';
+  if (hasEW) return 'ew';
+  return 'none'; // Isolated road tile
+}
+
+/**
+ * Check if a tile is a railroad crossing (road with rail overlay where rail crosses road perpendicularly)
+ * Returns false if rail runs parallel to road direction
+ */
+export function isRailroadCrossing(grid: Tile[][], gridSize: number, x: number, y: number): boolean {
+  if (x < 0 || y < 0 || x >= gridSize || y >= gridSize) return false;
+  const tile = grid[y][x];
+  
+  // Must be a road with rail overlay
+  if (tile.building.type !== 'road' || !tile.hasRailOverlay) return false;
+  
+  // Get road and rail directions
+  const roadDir = getRoadDirection(grid, gridSize, x, y);
+  const railConnections = getAdjacentRailForOverlay(grid, gridSize, x, y);
+  
+  const railHasNS = railConnections.north || railConnections.south;
+  const railHasEW = railConnections.east || railConnections.west;
+  
+  // If road is an intersection, always consider it a crossing
+  if (roadDir === 'intersection') return true;
+  
+  // If rail crosses in both directions, it's a crossing
+  if (railHasNS && railHasEW) return true;
+  
+  // Check if rail is perpendicular to road
+  // Road runs NS -> rail should run EW for a crossing
+  // Road runs EW -> rail should run NS for a crossing
+  if (roadDir === 'ns' && railHasEW && !railHasNS) return true;
+  if (roadDir === 'ew' && railHasNS && !railHasEW) return true;
+  
+  // Rail runs parallel to road - not a perpendicular crossing
+  return false;
+}
+
+/**
+ * Find all railroad crossings in the grid
+ */
+export function findRailroadCrossings(grid: Tile[][], gridSize: number): { x: number; y: number }[] {
+  const crossings: { x: number; y: number }[] = [];
+  
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      if (isRailroadCrossing(grid, gridSize, x, y)) {
+        crossings.push({ x, y });
+      }
+    }
+  }
+  
+  return crossings;
+}
+
+/**
+ * Get the rail track orientation at a crossing (NS or EW)
+ */
+export function getCrossingRailOrientation(
+  grid: Tile[][],
+  gridSize: number,
+  x: number,
+  y: number
+): 'ns' | 'ew' | 'cross' {
+  const connections = getAdjacentRailForOverlay(grid, gridSize, x, y);
+  const hasNS = connections.north || connections.south;
+  const hasEW = connections.east || connections.west;
+  
+  if (hasNS && hasEW) return 'cross';
+  if (hasNS) return 'ns';
+  return 'ew';
+}
+
+// ============================================================================
+// Railroad Crossing Drawing Functions
+// ============================================================================
+
+/** Crossing signal colors */
+export const CROSSING_COLORS = {
+  POLE: '#374151',           // Dark gray pole
+  LIGHT_OFF: '#1f2937',      // Inactive light
+  LIGHT_RED: '#ef4444',      // Active red light
+  GATE_POLE: '#4b5563',      // Gate arm support
+  GATE_ARM: '#fbbf24',       // Yellow/orange gate arm
+  GATE_STRIPE: '#1f2937',    // Black stripes on gate
+  BASE: '#6b7280',           // Concrete base
+};
+
+/**
+ * Draw a railroad crossing signal (pole with flashing lights, no crossbuck)
+ */
+export function drawCrossingSignal(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  position: 'nw' | 'ne' | 'sw' | 'se',
+  flashTimer: number,
+  isActive: boolean,
+  zoom: number
+): void {
+  if (zoom < 0.5) return;
+  
+  const w = TILE_WIDTH;
+  const h = TILE_HEIGHT;
+  
+  // Position signals at corners of the tile (on sidewalk area)
+  // Left signals (nw, sw) moved down 0.1, right signals (ne, se) moved up 0.1
+  const offsets = {
+    nw: { x: w * 0.12, y: h * 0.48 },  // moved down
+    ne: { x: w * 0.52, y: h * 0.02 },  // moved up
+    sw: { x: w * 0.48, y: h * 0.98 },  // moved down
+    se: { x: w * 0.88, y: h * 0.52 },  // moved up
+  };
+  
+  const offset = offsets[position];
+  const signalX = x + offset.x;
+  const signalY = y + offset.y;
+  
+  const scale = (zoom >= 0.8 ? 1 : 0.85) * 0.7; // 30% smaller
+  const poleHeight = 14 * scale;
+  const lightSize = 2.5 * scale;
+  const lightSpacing = 5 * scale;
+  
+  // Draw pole
+  ctx.strokeStyle = CROSSING_COLORS.POLE;
+  ctx.lineWidth = 2 * scale;
+  ctx.beginPath();
+  ctx.moveTo(signalX, signalY);
+  ctx.lineTo(signalX, signalY - poleHeight);
+  ctx.stroke();
+  
+  // Draw flashing lights (two alternating red lights) at top of pole
+  const lightsY = signalY - poleHeight + 4 * scale;
+  const flashOn = Math.floor(flashTimer / CROSSING_FLASH_INTERVAL) % 2 === 0;
+  
+  // Left light
+  ctx.fillStyle = isActive && flashOn ? CROSSING_COLORS.LIGHT_RED : CROSSING_COLORS.LIGHT_OFF;
+  ctx.beginPath();
+  ctx.arc(signalX - lightSpacing * 0.5, lightsY, lightSize, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Right light (alternate flash)
+  ctx.fillStyle = isActive && !flashOn ? CROSSING_COLORS.LIGHT_RED : CROSSING_COLORS.LIGHT_OFF;
+  ctx.beginPath();
+  ctx.arc(signalX + lightSpacing * 0.5, lightsY, lightSize, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Add glow effect when lights are on
+  if (isActive && zoom >= 0.7) {
+    ctx.save();
+    ctx.shadowColor = CROSSING_COLORS.LIGHT_RED;
+    ctx.shadowBlur = 8 * scale;
+    ctx.fillStyle = CROSSING_COLORS.LIGHT_RED;
+    if (flashOn) {
+      ctx.beginPath();
+      ctx.arc(signalX - lightSpacing * 0.5, lightsY, lightSize, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(signalX + lightSpacing * 0.5, lightsY, lightSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+/**
+ * Draw a railroad crossing gate arm
+ * Gate goes straight up when open (angle=0) and down when closed (angle=90)
+ */
+export function drawCrossingGate(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  position: 'nw' | 'ne' | 'sw' | 'se',
+  gateAngle: number, // 0 = up (open), 90 = down (closed)
+  zoom: number
+): void {
+  if (zoom < 0.6) return;
+  
+  const w = TILE_WIDTH;
+  const h = TILE_HEIGHT;
+  
+  // Position gates at corners (same as signals but slightly offset)
+  // Direction: gates on left side (nw, sw) swing right, gates on right side (ne, se) swing left
+  // Tilt: top gates (nw, ne) tilt up when closed, bottom gates (sw, se) tilt down when closed
+  // Left gates moved down 0.1, right gates moved up 0.1
+  const offsets = {
+    nw: { x: w * 0.15, y: h * 0.50, dir: 1, tilt: -30 },   // swings right, tilts up, moved down
+    ne: { x: w * 0.55, y: h * 0.05, dir: -1, tilt: -30 },  // swings left, tilts up, moved up
+    sw: { x: w * 0.45, y: h * 0.95, dir: 1, tilt: 30 },    // swings right, tilts down, moved down
+    se: { x: w * 0.85, y: h * 0.50, dir: -1, tilt: 30 },   // swings left, tilts down, moved up
+  };
+  
+  const offset = offsets[position];
+  const gateX = x + offset.x;
+  const gateY = y + offset.y;
+  
+  const scale = zoom >= 0.8 ? 1 : 0.85;
+  const gateLength = 18 * scale;
+  const gateWidth = 1.1 * scale;
+  
+  // Calculate gate end position based on angle
+  // angle 0 = straight up (vertical)
+  // angle 90 = horizontal (blocking road), but with tilt adjustment
+  // Tilt is applied progressively as the gate closes
+  const tiltAmount = (gateAngle / 90) * offset.tilt; // Gradually apply tilt as gate closes
+  const effectiveAngle = gateAngle + tiltAmount;
+  const angleRad = effectiveAngle * Math.PI / 180;
+  
+  // When open (angle=0): gate points straight up (-Y direction)
+  // When closed (angle=90): gate extends with tilt (up for top gates, down for bottom gates)
+  // dir determines which way the gate swings (left or right)
+  const gateEndX = gateX + offset.dir * Math.sin(angleRad) * gateLength;
+  const gateEndY = gateY - Math.cos(angleRad) * gateLength;
+  
+  ctx.save();
+  
+  // Draw gate arm using a rotated rectangle for better appearance
+  const dx = gateEndX - gateX;
+  const dy = gateEndY - gateY;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const angle = Math.atan2(dy, dx);
+  
+  ctx.translate(gateX, gateY);
+  ctx.rotate(angle);
+  
+  // Draw yellow base of gate arm
+  ctx.fillStyle = CROSSING_COLORS.GATE_ARM;
+  ctx.fillRect(0, -gateWidth / 2, len, gateWidth);
+  
+  // Draw black stripes (thinner than before for better look)
+  ctx.fillStyle = CROSSING_COLORS.GATE_STRIPE;
+  const stripeCount = 4;
+  const stripeWidth = len / (stripeCount * 2);
+  for (let i = 0; i < stripeCount; i++) {
+    ctx.fillRect(stripeWidth * (i * 2 + 1), -gateWidth / 2, stripeWidth * 0.7, gateWidth);
+  }
+  
+  ctx.restore();
+  
+  // Draw pivot point (small circle at base)
+  ctx.fillStyle = CROSSING_COLORS.GATE_POLE;
+  ctx.beginPath();
+  ctx.arc(gateX, gateY, gateWidth * 0.7, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * Draw complete railroad crossing visuals for a tile
+ */
+export function drawRailroadCrossing(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  gridX: number,
+  gridY: number,
+  grid: Tile[][],
+  gridSize: number,
+  zoom: number,
+  flashTimer: number,
+  gateAngle: number,
+  isActive: boolean
+): void {
+  // Determine rail orientation to place signals/gates appropriately
+  const orientation = getCrossingRailOrientation(grid, gridSize, gridX, gridY);
+  
+  // For NS tracks: signals on NE and SW corners (controlling EW road traffic)
+  // For EW tracks: signals on NW and SE corners (controlling NS road traffic)
+  // For cross: all four corners
+  
+  if (orientation === 'ns' || orientation === 'cross') {
+    // Signals for east-west road traffic
+    drawCrossingSignal(ctx, x, y, 'ne', flashTimer, isActive, zoom);
+    drawCrossingSignal(ctx, x, y, 'sw', flashTimer, isActive, zoom);
+    
+    if (zoom >= 0.7) {
+      drawCrossingGate(ctx, x, y, 'ne', gateAngle, zoom);
+      drawCrossingGate(ctx, x, y, 'sw', gateAngle, zoom);
+    }
+  }
+  
+  if (orientation === 'ew' || orientation === 'cross') {
+    // Signals for north-south road traffic
+    drawCrossingSignal(ctx, x, y, 'nw', flashTimer, isActive, zoom);
+    drawCrossingSignal(ctx, x, y, 'se', flashTimer, isActive, zoom);
+    
+    if (zoom >= 0.7) {
+      drawCrossingGate(ctx, x, y, 'nw', gateAngle, zoom);
+      drawCrossingGate(ctx, x, y, 'se', gateAngle, zoom);
+    }
+  }
+}
+
+// ============================================================================
 // Train Pathfinding Functions
 // ============================================================================
 
@@ -1398,6 +1743,126 @@ export function countRailTiles(
   }
   
   return count;
+}
+
+/**
+ * Check if a train is approaching or at a specific tile
+ * Used for railroad crossing activation
+ * @param trains - Array of all active trains
+ * @param tileX - Target tile X coordinate
+ * @param tileY - Target tile Y coordinate
+ * @param warningDistance - How many tiles away to trigger warning
+ * @returns Object with isApproaching flag and distance to nearest train
+ */
+export function isTrainApproachingTile(
+  trains: { 
+    tileX: number; 
+    tileY: number; 
+    direction: CarDirection; 
+    progress: number;
+    carriages: { tileX: number; tileY: number }[];
+  }[],
+  tileX: number,
+  tileY: number,
+  warningDistance: number = CROSSING_WARNING_DISTANCE
+): { isApproaching: boolean; distance: number; isOccupied: boolean } {
+  let minDistance = Infinity;
+  let isOccupied = false;
+  
+  for (const train of trains) {
+    // Check locomotive position
+    const locoDist = Math.abs(train.tileX - tileX) + Math.abs(train.tileY - tileY);
+    
+    // Check if train is directly on the crossing
+    if (train.tileX === tileX && train.tileY === tileY) {
+      isOccupied = true;
+      minDistance = 0;
+    }
+    
+    // Check all carriages
+    for (const carriage of train.carriages) {
+      if (carriage.tileX === tileX && carriage.tileY === tileY) {
+        isOccupied = true;
+        minDistance = 0;
+      }
+    }
+    
+    // Calculate effective distance considering direction
+    // A train approaching the crossing is more important than one moving away
+    const dirMeta: Record<CarDirection, { dx: number; dy: number }> = {
+      north: { dx: -1, dy: 0 },
+      east: { dx: 0, dy: -1 },
+      south: { dx: 1, dy: 0 },
+      west: { dx: 0, dy: 1 },
+    };
+    
+    const dir = dirMeta[train.direction];
+    
+    // Project train's path to see if it will reach the crossing
+    // Check if the crossing is generally in the direction the train is heading
+    const toTargetX = tileX - train.tileX;
+    const toTargetY = tileY - train.tileY;
+    
+    // Dot product to see if target is ahead of train
+    const dotProduct = toTargetX * dir.dx + toTargetY * dir.dy;
+    
+    if (dotProduct > 0) {
+      // Target is ahead of train - this train is approaching
+      // Calculate distance accounting for progress
+      const effectiveDistance = locoDist - train.progress;
+      minDistance = Math.min(minDistance, Math.max(0, effectiveDistance));
+    }
+  }
+  
+  return {
+    isApproaching: minDistance <= warningDistance,
+    distance: minDistance,
+    isOccupied,
+  };
+}
+
+/**
+ * Get the crossing state based on train proximity
+ */
+export function getCrossingStateForTile(
+  trains: { 
+    tileX: number; 
+    tileY: number; 
+    direction: CarDirection; 
+    progress: number;
+    carriages: { tileX: number; tileY: number }[];
+  }[],
+  tileX: number,
+  tileY: number
+): CrossingState {
+  const { isApproaching, isOccupied, distance } = isTrainApproachingTile(trains, tileX, tileY);
+  
+  if (isOccupied) return 'closed';
+  if (isApproaching && distance <= 1) return 'closed';
+  if (isApproaching) return 'warning';
+  return 'open';
+}
+
+/**
+ * Check if a vehicle should stop at a railroad crossing
+ * @param trains - Array of all active trains
+ * @param crossingX - Crossing tile X coordinate
+ * @param crossingY - Crossing tile Y coordinate
+ * @returns true if vehicles should stop
+ */
+export function shouldStopAtCrossing(
+  trains: { 
+    tileX: number; 
+    tileY: number; 
+    direction: CarDirection; 
+    progress: number;
+    carriages: { tileX: number; tileY: number }[];
+  }[],
+  crossingX: number,
+  crossingY: number
+): boolean {
+  const state = getCrossingStateForTile(trains, crossingX, crossingY);
+  return state === 'closed' || state === 'warning';
 }
 
 /**

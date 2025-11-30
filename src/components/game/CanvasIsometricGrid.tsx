@@ -87,6 +87,10 @@ import {
   drawRailTrack,
   drawRailTracksOnly,
   countRailTiles,
+  isRailroadCrossing,
+  drawRailroadCrossing,
+  getCrossingStateForTile,
+  GATE_ANIMATION_SPEED,
 } from '@/components/game/railSystem';
 import {
   spawnTrain,
@@ -195,6 +199,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   // Navigation light flash timer for planes/helicopters/boats at night
   const navLightFlashTimerRef = useRef(0);
 
+  // Railroad crossing state
+  const crossingFlashTimerRef = useRef(0);
+  const crossingGateAnglesRef = useRef<Map<string, number>>(new Map()); // key = "x,y", value = angle (0=open, 90=closed)
+
   // Firework system refs
   const fireworksRef = useRef<Firework[]>([]);
   const fireworkIdRef = useRef(0);
@@ -279,6 +287,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     pedestrianIdRef,
     pedestrianSpawnTimerRef,
     trafficLightTimerRef,
+    trainsRef,
   };
 
   const vehicleSystemState: VehicleSystemState = {
@@ -2645,6 +2654,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         drawBuilding(ctx, screenX, screenY, tile);
         
         // If this road has a rail overlay, draw just the rail tracks (ties and rails, no ballast)
+        // Crossing signals/gates are drawn later (after rail tiles) to avoid z-order issues
         if (tile.hasRailOverlay) {
           drawRailTracksOnly(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
         }
@@ -2677,6 +2687,31 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // Draw the rail tracks
         drawRailTrack(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
       });
+    
+    // Draw railroad crossing signals and gates AFTER rail tiles to ensure they appear on top
+    // We iterate through the roadQueue again since crossings are road tiles with rail overlay
+    roadQueue.forEach(({ tile, screenX, screenY }) => {
+      if (tile.hasRailOverlay && isRailroadCrossing(grid, gridSize, tile.x, tile.y)) {
+        const crossingKey = `${tile.x},${tile.y}`;
+        const gateAngle = crossingGateAnglesRef.current.get(crossingKey) ?? 0;
+        const crossingState = getCrossingStateForTile(trainsRef.current, tile.x, tile.y);
+        const isActive = crossingState !== 'open';
+        
+        drawRailroadCrossing(
+          ctx,
+          screenX,
+          screenY,
+          tile.x,
+          tile.y,
+          grid,
+          gridSize,
+          zoom,
+          crossingFlashTimerRef.current,
+          gateAngle,
+          isActive
+        );
+      }
+    });
     
     // Draw green base tiles for grass/empty tiles adjacent to water (after water, before gray bases)
     insertionSortByDepth(greenBaseTileQueue);
@@ -2925,6 +2960,38 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         updateSmog(delta); // Update factory smog particles
         navLightFlashTimerRef.current += delta * 3; // Update nav light flash timer
         trafficLightTimerRef.current += delta; // Update traffic light cycle timer
+        crossingFlashTimerRef.current += delta; // Update crossing flash timer
+        
+        // Update railroad crossing gate angles based on train proximity
+        // Only for perpendicular crossings (not parallel rail/road)
+        const trains = trainsRef.current;
+        const gateAngles = crossingGateAnglesRef.current;
+        const gateSpeedMult = speed === 0 ? 0 : speed === 1 ? 1 : speed === 2 ? 2.5 : 4;
+        
+        // Find all perpendicular crossings and update their gate states
+        for (let gy = 0; gy < gridSize; gy++) {
+          for (let gx = 0; gx < gridSize; gx++) {
+            // Only process perpendicular crossings (isRailroadCrossing checks both hasRailOverlay and perpendicularity)
+            if (isRailroadCrossing(grid, gridSize, gx, gy)) {
+              const key = `${gx},${gy}`;
+              const currentAngle = gateAngles.get(key) ?? 0;
+              const crossingState = getCrossingStateForTile(trains, gx, gy);
+              
+              // Determine target angle based on state
+              const targetAngle = crossingState === 'open' ? 0 : 90;
+              
+              // Animate gate toward target
+              if (currentAngle !== targetAngle) {
+                const angleDelta = GATE_ANIMATION_SPEED * delta * gateSpeedMult;
+                if (currentAngle < targetAngle) {
+                  gateAngles.set(key, Math.min(targetAngle, currentAngle + angleDelta));
+                } else {
+                  gateAngles.set(key, Math.max(targetAngle, currentAngle - angleDelta));
+                }
+              }
+            }
+          }
+        }
       }
       // PERF: Skip drawing animated elements during mobile panning/zooming for better performance
       const skipAnimatedElements = isMobile && (isPanningRef.current || isPinchZoomingRef.current);
@@ -2967,7 +3034,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateSeaplanes, drawSeaplanes, updateBoats, drawBoats, updateBarges, drawBarges, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateSeaplanes, drawSeaplanes, updateBoats, drawBoats, updateBarges, drawBarges, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile, grid, gridSize, speed]);
   
   // Day/Night cycle lighting rendering - optimized for performance
   useEffect(() => {
