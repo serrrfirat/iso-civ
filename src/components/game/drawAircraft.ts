@@ -93,6 +93,14 @@ function getPlaneSprite(
   // Crop adjustments for specific plane types and directions
   let topCrop = 0;
   let bottomCrop = 0;
+  if (planeType === '737') {
+    // Row 0 (737) has tail cut off, extend reading area downward
+    if (dirInfo.col === 3) {
+      bottomCrop = -70; // Extend reading area downward for N-facing
+    } else {
+      bottomCrop = -8; // Slight extension for other directions
+    }
+  }
   if (planeType === '777') {
     // Column 3 (North-facing) has overlap with row above (737)
     if (dirInfo.col === 3) {
