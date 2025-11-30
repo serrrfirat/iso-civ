@@ -33,8 +33,10 @@ const ALL_PARK_TYPES = new Set<BuildingType>([
 export function useBuildingHelpers(grid: Tile[][], gridSize: number) {
   // Pre-compute all tile metadata once when grid changes
   // This converts O(n) per-tile lookups during render to O(1) map lookups
+  // PERF: Store gridSize for numeric key calculation
   const tileMetadataMap = useMemo(() => {
-    const map = new Map<string, TileMetadata>();
+    // PERF: Use numeric keys (y * gridSize + x) instead of string keys
+    const map = new Map<number, TileMetadata>();
     const maxSize = 4;
     
     // Helper to check if a position has water
@@ -45,12 +47,13 @@ export function useBuildingHelpers(grid: Tile[][], gridSize: number) {
     
     // First pass: compute isPartOfMultiTileBuilding and isPartOfParkBuilding for all tiles
     // These are expensive O(16) lookups that we want to do once
-    const multiTileMap = new Map<string, boolean>();
-    const parkBuildingMap = new Map<string, boolean>();
+    // PERF: Use numeric keys
+    const multiTileMap = new Map<number, boolean>();
+    const parkBuildingMap = new Map<number, boolean>();
     
     for (let y = 0; y < gridSize; y++) {
       for (let x = 0; x < gridSize; x++) {
-        const key = `${x},${y}`;
+        const key = y * gridSize + x;
         
         // Check isPartOfMultiTileBuilding
         let isMultiTile = false;
@@ -101,7 +104,7 @@ export function useBuildingHelpers(grid: Tile[][], gridSize: number) {
     // Second pass: compute all derived metadata
     for (let y = 0; y < gridSize; y++) {
       for (let x = 0; x < gridSize; x++) {
-        const key = `${x},${y}`;
+        const key = y * gridSize + x;
         const tile = grid[y][x];
         const buildingType = tile.building.type;
         
@@ -160,18 +163,19 @@ export function useBuildingHelpers(grid: Tile[][], gridSize: number) {
   }, [grid, gridSize]);
   
   // O(1) lookup functions that use the pre-computed map
+  // PERF: Use numeric key calculation (gridY * gridSize + gridX)
   const isPartOfMultiTileBuilding = useCallback((gridX: number, gridY: number): boolean => {
-    return tileMetadataMap.get(`${gridX},${gridY}`)?.isPartOfMultiTileBuilding ?? false;
-  }, [tileMetadataMap]);
+    return tileMetadataMap.get(gridY * gridSize + gridX)?.isPartOfMultiTileBuilding ?? false;
+  }, [tileMetadataMap, gridSize]);
 
   const isPartOfParkBuilding = useCallback((gridX: number, gridY: number): boolean => {
-    return tileMetadataMap.get(`${gridX},${gridY}`)?.isPartOfParkBuilding ?? false;
-  }, [tileMetadataMap]);
+    return tileMetadataMap.get(gridY * gridSize + gridX)?.isPartOfParkBuilding ?? false;
+  }, [tileMetadataMap, gridSize]);
   
   // Get full tile metadata for a position (O(1) lookup)
   const getTileMetadata = useCallback((gridX: number, gridY: number): TileMetadata | null => {
-    return tileMetadataMap.get(`${gridX},${gridY}`) ?? null;
-  }, [tileMetadataMap]);
+    return tileMetadataMap.get(gridY * gridSize + gridX) ?? null;
+  }, [tileMetadataMap, gridSize]);
 
   const findBuildingOrigin = useCallback((gridX: number, gridY: number): { originX: number; originY: number; buildingType: BuildingType } | null => {
     const maxSize = 4;

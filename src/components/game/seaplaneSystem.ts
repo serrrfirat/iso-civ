@@ -215,18 +215,16 @@ export function useSeaplaneSystem(
               if (seaplane.targetAngle < 0) seaplane.targetAngle += Math.PI * 2;
             }
           } else {
-            // When very close to center (<50px), stabilize and reduce turning to prevent flickering
-            // Only update target angle if current angle is significantly different
-            let angleDiff = normalizedAngleToCenter - seaplane.angle;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            
-            // Only adjust if angle difference is large enough to prevent micro-oscillations
-            // Use a larger threshold (45 degrees) when very close to center
-            if (Math.abs(angleDiff) > Math.PI / 4) {
-              seaplane.targetAngle = normalizedAngleToCenter;
+            // When very close to center (<50px), DON'T target center anymore
+            // This prevents flickering when crossing over the center point
+            // Instead, just do occasional gentle random turns like a boat idling
+            if (Math.random() < 0.005) { // Very infrequent turns
+              seaplane.targetAngle = seaplane.angle + (Math.random() - 0.5) * Math.PI / 6; // Very gentle turns
+              // Normalize
+              seaplane.targetAngle = seaplane.targetAngle % (Math.PI * 2);
+              if (seaplane.targetAngle < 0) seaplane.targetAngle += Math.PI * 2;
             }
-            // Otherwise keep current targetAngle to maintain stability
+            // Keep current targetAngle to maintain stability - don't chase the center
           }
           
           // Smooth turning with maximum rate limit to prevent rapid flipping
@@ -324,9 +322,14 @@ export function useSeaplaneSystem(
           if (seaplane.lifeTime <= 5) {
             const distToBay = Math.hypot(seaplane.x - seaplane.bayScreenX, seaplane.y - seaplane.bayScreenY);
             
-            // Turn toward bay
+            // Smoothly turn toward bay (prevents sudden angle jumps)
             const angleToBay = Math.atan2(seaplane.bayScreenY - seaplane.y, seaplane.bayScreenX - seaplane.x);
-            seaplane.angle = angleToBay;
+            let flyingAngleDiff = angleToBay - seaplane.angle;
+            while (flyingAngleDiff > Math.PI) flyingAngleDiff -= Math.PI * 2;
+            while (flyingAngleDiff < -Math.PI) flyingAngleDiff += Math.PI * 2;
+            // Smooth turn toward bay
+            const flyingTurnRate = Math.PI * delta * 0.8; // Max ~144 degrees per second
+            seaplane.angle += Math.max(-flyingTurnRate, Math.min(flyingTurnRate, flyingAngleDiff));
             
             // Start landing approach when close to bay
             if (distToBay < 300) {
@@ -350,9 +353,14 @@ export function useSeaplaneSystem(
           seaplane.speed = Math.max(SEAPLANE_TAKEOFF_SPEED, seaplane.speed - delta * 15);
           seaplane.altitude = Math.max(0, seaplane.altitude - delta * 0.25);
           
-          // Adjust angle toward bay center
+          // Smoothly adjust angle toward bay center (prevents sudden jumps)
           const angleToBay = Math.atan2(seaplane.bayScreenY - seaplane.y, seaplane.bayScreenX - seaplane.x);
-          seaplane.angle = angleToBay;
+          let landingAngleDiff = angleToBay - seaplane.angle;
+          while (landingAngleDiff > Math.PI) landingAngleDiff -= Math.PI * 2;
+          while (landingAngleDiff < -Math.PI) landingAngleDiff += Math.PI * 2;
+          // Smooth turn toward landing target
+          const landingTurnRate = Math.PI * delta * 0.5; // Max ~90 degrees per second
+          seaplane.angle += Math.max(-landingTurnRate, Math.min(landingTurnRate, landingAngleDiff));
           
           nextX = seaplane.x + Math.cos(seaplane.angle) * seaplane.speed * delta * speedMultiplier;
           nextY = seaplane.y + Math.sin(seaplane.angle) * seaplane.speed * delta * speedMultiplier;

@@ -11,7 +11,6 @@ import { Separator } from '@/components/ui/separator';
 import {
   PlayIcon,
   PauseIcon,
-  FastForwardIcon,
   PopulationIcon,
   MoneyIcon,
   HappyIcon,
@@ -169,7 +168,10 @@ export function MobileTopBar({
                 }`}
                 title="2x speed"
               >
-                <FastForwardIcon size={12} />
+                <div className="flex items-center -space-x-[4px]">
+                  <PlayIcon size={9} />
+                  <PlayIcon size={9} />
+                </div>
               </button>
               <button
                 onClick={() => setSpeed(3)}
@@ -178,7 +180,8 @@ export function MobileTopBar({
                 }`}
                 title="3x speed"
               >
-                <div className="flex items-center -space-x-1">
+                <div className="flex items-center -space-x-[5px]">
+                  <PlayIcon size={8} />
                   <PlayIcon size={8} />
                   <PlayIcon size={8} />
                 </div>

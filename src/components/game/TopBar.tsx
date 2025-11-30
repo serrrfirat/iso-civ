@@ -9,7 +9,6 @@ import { Separator } from '@/components/ui/separator';
 import {
   PlayIcon,
   PauseIcon,
-  FastForwardIcon,
   HappyIcon,
   HealthIcon,
   EducationIcon,
@@ -197,8 +196,13 @@ export const TopBar = React.memo(function TopBar() {
             >
               {s === 0 ? <PauseIcon size={14} /> : 
                s === 1 ? <PlayIcon size={14} /> : 
-               s === 2 ? <FastForwardIcon size={14} /> :
-               <div className="flex items-center -space-x-1">
+               s === 2 ? (
+                 <div className="flex items-center -space-x-[5px]">
+                   <PlayIcon size={11} />
+                   <PlayIcon size={11} />
+                 </div>
+               ) :
+               <div className="flex items-center -space-x-[6px]">
                  <PlayIcon size={10} />
                  <PlayIcon size={10} />
                  <PlayIcon size={10} />

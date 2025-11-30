@@ -2618,26 +2618,30 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     // PERF: Use insertion sort instead of .sort() - O(n) for nearly-sorted data
     insertionSortByDepth(waterQueue);
-    waterQueue.forEach(({ tile, screenX, screenY }) => {
+    // PERF: Use for loop instead of forEach to avoid function call overhead
+    for (let i = 0; i < waterQueue.length; i++) {
+      const { tile, screenX, screenY } = waterQueue[i];
       drawBuilding(ctx, screenX, screenY, tile);
-    });
+    }
     
     ctx.restore(); // Remove clipping after drawing water
     
     // Draw beaches on water tiles (after water, outside clipping region)
     // Note: waterQueue is already sorted from above
-    waterQueue.forEach(({ tile, screenX, screenY }) => {
-        // Compute land adjacency for each edge (opposite of water adjacency)
-        // Only consider tiles within bounds - don't draw beaches on map edges
-        // Also exclude beaches next to marina docks and piers
-        const adjacentLand = {
-          north: (tile.x - 1 >= 0 && tile.x - 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x - 1, tile.y) && !hasMarinaPier(tile.x - 1, tile.y),
-          east: (tile.x >= 0 && tile.x < gridSize && tile.y - 1 >= 0 && tile.y - 1 < gridSize) && !isWater(tile.x, tile.y - 1) && !hasMarinaPier(tile.x, tile.y - 1),
-          south: (tile.x + 1 >= 0 && tile.x + 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x + 1, tile.y) && !hasMarinaPier(tile.x + 1, tile.y),
-          west: (tile.x >= 0 && tile.x < gridSize && tile.y + 1 >= 0 && tile.y + 1 < gridSize) && !isWater(tile.x, tile.y + 1) && !hasMarinaPier(tile.x, tile.y + 1),
-        };
-        drawBeachOnWater(ctx, screenX, screenY, adjacentLand);
-      });
+    // PERF: Use for loop instead of forEach
+    for (let i = 0; i < waterQueue.length; i++) {
+      const { tile, screenX, screenY } = waterQueue[i];
+      // Compute land adjacency for each edge (opposite of water adjacency)
+      // Only consider tiles within bounds - don't draw beaches on map edges
+      // Also exclude beaches next to marina docks and piers
+      const adjacentLand = {
+        north: (tile.x - 1 >= 0 && tile.x - 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x - 1, tile.y) && !hasMarinaPier(tile.x - 1, tile.y),
+        east: (tile.x >= 0 && tile.x < gridSize && tile.y - 1 >= 0 && tile.y - 1 < gridSize) && !isWater(tile.x, tile.y - 1) && !hasMarinaPier(tile.x, tile.y - 1),
+        south: (tile.x + 1 >= 0 && tile.x + 1 < gridSize && tile.y >= 0 && tile.y < gridSize) && !isWater(tile.x + 1, tile.y) && !hasMarinaPier(tile.x + 1, tile.y),
+        west: (tile.x >= 0 && tile.x < gridSize && tile.y + 1 >= 0 && tile.y + 1 < gridSize) && !isWater(tile.x, tile.y + 1) && !hasMarinaPier(tile.x, tile.y + 1),
+      };
+      drawBeachOnWater(ctx, screenX, screenY, adjacentLand);
+    }
     
     // PERF: Pre-compute tile dimensions once outside loops
     const tileWidth = TILE_WIDTH;
@@ -2647,64 +2651,72 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     // Draw roads (above water, needs full redraw including base tile)
     insertionSortByDepth(roadQueue);
-    roadQueue.forEach(({ tile, screenX, screenY }) => {
-        // Draw road base tile first (grey diamond)
-        ctx.fillStyle = '#4a4a4a';
-        ctx.beginPath();
-        ctx.moveTo(screenX + halfTileWidth, screenY);
-        ctx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
-        ctx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
-        ctx.lineTo(screenX, screenY + halfTileHeight);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Draw road markings and sidewalks
-        drawBuilding(ctx, screenX, screenY, tile);
-        
-        // If this road has a rail overlay, draw just the rail tracks (ties and rails, no ballast)
-        // Crossing signals/gates are drawn later (after rail tiles) to avoid z-order issues
-        if (tile.hasRailOverlay) {
-          drawRailTracksOnly(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
-        }
-      });
+    // PERF: Use for loop instead of forEach
+    for (let i = 0; i < roadQueue.length; i++) {
+      const { tile, screenX, screenY } = roadQueue[i];
+      // Draw road base tile first (grey diamond)
+      ctx.fillStyle = '#4a4a4a';
+      ctx.beginPath();
+      ctx.moveTo(screenX + halfTileWidth, screenY);
+      ctx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
+      ctx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
+      ctx.lineTo(screenX, screenY + halfTileHeight);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Draw road markings and sidewalks
+      drawBuilding(ctx, screenX, screenY, tile);
+      
+      // If this road has a rail overlay, draw just the rail tracks (ties and rails, no ballast)
+      // Crossing signals/gates are drawn later (after rail tiles) to avoid z-order issues
+      if (tile.hasRailOverlay) {
+        drawRailTracksOnly(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
+      }
+    }
     
     // Draw rail tracks (above water, similar to roads)
     insertionSortByDepth(railQueue);
-    railQueue.forEach(({ tile, screenX, screenY }) => {
-        // Draw rail base tile first (dark gravel colored diamond)
-        ctx.fillStyle = '#5B6345'; // Dark gravel color for contrast with ballast
-        ctx.beginPath();
-        ctx.moveTo(screenX + halfTileWidth, screenY);
-        ctx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
-        ctx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
-        ctx.lineTo(screenX, screenY + halfTileHeight);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Draw edge shading for depth
-        ctx.strokeStyle = '#4B5335';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(screenX + halfTileWidth, screenY + tileHeight);
-        ctx.lineTo(screenX, screenY + halfTileHeight);
-        ctx.lineTo(screenX + halfTileWidth, screenY);
-        ctx.stroke();
-        
-        // Draw the rail tracks
-        drawRailTrack(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
-      });
+    // PERF: Use for loop instead of forEach
+    for (let i = 0; i < railQueue.length; i++) {
+      const { tile, screenX, screenY } = railQueue[i];
+      // Draw rail base tile first (dark gravel colored diamond)
+      ctx.fillStyle = '#5B6345'; // Dark gravel color for contrast with ballast
+      ctx.beginPath();
+      ctx.moveTo(screenX + halfTileWidth, screenY);
+      ctx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
+      ctx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
+      ctx.lineTo(screenX, screenY + halfTileHeight);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Draw edge shading for depth
+      ctx.strokeStyle = '#4B5335';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(screenX + halfTileWidth, screenY + tileHeight);
+      ctx.lineTo(screenX, screenY + halfTileHeight);
+      ctx.lineTo(screenX + halfTileWidth, screenY);
+      ctx.stroke();
+      
+      // Draw the rail tracks
+      drawRailTrack(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
+    }
     
     // Draw green base tiles for grass/empty tiles adjacent to water (after rail, before crossings)
     insertionSortByDepth(greenBaseTileQueue);
-    greenBaseTileQueue.forEach(({ tile, screenX, screenY }) => {
+    // PERF: Use for loop instead of forEach
+    for (let i = 0; i < greenBaseTileQueue.length; i++) {
+      const { tile, screenX, screenY } = greenBaseTileQueue[i];
       drawGreenBaseTile(ctx, screenX, screenY, tile, zoom);
-    });
+    }
     
     // Draw gray building base tiles (after rail, before crossings)
     insertionSortByDepth(baseTileQueue);
-    baseTileQueue.forEach(({ tile, screenX, screenY }) => {
+    // PERF: Use for loop instead of forEach
+    for (let i = 0; i < baseTileQueue.length; i++) {
+      const { tile, screenX, screenY } = baseTileQueue[i];
       drawGreyBaseTile(ctx, screenX, screenY, tile, zoom);
-    });
+    }
     
     // Draw railroad crossing signals and gates AFTER base tiles to ensure they appear on top
     // PERF: Build a Set of crossing keys for O(1) lookup instead of calling isRailroadCrossing
@@ -2721,7 +2733,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const gateAnglesMap = crossingGateAnglesRef.current;
     
     // Only iterate roads with rail overlay that are crossings
-    roadQueue.forEach(({ tile, screenX, screenY }) => {
+    // PERF: Use for loop instead of forEach
+    for (let i = 0; i < roadQueue.length; i++) {
+      const { tile, screenX, screenY } = roadQueue[i];
       if (tile.hasRailOverlay) {
         // PERF: Use numeric key and Set lookup instead of isRailroadCrossing call
         const crossingKey = tile.y * gridSize + tile.x;
@@ -2745,7 +2759,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           );
         }
       }
-    });
+    }
     
     // Note: Beach drawing has been moved to water tiles (drawBeachOnWater)
     // The beachQueue is no longer used for drawing beaches on land tiles
@@ -2779,16 +2793,20 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         buildingsCtx.imageSmoothingEnabled = false;
         
         // Draw buildings on the buildings canvas
-        buildingQueue.forEach(({ tile, screenX, screenY }) => {
+        // PERF: Use for loop instead of forEach
+        for (let i = 0; i < buildingQueue.length; i++) {
+          const { tile, screenX, screenY } = buildingQueue[i];
           drawBuilding(buildingsCtx, screenX, screenY, tile);
-        });
+        }
         
         // NOTE: Recreation pedestrians are now drawn in the animation loop on the air canvas
         // so their animations are smooth (the buildings canvas only updates when grid changes)
         
         // Draw overlays on the buildings canvas so they appear ON TOP of buildings
         // (The buildings canvas is layered above the main canvas, so overlays must be drawn here)
-        overlayQueue.forEach(({ tile, screenX, screenY }) => {
+        // PERF: Use for loop instead of forEach
+        for (let i = 0; i < overlayQueue.length; i++) {
+          const { tile, screenX, screenY } = overlayQueue[i];
           // Get service coverage for this tile
           const coverage = {
             fire: state.services.fire[tile.y][tile.x],
@@ -2799,13 +2817,13 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           
           buildingsCtx.fillStyle = getOverlayFillStyle(overlayMode, tile, coverage);
           buildingsCtx.beginPath();
-          buildingsCtx.moveTo(screenX + TILE_WIDTH / 2, screenY);
-          buildingsCtx.lineTo(screenX + TILE_WIDTH, screenY + TILE_HEIGHT / 2);
-          buildingsCtx.lineTo(screenX + TILE_WIDTH / 2, screenY + TILE_HEIGHT);
-          buildingsCtx.lineTo(screenX, screenY + TILE_HEIGHT / 2);
+          buildingsCtx.moveTo(screenX + halfTileWidth, screenY);
+          buildingsCtx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
+          buildingsCtx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
+          buildingsCtx.lineTo(screenX, screenY + halfTileHeight);
           buildingsCtx.closePath();
           buildingsCtx.fill();
-        });
+        }
         
         buildingsCtx.setTransform(1, 0, 0, 1, 0, 0);
       }

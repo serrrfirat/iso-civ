@@ -396,8 +396,9 @@ export function useVehicleSystems(
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2 : 3;
     const keysToDelete: string[] = [];
     
-    activeCrimeIncidentsRef.current.forEach((crime, key) => {
-      if (activeCrimesRef.current.has(key)) return;
+    // PERF: Use for...of instead of forEach for Map iteration
+    for (const [key, crime] of activeCrimeIncidentsRef.current) {
+      if (activeCrimesRef.current.has(key)) continue;
       
       const newTimeRemaining = crime.timeRemaining - delta * speedMultiplier;
       if (newTimeRemaining <= 0) {
@@ -405,9 +406,12 @@ export function useVehicleSystems(
       } else {
         activeCrimeIncidentsRef.current.set(key, { ...crime, timeRemaining: newTimeRemaining });
       }
-    });
+    }
     
-    keysToDelete.forEach(key => activeCrimeIncidentsRef.current.delete(key));
+    // PERF: Use for loop instead of forEach
+    for (let i = 0; i < keysToDelete.length; i++) {
+      activeCrimeIncidentsRef.current.delete(keysToDelete[i]);
+    }
   }, [worldStateRef, activeCrimeIncidentsRef, activeCrimesRef]);
 
   const findCrimeIncidents = useCallback((): { x: number; y: number }[] => {
@@ -728,9 +732,10 @@ export function useVehicleSystems(
     const lightState = getTrafficLightState(trafficTime);
     
     // Build spatial index of cars by tile for efficient collision detection
-    const carsByTile = new Map<string, Car[]>();
+    // PERF: Use numeric keys (y * gridSize + x) instead of string keys
+    const carsByTile = new Map<number, Car[]>();
     for (const car of carsRef.current) {
-      const key = `${car.tileX},${car.tileY}`;
+      const key = car.tileY * currentGridSize + car.tileX;
       if (!carsByTile.has(key)) carsByTile.set(key, []);
       carsByTile.get(key)!.push(car);
     }
@@ -820,7 +825,8 @@ export function useVehicleSystems(
       // Only check cars going the SAME direction (same lane)
       if (!shouldStop) {
         // Check same tile for car ahead in same lane
-        const sameTileCars = carsByTile.get(`${car.tileX},${car.tileY}`) || [];
+        // PERF: Use numeric key lookup
+        const sameTileCars = carsByTile.get(car.tileY * currentGridSize + car.tileX) || [];
         for (const other of sameTileCars) {
           if (other.id === car.id) continue;
           // Same direction (same lane) and ahead of us
@@ -835,7 +841,8 @@ export function useVehicleSystems(
         
         // Check next tile for car in same lane we might hit
         if (!shouldStop && car.progress > 0.7) {
-          const nextTileCars = carsByTile.get(`${nextX},${nextY}`) || [];
+          // PERF: Use numeric key lookup
+          const nextTileCars = carsByTile.get(nextY * currentGridSize + nextX) || [];
           for (const other of nextTileCars) {
             // Only stop for cars going same direction (same lane)
             if (other.direction === car.direction && other.progress < 0.3) {
@@ -1293,13 +1300,14 @@ export function useVehicleSystems(
     const viewRight = viewWidth - currentOffset.x / currentZoom + TILE_WIDTH * 2;
     const viewBottom = viewHeight - currentOffset.y / currentZoom + TILE_HEIGHT * 4;
     
-    activeCrimeIncidentsRef.current.forEach((crime) => {
+    // PERF: Use for...of instead of forEach for Map iteration
+    for (const crime of activeCrimeIncidentsRef.current.values()) {
       const { screenX, screenY } = gridToScreen(crime.x, crime.y, 0, 0);
       const centerX = screenX + TILE_WIDTH / 2;
       const centerY = screenY + TILE_HEIGHT / 2;
       
       if (centerX < viewLeft || centerX > viewRight || centerY < viewTop || centerY > viewBottom) {
-        return;
+        continue;
       }
       
       const pulse = Math.sin(animTime * 4) * 0.3 + 0.7;
@@ -1345,7 +1353,7 @@ export function useVehicleSystems(
       ctx.fill();
       
       ctx.restore();
-    });
+    }
     
     for (let y = 0; y < currentGridSize; y++) {
       for (let x = 0; x < currentGridSize; x++) {
