@@ -380,7 +380,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     baseball_field_small: -0.55,  // shifted down 0.3 from -0.85
     soccer_field_small: -0.20,  // shifted up slightly
     football_field: -0.55,  // shifted down 0.3
-    baseball_stadium: -1.5,  // adjusted for scale, moved up 0.5 tiles
+    baseball_stadium: -1.35,  // adjusted for scale, moved up 0.5 tiles, shifted down 0.15 tiles
     community_center: -0.2,
     office_building_small: -0.3,
     swimming_pool: -0.20,  // shifted up slightly
