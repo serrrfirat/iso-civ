@@ -78,7 +78,7 @@ export const PLANE_TYPES: Array<'737' | '777' | '747' | 'a380' | 'g650'> = ['737
 // baseAngle = the angle the sprite visually faces; rotationOffset = planeAngle - baseAngle
 export const PLANE_DIRECTION_COLS: Record<string, { col: number; mirrorX: boolean; mirrorY: boolean; baseAngle: number }> = {
   // Original sprites - baseAngle is what direction the sprite is drawn facing
-  'se': { col: 0, mirrorX: false, mirrorY: false, baseAngle: Math.PI / 4 },               // 45° - South East
+  'se': { col: 0, mirrorX: false, mirrorY: false, baseAngle: Math.PI / 4 - 0.26 },        // ~30° - South East (sprite faces ~15° more south)
   'sw': { col: 1, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 4 + 0.26 },  // ~150° - South West (sprite faces ~15° more west)
   'w': { col: 2, mirrorX: false, mirrorY: false, baseAngle: Math.PI },                    // 180° - West
   'n': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 },          // 270° - North (top-down)
@@ -87,8 +87,8 @@ export const PLANE_DIRECTION_COLS: Record<string, { col: number; mirrorX: boolea
   's': { col: 3, mirrorX: false, mirrorY: true, baseAngle: Math.PI / 2 },                 // 90° - South (vertical flip of N)
   // NW and NE use the N sprite (top-down view) with rotation
   // N sprite faces 270°, so baseAngle = 270° and rotation naturally adjusts to target
-  'nw': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 + 0.52 },  // ~300° - needs extra CCW rotation
-  'ne': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 - 0.52 },  // ~240° - symmetric adjustment for NE
+  'nw': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 },          // 270° - N sprite, rotation handles direction
+  'ne': { col: 3, mirrorX: false, mirrorY: false, baseAngle: (3 * Math.PI) / 2 + 0.52 },  // ~300° - needs extra CCW rotation
 };
 // Plane scale factors by type (larger planes are bigger)
 // Scaled down 30% from previous values
