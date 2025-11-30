@@ -398,7 +398,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     pier_large: -0.1,  // 1x1 building, shifted down 0.1 tiles from -0.2
     roller_coaster_small: -0.50,  // shifted up 0.15 tiles from -0.35
     community_garden: -0.15,
-    pond_park: -0.15,
+    pond_park: -0.23,  // shifted up 0.08 tiles from -0.15
     park_gate: -0.15,
     mountain_lodge: -0.55,  // shifted down 0.3 from -0.85
     mountain_trailhead: -1.0,  // 3x3, shifted down 0.5 tiles

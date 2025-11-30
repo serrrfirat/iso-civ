@@ -2494,7 +2494,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               
               // Check if building should be horizontally flipped
               // Some buildings are mirrored by default and the flip flag inverts that
-              const defaultMirroredBuildings = ['marina_docks_small', 'pier_large'];
+              // Note: marina and pier are NOT in this list - they face the default direction
+              const defaultMirroredBuildings: string[] = [];
               const isDefaultMirrored = defaultMirroredBuildings.includes(buildingType);
               
               // Check if this is a waterfront asset - these use water-facing logic set at build time
