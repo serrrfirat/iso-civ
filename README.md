@@ -2,7 +2,7 @@
 
 IsoCity is a open-source isometric city-building simulation game built with **Next.js**, **TypeScript**, and **Tailwind CSS**. It leverages the HTML5 Canvas API for high-performance rendering of isometric graphics, featuring complex systems for economic simulation, trains, planes, seaplanes, helicopters, cars, pedestrians, and more.
 
-![IsoCity Banner](public/og-image.png)
+![IsoCity Banner](public/readme-image.png)
 
 ## Features
 
