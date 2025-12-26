@@ -1940,20 +1940,15 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           const baseH = 6;
           const baseW = suspTowerW + 2;
           
-          // Draw back tower with concrete base
-          ctx.fillStyle = baseCol;
-          ctx.fillRect(
-            backTower.x - baseW/2, 
-            cy - suspTowerH + backTowerYOff + towerH - baseH, 
-            baseW, 
-            baseH
-          );
+          // Draw back tower - shorter and no base
+          const backTowerH = 15; // Shorter to avoid intersecting roads
+          const backTowerShiftUp = 2; // Small shift up
           ctx.fillStyle = supportCol;
           ctx.fillRect(
             backTower.x - suspTowerW/2, 
-            cy - suspTowerH + backTowerYOff, 
+            cy - backTowerH + backTowerYOff - backTowerShiftUp, 
             suspTowerW, 
-            towerH - baseH
+            backTowerH
           );
           
           // Draw front tower with concrete base
@@ -2256,20 +2251,15 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const baseHeight = 6;
       const baseWidth = suspTowerW + 2;
       
-      // Draw back tower with concrete base
-      ctx.fillStyle = baseColor;
-      ctx.fillRect(
-        backTower.x - baseWidth/2, 
-        cy - suspTowerH + backTowerYOffset + towerHeight - baseHeight, 
-        baseWidth, 
-        baseHeight
-      );
+      // Draw back tower - shorter and no base
+      const backTowerHeight = 22;
+      const backTowerShiftUp = 4;
       ctx.fillStyle = supportColor;
       ctx.fillRect(
         backTower.x - suspTowerW/2, 
-        cy - suspTowerH + backTowerYOffset, 
+        cy - backTowerHeight + backTowerYOffset - backTowerShiftUp, 
         suspTowerW, 
-        towerHeight - baseHeight
+        backTowerHeight
       );
       
       // Draw front tower with concrete base
@@ -3665,12 +3655,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     }
     
     // Draw suspension bridge towers AGAIN on main canvas after base tiles
-    // This ensures the upper portion of towers (above deck level) appears above base tiles
-    // The lower portion was already drawn in drawBridgeTile before the deck
+    // Draw suspension bridge FRONT towers on main canvas after base tiles
+    // Only the front tower is drawn here (back tower was drawn before deck in drawBridgeTile)
     for (let i = 0; i < bridgeQueue.length; i++) {
       const { tile, screenX, screenY } = bridgeQueue[i];
       if (tile.building.bridgeType === 'suspension') {
-        drawSuspensionBridgeTowers(ctx, screenX, screenY, tile.building, zoom);
+        drawSuspensionBridgeTowers(ctx, screenX, screenY, tile.building, zoom, true);
       }
     }
     
