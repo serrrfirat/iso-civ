@@ -1643,7 +1643,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       }
     }
     
-    // Draw bridge tile - uses IDENTICAL coordinate system as drawRoad for perfect alignment
+    // Draw bridge tile - draws as a SINGLE continuous shape to avoid gaps
     function drawBridgeTile(
       ctx: CanvasRenderingContext2D,
       x: number,
@@ -1666,219 +1666,226 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Bridge styles - all use road-like asphalt colors
       const bridgeStyles: Record<string, { asphalt: string; barrier: string; accent: string; support: string; cable?: string }[]> = {
         small: [
-          { asphalt: ROAD_COLORS.ASPHALT, barrier: '#808080', accent: '#606060', support: '#505050' },
-          { asphalt: '#454545', barrier: '#707070', accent: '#555555', support: '#404040' },
-          { asphalt: '#3d3d3d', barrier: '#686868', accent: '#484848', support: '#383838' },
+          { asphalt: ROAD_COLORS.ASPHALT, barrier: '#707070', accent: '#606060', support: '#404040' },
+          { asphalt: '#454545', barrier: '#606060', accent: '#555555', support: '#353535' },
+          { asphalt: '#3d3d3d', barrier: '#585858', accent: '#484848', support: '#303030' },
         ],
         medium: [
-          { asphalt: ROAD_COLORS.ASPHALT, barrier: '#909090', accent: '#707070', support: '#606060' },
-          { asphalt: '#454545', barrier: '#808080', accent: '#606060', support: '#505050' },
-          { asphalt: '#3d3d3d', barrier: '#757575', accent: '#555555', support: '#454545' },
+          { asphalt: ROAD_COLORS.ASPHALT, barrier: '#808080', accent: '#707070', support: '#505050' },
+          { asphalt: '#454545', barrier: '#707070', accent: '#606060', support: '#454545' },
+          { asphalt: '#3d3d3d', barrier: '#656565', accent: '#555555', support: '#404040' },
         ],
         large: [
-          { asphalt: '#3d3d3d', barrier: '#4682B4', accent: '#5a8a8a', support: '#4a6a6a' },
-          { asphalt: ROAD_COLORS.ASPHALT, barrier: '#708090', accent: '#607080', support: '#506070' },
+          { asphalt: '#3d3d3d', barrier: '#4682B4', accent: '#5a8a8a', support: '#3a5a5a' },
+          { asphalt: ROAD_COLORS.ASPHALT, barrier: '#708090', accent: '#607080', support: '#405060' },
         ],
         suspension: [
-          { asphalt: '#3d3d3d', barrier: '#808080', accent: '#606060', support: '#B0B0B0', cable: '#DC143C' },
-          { asphalt: '#3d3d3d', barrier: '#707070', accent: '#555555', support: '#A0A0A0', cable: '#FF4500' },
+          { asphalt: '#3d3d3d', barrier: '#707070', accent: '#606060', support: '#909090', cable: '#DC143C' },
+          { asphalt: '#3d3d3d', barrier: '#606060', accent: '#555555', support: '#808080', cable: '#FF4500' },
         ],
       };
       
       const style = bridgeStyles[bridgeType]?.[variant] || bridgeStyles.small[0];
       
-      // ============================================================
-      // EXACT SAME COORDINATES AS drawRoad (copied from lines 1077-1097)
-      // ============================================================
-      const northEdgeX = x + w * 0.25;
-      const northEdgeY = y + h * 0.25;
-      const eastEdgeX = x + w * 0.75;
-      const eastEdgeY = y + h * 0.25;
-      const southEdgeX = x + w * 0.75;
-      const southEdgeY = y + h * 0.75;
-      const westEdgeX = x + w * 0.25;
-      const westEdgeY = y + h * 0.75;
+      // Diamond corners for the tile
+      const topCorner = { x: cx, y: y };
+      const rightCorner = { x: x + w, y: cy };
+      const bottomCorner = { x: cx, y: y + h };
+      const leftCorner = { x: x, y: cy };
       
-      const northDx = (northEdgeX - cx) / Math.hypot(northEdgeX - cx, northEdgeY - cy);
-      const northDy = (northEdgeY - cy) / Math.hypot(northEdgeX - cx, northEdgeY - cy);
-      const eastDx = (eastEdgeX - cx) / Math.hypot(eastEdgeX - cx, eastEdgeY - cy);
-      const eastDy = (eastEdgeY - cy) / Math.hypot(eastEdgeX - cx, eastEdgeY - cy);
-      const southDx = (southEdgeX - cx) / Math.hypot(southEdgeX - cx, southEdgeY - cy);
-      const southDy = (southEdgeY - cy) / Math.hypot(southEdgeX - cx, southEdgeY - cy);
-      const westDx = (westEdgeX - cx) / Math.hypot(westEdgeX - cx, westEdgeY - cy);
-      const westDy = (westEdgeY - cy) / Math.hypot(westEdgeX - cx, westEdgeY - cy);
+      // Bridge width - slightly SKINNIER than roads (0.12 vs 0.14)
+      const bridgeWidthRatio = 0.12;
+      const halfWidth = w * bridgeWidthRatio * 0.5;
       
-      const getPerp = (dx: number, dy: number) => ({ nx: -dy, ny: dx });
+      // For bridges, we draw a SINGLE continuous parallelogram from edge to edge
+      // This avoids the gaps that occur when drawing two segments with different perpendiculars
       
-      // SAME road width as roads (0.14 ratio, same as line 1066-1067)
-      const roadW = w * 0.14;
-      const halfWidth = roadW * 0.5;
-      const edgeStop = 0.98;
+      // Calculate the edge points for the bridge path
+      // NS bridge: goes from top-left edge (between top and left corners) to bottom-right edge (between bottom and right corners)
+      // EW bridge: goes from top-right edge (between top and right corners) to bottom-left edge (between bottom and left corners)
       
-      // ============================================================
-      // DRAW ROAD SURFACE - IDENTICAL to drawRoad logic (lines 1256-1320)
-      // ============================================================
-      ctx.fillStyle = style.asphalt;
+      let startEdge: { x: number; y: number };
+      let endEdge: { x: number; y: number };
+      let perpX: number;
+      let perpY: number;
       
       if (orientation === 'ns') {
-        // Draw NORTH segment (center to north edge) - same as road "if (north)" block
-        {
-          const stopX = cx + (northEdgeX - cx) * edgeStop;
-          const stopY = cy + (northEdgeY - cy) * edgeStop;
-          const perp = getPerp(northDx, northDy);
-          ctx.beginPath();
-          ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
-          ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
-          ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
-          ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
-          ctx.closePath();
-          ctx.fill();
-        }
-        
-        // Draw SOUTH segment (center to south edge) - same as road "if (south)" block
-        {
-          const stopX = cx + (southEdgeX - cx) * edgeStop;
-          const stopY = cy + (southEdgeY - cy) * edgeStop;
-          const perp = getPerp(southDx, southDy);
-          ctx.beginPath();
-          ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
-          ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
-          ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
-          ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
-          ctx.closePath();
-          ctx.fill();
-        }
+        // NS bridge connects top-left edge to bottom-right edge
+        startEdge = { x: (topCorner.x + leftCorner.x) / 2, y: (topCorner.y + leftCorner.y) / 2 };
+        endEdge = { x: (bottomCorner.x + rightCorner.x) / 2, y: (bottomCorner.y + rightCorner.y) / 2 };
+        // Perpendicular direction (pointing toward top-right / bottom-left)
+        const dx = endEdge.x - startEdge.x;
+        const dy = endEdge.y - startEdge.y;
+        const len = Math.hypot(dx, dy);
+        perpX = -dy / len;
+        perpY = dx / len;
       } else {
-        // Draw EAST segment (center to east edge) - same as road "if (east)" block
-        {
-          const stopX = cx + (eastEdgeX - cx) * edgeStop;
-          const stopY = cy + (eastEdgeY - cy) * edgeStop;
-          const perp = getPerp(eastDx, eastDy);
-          ctx.beginPath();
-          ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
-          ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
-          ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
-          ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
-          ctx.closePath();
-          ctx.fill();
-        }
-        
-        // Draw WEST segment (center to west edge) - same as road "if (west)" block
-        {
-          const stopX = cx + (westEdgeX - cx) * edgeStop;
-          const stopY = cy + (westEdgeY - cy) * edgeStop;
-          const perp = getPerp(westDx, westDy);
-          ctx.beginPath();
-          ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
-          ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
-          ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
-          ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
-          ctx.closePath();
-          ctx.fill();
-        }
+        // EW bridge connects top-right edge to bottom-left edge
+        startEdge = { x: (topCorner.x + rightCorner.x) / 2, y: (topCorner.y + rightCorner.y) / 2 };
+        endEdge = { x: (bottomCorner.x + leftCorner.x) / 2, y: (bottomCorner.y + leftCorner.y) / 2 };
+        // Perpendicular direction
+        const dx = endEdge.x - startEdge.x;
+        const dy = endEdge.y - startEdge.y;
+        const len = Math.hypot(dx, dy);
+        perpX = -dy / len;
+        perpY = dx / len;
       }
       
-      // Center diamond - SAME as road (lines 1312-1320)
-      const centerSize = roadW * 1.4;
+      // ============================================================
+      // DRAW SUPPORT PILLARS FIRST (they go into the water)
+      // ============================================================
+      const pillarW = 4;
+      const pillarH = 14;
+      const pillarInset = 0.15; // How far from edges to place pillars
+      
+      ctx.fillStyle = style.support;
+      
+      // Draw pillars at consistent positions along the bridge
+      // Position them at 15% and 85% of the tile to connect smoothly between tiles
+      if (position !== 'start' && position !== 'end') {
+        // Middle tiles get 2 pillars
+        const pillar1 = {
+          x: startEdge.x + (endEdge.x - startEdge.x) * pillarInset,
+          y: startEdge.y + (endEdge.y - startEdge.y) * pillarInset
+        };
+        const pillar2 = {
+          x: startEdge.x + (endEdge.x - startEdge.x) * (1 - pillarInset),
+          y: startEdge.y + (endEdge.y - startEdge.y) * (1 - pillarInset)
+        };
+        
+        // Isometric pillar shape (3D column going into water)
+        const drawPillar = (px: number, py: number) => {
+          // Draw the side face first (darker)
+          ctx.fillStyle = '#303030';
+          ctx.beginPath();
+          ctx.moveTo(px - pillarW, py);
+          ctx.lineTo(px - pillarW, py + pillarH);
+          ctx.lineTo(px, py + pillarH + pillarW/2);
+          ctx.lineTo(px, py + pillarW/2);
+          ctx.closePath();
+          ctx.fill();
+          
+          // Draw the front face
+          ctx.fillStyle = '#404040';
+          ctx.beginPath();
+          ctx.moveTo(px, py + pillarW/2);
+          ctx.lineTo(px, py + pillarH + pillarW/2);
+          ctx.lineTo(px + pillarW, py + pillarH);
+          ctx.lineTo(px + pillarW, py);
+          ctx.closePath();
+          ctx.fill();
+          
+          // Draw the top face
+          ctx.fillStyle = style.support;
+          ctx.beginPath();
+          ctx.moveTo(px, py - pillarW/2);
+          ctx.lineTo(px + pillarW, py);
+          ctx.lineTo(px, py + pillarW/2);
+          ctx.lineTo(px - pillarW, py);
+          ctx.closePath();
+          ctx.fill();
+        };
+        
+        drawPillar(pillar1.x, pillar1.y);
+        drawPillar(pillar2.x, pillar2.y);
+      } else {
+        // Start/end tiles get 1 pillar (at the water edge)
+        const pillarPos = position === 'start' 
+          ? { x: startEdge.x + (endEdge.x - startEdge.x) * (1 - pillarInset), y: startEdge.y + (endEdge.y - startEdge.y) * (1 - pillarInset) }
+          : { x: startEdge.x + (endEdge.x - startEdge.x) * pillarInset, y: startEdge.y + (endEdge.y - startEdge.y) * pillarInset };
+        
+        const drawPillar = (px: number, py: number) => {
+          ctx.fillStyle = '#303030';
+          ctx.beginPath();
+          ctx.moveTo(px - pillarW, py);
+          ctx.lineTo(px - pillarW, py + pillarH);
+          ctx.lineTo(px, py + pillarH + pillarW/2);
+          ctx.lineTo(px, py + pillarW/2);
+          ctx.closePath();
+          ctx.fill();
+          
+          ctx.fillStyle = '#404040';
+          ctx.beginPath();
+          ctx.moveTo(px, py + pillarW/2);
+          ctx.lineTo(px, py + pillarH + pillarW/2);
+          ctx.lineTo(px + pillarW, py + pillarH);
+          ctx.lineTo(px + pillarW, py);
+          ctx.closePath();
+          ctx.fill();
+          
+          ctx.fillStyle = style.support;
+          ctx.beginPath();
+          ctx.moveTo(px, py - pillarW/2);
+          ctx.lineTo(px + pillarW, py);
+          ctx.lineTo(px, py + pillarW/2);
+          ctx.lineTo(px - pillarW, py);
+          ctx.closePath();
+          ctx.fill();
+        };
+        
+        drawPillar(pillarPos.x, pillarPos.y);
+      }
+      
+      // ============================================================
+      // DRAW BRIDGE DECK AS SINGLE CONTINUOUS SHAPE
+      // ============================================================
+      
+      // The deck is elevated slightly, and start/end tiles have ramps
+      const deckElevation = 3; // Deck is elevated above water
+      const rampOffset = (position === 'start' || position === 'end') ? 2 : 0;
+      
+      // For start position: startEdge is at ground level, endEdge is elevated
+      // For end position: startEdge is elevated, endEdge is at ground level
+      // For middle: both edges are elevated
+      let startY = startEdge.y;
+      let endY = endEdge.y;
+      
+      if (position === 'start') {
+        startY = startEdge.y + rampOffset; // Ground level
+        endY = endEdge.y - deckElevation;
+      } else if (position === 'end') {
+        startY = startEdge.y - deckElevation;
+        endY = endEdge.y + rampOffset; // Ground level
+      } else {
+        // Middle tiles are fully elevated
+        startY = startEdge.y - deckElevation;
+        endY = endEdge.y - deckElevation;
+      }
+      
+      // Draw the deck as a single parallelogram
+      ctx.fillStyle = style.asphalt;
       ctx.beginPath();
-      ctx.moveTo(cx, cy - centerSize);
-      ctx.lineTo(cx + centerSize, cy);
-      ctx.lineTo(cx, cy + centerSize);
-      ctx.lineTo(cx - centerSize, cy);
+      ctx.moveTo(startEdge.x + perpX * halfWidth, startY + perpY * halfWidth);
+      ctx.lineTo(endEdge.x + perpX * halfWidth, endY + perpY * halfWidth);
+      ctx.lineTo(endEdge.x - perpX * halfWidth, endY - perpY * halfWidth);
+      ctx.lineTo(startEdge.x - perpX * halfWidth, startY - perpY * halfWidth);
       ctx.closePath();
       ctx.fill();
       
       // ============================================================
-      // BRIDGE BARRIERS (like curbs/sidewalks on roads)
+      // BRIDGE BARRIERS (railings on both sides)
       // ============================================================
       if (currentZoom >= 0.4) {
+        const barrierW = 2;
         ctx.fillStyle = style.barrier;
-        const barrierW = w * 0.03;
         
-        if (orientation === 'ns') {
-          // Use north direction perpendicular for north half, south for south half
-          const northPerp = getPerp(northDx, northDy);
-          const southPerp = getPerp(southDx, southDy);
-          const northStop = { x: cx + (northEdgeX - cx) * edgeStop, y: cy + (northEdgeY - cy) * edgeStop };
-          const southStop = { x: cx + (southEdgeX - cx) * edgeStop, y: cy + (southEdgeY - cy) * edgeStop };
-          
-          // Left barrier - north half
-          ctx.beginPath();
-          ctx.moveTo(cx + northPerp.nx * halfWidth, cy + northPerp.ny * halfWidth);
-          ctx.lineTo(northStop.x + northPerp.nx * halfWidth, northStop.y + northPerp.ny * halfWidth);
-          ctx.lineTo(northStop.x + northPerp.nx * (halfWidth + barrierW), northStop.y + northPerp.ny * (halfWidth + barrierW));
-          ctx.lineTo(cx + northPerp.nx * (halfWidth + barrierW), cy + northPerp.ny * (halfWidth + barrierW));
-          ctx.closePath();
-          ctx.fill();
-          
-          // Left barrier - south half
-          ctx.beginPath();
-          ctx.moveTo(cx + southPerp.nx * halfWidth, cy + southPerp.ny * halfWidth);
-          ctx.lineTo(southStop.x + southPerp.nx * halfWidth, southStop.y + southPerp.ny * halfWidth);
-          ctx.lineTo(southStop.x + southPerp.nx * (halfWidth + barrierW), southStop.y + southPerp.ny * (halfWidth + barrierW));
-          ctx.lineTo(cx + southPerp.nx * (halfWidth + barrierW), cy + southPerp.ny * (halfWidth + barrierW));
-          ctx.closePath();
-          ctx.fill();
-          
-          // Right barrier - north half
-          ctx.beginPath();
-          ctx.moveTo(cx - northPerp.nx * halfWidth, cy - northPerp.ny * halfWidth);
-          ctx.lineTo(northStop.x - northPerp.nx * halfWidth, northStop.y - northPerp.ny * halfWidth);
-          ctx.lineTo(northStop.x - northPerp.nx * (halfWidth + barrierW), northStop.y - northPerp.ny * (halfWidth + barrierW));
-          ctx.lineTo(cx - northPerp.nx * (halfWidth + barrierW), cy - northPerp.ny * (halfWidth + barrierW));
-          ctx.closePath();
-          ctx.fill();
-          
-          // Right barrier - south half
-          ctx.beginPath();
-          ctx.moveTo(cx - southPerp.nx * halfWidth, cy - southPerp.ny * halfWidth);
-          ctx.lineTo(southStop.x - southPerp.nx * halfWidth, southStop.y - southPerp.ny * halfWidth);
-          ctx.lineTo(southStop.x - southPerp.nx * (halfWidth + barrierW), southStop.y - southPerp.ny * (halfWidth + barrierW));
-          ctx.lineTo(cx - southPerp.nx * (halfWidth + barrierW), cy - southPerp.ny * (halfWidth + barrierW));
-          ctx.closePath();
-          ctx.fill();
-        } else {
-          const eastPerp = getPerp(eastDx, eastDy);
-          const westPerp = getPerp(westDx, westDy);
-          const eastStop = { x: cx + (eastEdgeX - cx) * edgeStop, y: cy + (eastEdgeY - cy) * edgeStop };
-          const westStop = { x: cx + (westEdgeX - cx) * edgeStop, y: cy + (westEdgeY - cy) * edgeStop };
-          
-          // Top barrier - east half
-          ctx.beginPath();
-          ctx.moveTo(cx + eastPerp.nx * halfWidth, cy + eastPerp.ny * halfWidth);
-          ctx.lineTo(eastStop.x + eastPerp.nx * halfWidth, eastStop.y + eastPerp.ny * halfWidth);
-          ctx.lineTo(eastStop.x + eastPerp.nx * (halfWidth + barrierW), eastStop.y + eastPerp.ny * (halfWidth + barrierW));
-          ctx.lineTo(cx + eastPerp.nx * (halfWidth + barrierW), cy + eastPerp.ny * (halfWidth + barrierW));
-          ctx.closePath();
-          ctx.fill();
-          
-          // Top barrier - west half
-          ctx.beginPath();
-          ctx.moveTo(cx + westPerp.nx * halfWidth, cy + westPerp.ny * halfWidth);
-          ctx.lineTo(westStop.x + westPerp.nx * halfWidth, westStop.y + westPerp.ny * halfWidth);
-          ctx.lineTo(westStop.x + westPerp.nx * (halfWidth + barrierW), westStop.y + westPerp.ny * (halfWidth + barrierW));
-          ctx.lineTo(cx + westPerp.nx * (halfWidth + barrierW), cy + westPerp.ny * (halfWidth + barrierW));
-          ctx.closePath();
-          ctx.fill();
-          
-          // Bottom barrier - east half
-          ctx.beginPath();
-          ctx.moveTo(cx - eastPerp.nx * halfWidth, cy - eastPerp.ny * halfWidth);
-          ctx.lineTo(eastStop.x - eastPerp.nx * halfWidth, eastStop.y - eastPerp.ny * halfWidth);
-          ctx.lineTo(eastStop.x - eastPerp.nx * (halfWidth + barrierW), eastStop.y - eastPerp.ny * (halfWidth + barrierW));
-          ctx.lineTo(cx - eastPerp.nx * (halfWidth + barrierW), cy - eastPerp.ny * (halfWidth + barrierW));
-          ctx.closePath();
-          ctx.fill();
-          
-          // Bottom barrier - west half
-          ctx.beginPath();
-          ctx.moveTo(cx - westPerp.nx * halfWidth, cy - westPerp.ny * halfWidth);
-          ctx.lineTo(westStop.x - westPerp.nx * halfWidth, westStop.y - westPerp.ny * halfWidth);
-          ctx.lineTo(westStop.x - westPerp.nx * (halfWidth + barrierW), westStop.y - westPerp.ny * (halfWidth + barrierW));
-          ctx.lineTo(cx - westPerp.nx * (halfWidth + barrierW), cy - westPerp.ny * (halfWidth + barrierW));
-          ctx.closePath();
-          ctx.fill();
-        }
+        // Left barrier
+        ctx.beginPath();
+        ctx.moveTo(startEdge.x + perpX * halfWidth, startY + perpY * halfWidth);
+        ctx.lineTo(endEdge.x + perpX * halfWidth, endY + perpY * halfWidth);
+        ctx.lineTo(endEdge.x + perpX * (halfWidth + barrierW), endY + perpY * (halfWidth + barrierW));
+        ctx.lineTo(startEdge.x + perpX * (halfWidth + barrierW), startY + perpY * (halfWidth + barrierW));
+        ctx.closePath();
+        ctx.fill();
+        
+        // Right barrier  
+        ctx.beginPath();
+        ctx.moveTo(startEdge.x - perpX * halfWidth, startY - perpY * halfWidth);
+        ctx.lineTo(endEdge.x - perpX * halfWidth, endY - perpY * halfWidth);
+        ctx.lineTo(endEdge.x - perpX * (halfWidth + barrierW), endY - perpY * (halfWidth + barrierW));
+        ctx.lineTo(startEdge.x - perpX * (halfWidth + barrierW), startY - perpY * (halfWidth + barrierW));
+        ctx.closePath();
+        ctx.fill();
       }
       
       // ============================================================
@@ -1888,170 +1895,93 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 6]);
-        
-        if (orientation === 'ns') {
-          const northStop = { x: cx + (northEdgeX - cx) * edgeStop, y: cy + (northEdgeY - cy) * edgeStop };
-          const southStop = { x: cx + (southEdgeX - cx) * edgeStop, y: cy + (southEdgeY - cy) * edgeStop };
-          ctx.beginPath();
-          ctx.moveTo(northStop.x, northStop.y);
-          ctx.lineTo(southStop.x, southStop.y);
-          ctx.stroke();
-        } else {
-          const eastStop = { x: cx + (eastEdgeX - cx) * edgeStop, y: cy + (eastEdgeY - cy) * edgeStop };
-          const westStop = { x: cx + (westEdgeX - cx) * edgeStop, y: cy + (westEdgeY - cy) * edgeStop };
-          ctx.beginPath();
-          ctx.moveTo(eastStop.x, eastStop.y);
-          ctx.lineTo(westStop.x, westStop.y);
-          ctx.stroke();
-        }
+        ctx.beginPath();
+        ctx.moveTo(startEdge.x, startY);
+        ctx.lineTo(endEdge.x, endY);
+        ctx.stroke();
         ctx.setLineDash([]);
       }
       
       // ============================================================
-      // BRIDGE TYPE DECORATIONS
+      // BRIDGE TYPE-SPECIFIC DECORATIONS
       // ============================================================
-      // Support pillars for start/end positions
-      if (position === 'start' || position === 'end') {
-        ctx.fillStyle = style.support;
-        const pillarW = 6;
-        const pillarH = 10;
-        
-        if (orientation === 'ns') {
-          const perp = getPerp(northDx, northDy);
-          ctx.fillRect(cx + perp.nx * (halfWidth + 4) - pillarW/2, cy + 4, pillarW, pillarH);
-          ctx.fillRect(cx - perp.nx * (halfWidth + 4) - pillarW/2, cy + 4, pillarW, pillarH);
-        } else {
-          const perp = getPerp(eastDx, eastDy);
-          ctx.fillRect(cx + perp.nx * (halfWidth + 4) - pillarW/2, cy + 4, pillarW, pillarH);
-          ctx.fillRect(cx - perp.nx * (halfWidth + 4) - pillarW/2, cy + 4, pillarW, pillarH);
-        }
-      }
       
       // Suspension bridge towers and cables
       if (bridgeType === 'suspension' && (position === 'start' || position === 'end') && currentZoom >= 0.5) {
         const towerW = 4;
-        const towerH = 18;
+        const towerH = 20;
         const cableColor = style.cable || '#DC143C';
         
+        // Tower position (in middle of tile)
         ctx.fillStyle = style.support;
         
-        if (orientation === 'ns') {
-          const perp = getPerp(northDx, northDy);
-          const leftX = cx + perp.nx * (halfWidth + 5);
-          const rightX = cx - perp.nx * (halfWidth + 5);
-          
-          ctx.fillRect(leftX - towerW/2, cy - towerH + 4, towerW, towerH);
-          ctx.fillRect(rightX - towerW/2, cy - towerH + 4, towerW, towerH);
-          
-          ctx.strokeStyle = cableColor;
-          ctx.lineWidth = 2;
-          
-          const northStop = { x: cx + (northEdgeX - cx) * edgeStop, y: cy + (northEdgeY - cy) * edgeStop };
-          const southStop = { x: cx + (southEdgeX - cx) * edgeStop, y: cy + (southEdgeY - cy) * edgeStop };
-          
-          ctx.beginPath();
-          ctx.moveTo(leftX, cy - towerH + 4);
-          ctx.lineTo(northStop.x + perp.nx * halfWidth, northStop.y);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(leftX, cy - towerH + 4);
-          ctx.lineTo(southStop.x + perp.nx * halfWidth, southStop.y);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(rightX, cy - towerH + 4);
-          ctx.lineTo(northStop.x - perp.nx * halfWidth, northStop.y);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(rightX, cy - towerH + 4);
-          ctx.lineTo(southStop.x - perp.nx * halfWidth, southStop.y);
-          ctx.stroke();
-        } else {
-          const perp = getPerp(eastDx, eastDy);
-          const topX = cx + perp.nx * (halfWidth + 5);
-          const botX = cx - perp.nx * (halfWidth + 5);
-          
-          ctx.fillRect(topX - towerW/2, cy - towerH + 4, towerW, towerH);
-          ctx.fillRect(botX - towerW/2, cy - towerH + 4, towerW, towerH);
-          
-          ctx.strokeStyle = cableColor;
-          ctx.lineWidth = 2;
-          
-          const eastStop = { x: cx + (eastEdgeX - cx) * edgeStop, y: cy + (eastEdgeY - cy) * edgeStop };
-          const westStop = { x: cx + (westEdgeX - cx) * edgeStop, y: cy + (westEdgeY - cy) * edgeStop };
-          
-          ctx.beginPath();
-          ctx.moveTo(topX, cy - towerH + 4);
-          ctx.lineTo(eastStop.x + perp.nx * halfWidth, eastStop.y);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(topX, cy - towerH + 4);
-          ctx.lineTo(westStop.x + perp.nx * halfWidth, westStop.y);
-          ctx.stroke();
-        }
+        // Left tower
+        const leftTowerX = cx + perpX * (halfWidth + 6);
+        const leftTowerY = cy + perpY * (halfWidth + 6);
+        ctx.fillRect(leftTowerX - towerW/2, cy - towerH, towerW, towerH + 4);
+        
+        // Right tower
+        const rightTowerX = cx - perpX * (halfWidth + 6);
+        const rightTowerY = cy - perpY * (halfWidth + 6);
+        ctx.fillRect(rightTowerX - towerW/2, cy - towerH, towerW, towerH + 4);
+        
+        // Cables from towers to deck
+        ctx.strokeStyle = cableColor;
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.moveTo(leftTowerX, cy - towerH);
+        ctx.lineTo(startEdge.x + perpX * halfWidth, startY);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(leftTowerX, cy - towerH);
+        ctx.lineTo(endEdge.x + perpX * halfWidth, endY);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(rightTowerX, cy - towerH);
+        ctx.lineTo(startEdge.x - perpX * halfWidth, startY);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(rightTowerX, cy - towerH);
+        ctx.lineTo(endEdge.x - perpX * halfWidth, endY);
+        ctx.stroke();
       }
       
       // Large bridge truss structure
       if (bridgeType === 'large' && currentZoom >= 0.5) {
         ctx.strokeStyle = style.accent;
         ctx.lineWidth = 1.5;
-        const trussH = 10;
+        const trussH = 8;
         
-        if (orientation === 'ns') {
-          const perp = getPerp(northDx, northDy);
-          const northStop = { x: cx + (northEdgeX - cx) * edgeStop, y: cy + (northEdgeY - cy) * edgeStop };
-          const southStop = { x: cx + (southEdgeX - cx) * edgeStop, y: cy + (southEdgeY - cy) * edgeStop };
-          
-          // Top beams
-          ctx.beginPath();
-          ctx.moveTo(northStop.x + perp.nx * halfWidth, northStop.y - trussH);
-          ctx.lineTo(southStop.x + perp.nx * halfWidth, southStop.y - trussH);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(northStop.x - perp.nx * halfWidth, northStop.y - trussH);
-          ctx.lineTo(southStop.x - perp.nx * halfWidth, southStop.y - trussH);
-          ctx.stroke();
-          
-          // Verticals
-          for (let i = 0; i <= 4; i++) {
-            const t = i / 4;
-            const px = northStop.x + (southStop.x - northStop.x) * t;
-            const py = northStop.y + (southStop.y - northStop.y) * t;
-            ctx.beginPath();
-            ctx.moveTo(px + perp.nx * halfWidth, py);
-            ctx.lineTo(px + perp.nx * halfWidth, py - trussH);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(px - perp.nx * halfWidth, py);
-            ctx.lineTo(px - perp.nx * halfWidth, py - trussH);
-            ctx.stroke();
-          }
-        } else {
-          const perp = getPerp(eastDx, eastDy);
-          const eastStop = { x: cx + (eastEdgeX - cx) * edgeStop, y: cy + (eastEdgeY - cy) * edgeStop };
-          const westStop = { x: cx + (westEdgeX - cx) * edgeStop, y: cy + (westEdgeY - cy) * edgeStop };
+        // Top beams on both sides
+        ctx.beginPath();
+        ctx.moveTo(startEdge.x + perpX * halfWidth, startY - trussH);
+        ctx.lineTo(endEdge.x + perpX * halfWidth, endY - trussH);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(startEdge.x - perpX * halfWidth, startY - trussH);
+        ctx.lineTo(endEdge.x - perpX * halfWidth, endY - trussH);
+        ctx.stroke();
+        
+        // Vertical supports
+        for (let i = 0; i <= 4; i++) {
+          const t = i / 4;
+          const px = startEdge.x + (endEdge.x - startEdge.x) * t;
+          const py = startY + (endY - startY) * t;
           
           ctx.beginPath();
-          ctx.moveTo(eastStop.x + perp.nx * halfWidth, eastStop.y - trussH);
-          ctx.lineTo(westStop.x + perp.nx * halfWidth, westStop.y - trussH);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(eastStop.x - perp.nx * halfWidth, eastStop.y - trussH);
-          ctx.lineTo(westStop.x - perp.nx * halfWidth, westStop.y - trussH);
+          ctx.moveTo(px + perpX * halfWidth, py);
+          ctx.lineTo(px + perpX * halfWidth, py - trussH);
           ctx.stroke();
           
-          for (let i = 0; i <= 4; i++) {
-            const t = i / 4;
-            const px = eastStop.x + (westStop.x - eastStop.x) * t;
-            const py = eastStop.y + (westStop.y - eastStop.y) * t;
-            ctx.beginPath();
-            ctx.moveTo(px + perp.nx * halfWidth, py);
-            ctx.lineTo(px + perp.nx * halfWidth, py - trussH);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(px - perp.nx * halfWidth, py);
-            ctx.lineTo(px - perp.nx * halfWidth, py - trussH);
-            ctx.stroke();
-          }
+          ctx.beginPath();
+          ctx.moveTo(px - perpX * halfWidth, py);
+          ctx.lineTo(px - perpX * halfWidth, py - trussH);
+          ctx.stroke();
         }
       }
     }
