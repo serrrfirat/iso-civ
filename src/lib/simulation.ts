@@ -2499,6 +2499,26 @@ export function removeSubway(state: GameState, x: number, y: number): GameState 
   return { ...state, grid: newGrid };
 }
 
+// Terraform a tile into water
+export function placeWaterTerraform(state: GameState, x: number, y: number): GameState {
+  const tile = state.grid[y]?.[x];
+  if (!tile) return state;
+  
+  // Already water
+  if (tile.building.type === 'water') return state;
+  
+  // Can only terraform certain tile types (grass, tree)
+  const allowedTypes: BuildingType[] = ['grass', 'tree'];
+  if (!allowedTypes.includes(tile.building.type)) return state;
+
+  const newGrid = state.grid.map(row => row.map(t => ({ ...t, building: { ...t.building } })));
+  newGrid[y][x].building = createBuilding('water');
+  newGrid[y][x].zone = 'none';
+  newGrid[y][x].hasSubway = false; // Remove any subway under water
+
+  return { ...state, grid: newGrid };
+}
+
 // Generate a random advanced city state with developed zones, infrastructure, and buildings
 export function generateRandomAdvancedCity(size: number = DEFAULT_GRID_SIZE, cityName: string = 'Metropolis'): GameState {
   // Start with a base state (terrain generation)

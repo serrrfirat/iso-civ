@@ -31,7 +31,7 @@ const CategoryIcons: Record<string, React.ReactNode> = {
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
     </svg>
   ),
-  'ZONES': (
+  'ZONING': (
     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <rect x="3" y="3" width="7" height="7" />
       <rect x="14" y="3" width="7" height="7" />
@@ -109,6 +109,9 @@ const QuickToolIcons: Partial<Record<Tool, React.ReactNode>> = {
   ),
   zone_dezone: (
     <div className="w-5 h-5 rounded-sm bg-gray-500 flex items-center justify-center text-[10px] font-bold text-white">X</div>
+  ),
+  zone_water: (
+    <div className="w-5 h-5 rounded-sm bg-cyan-500 flex items-center justify-center text-[10px] font-bold text-white">~</div>
   ),
   police_station: (
     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -191,7 +194,7 @@ const QuickToolIcons: Partial<Record<Tool, React.ReactNode>> = {
 
 const toolCategories = {
   'TOOLS': ['select', 'bulldoze', 'road', 'rail', 'subway'] as Tool[],
-  'ZONES': ['zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone'] as Tool[],
+  'ZONING': ['zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone', 'zone_water'] as Tool[],
   'UTILITIES': ['power_plant', 'water_tower', 'subway_station', 'rail_station'] as Tool[],
   'SERVICES': ['police_station', 'fire_station', 'hospital', 'school', 'university'] as Tool[],
   'PARKS': ['park', 'park_large', 'tennis', 'playground_small', 'playground_large', 'community_garden', 'pond_park', 'park_gate', 'greenhouse_garden'] as Tool[],

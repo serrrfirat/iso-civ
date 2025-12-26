@@ -32,7 +32,7 @@ interface MenuItem {
 
 const MENU_CATEGORIES = [
   { key: 'tools', label: 'Tools' },
-  { key: 'zones', label: 'Zones' },
+  { key: 'zoning', label: 'Zoning' },
   { key: 'services', label: 'Services' },
   { key: 'parks', label: 'Parks' },
   { key: 'sports', label: 'Sports' },
@@ -64,9 +64,9 @@ function buildMenuItems(): MenuItem[] {
     });
   });
 
-  // Zones category
-  const zonesCategory: Tool[] = ['zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone'];
-  zonesCategory.forEach(tool => {
+  // Zoning category
+  const zoningCategory: Tool[] = ['zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone', 'zone_water'];
+  zoningCategory.forEach(tool => {
     const info = TOOL_INFO[tool];
     items.push({
       id: tool,
@@ -75,8 +75,8 @@ function buildMenuItems(): MenuItem[] {
       name: info.name,
       description: info.description,
       cost: info.cost,
-      category: 'zones',
-      keywords: [info.name.toLowerCase(), tool, 'zone', 'zoning'],
+      category: 'zoning',
+      keywords: [info.name.toLowerCase(), tool, 'zone', 'zoning', ...(tool === 'zone_water' ? ['water', 'terraform', 'lake', 'ocean'] : [])],
     });
   });
 
