@@ -629,6 +629,7 @@ function drawTies(
   };
 
   // Draw ties for double track along a curve
+  // Outer curves are longer than inner curves, so adjust tie counts accordingly
   const drawDoubleCurveTies = (
     from: { x: number; y: number },
     to: { x: number; y: number },
@@ -642,16 +643,20 @@ function drawTies(
     curvePerp: { x: number; y: number },
     numTies: number
   ) => {
-    // Track 0
+    // Track 0 is the outer curve (offset by +halfSep away from curve center)
+    // It has a longer arc length, so use more ties
+    const outerTies = numTies + 2;
     const from0 = offsetPoint(from, fromPerp, halfSep);
     const to0 = offsetPoint(to, toPerp, halfSep);
     const ctrl0 = offsetPoint(control, curvePerp, halfSep);
-    drawSingleCurveTies(from0, to0, ctrl0, fromTieDir, toTieDir, fromTiePerpDir, toTiePerpDir, numTies);
-    // Track 1
+    drawSingleCurveTies(from0, to0, ctrl0, fromTieDir, toTieDir, fromTiePerpDir, toTiePerpDir, outerTies);
+    // Track 1 is the inner curve (offset by -halfSep toward curve center)
+    // It has a shorter arc length, so use fewer ties
+    const innerTies = Math.max(3, numTies - 2);
     const from1 = offsetPoint(from, fromPerp, -halfSep);
     const to1 = offsetPoint(to, toPerp, -halfSep);
     const ctrl1 = offsetPoint(control, curvePerp, -halfSep);
-    drawSingleCurveTies(from1, to1, ctrl1, fromTieDir, toTieDir, fromTiePerpDir, toTiePerpDir, numTies);
+    drawSingleCurveTies(from1, to1, ctrl1, fromTieDir, toTieDir, fromTiePerpDir, toTiePerpDir, innerTies);
   };
 
   const tiesHalf = Math.ceil(TIES_PER_TILE / 2);
