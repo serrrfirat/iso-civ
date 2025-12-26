@@ -1848,16 +1848,19 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       };
       
       // For 1x1 bridges (span of 1), draw connectors on BOTH ends
+      // SKIP connectors for rail bridges - they don't need road-style ramps
       const isSingleTileBridge = bridgeSpan === 1;
       
-      if (position === 'start' || isSingleTileBridge) {
-        // Draw connector at start edge (extending backward)
-        drawConnector(startEdge, -1);
-      }
-      
-      if (position === 'end' || isSingleTileBridge) {
-        // Draw connector at end edge (extending forward)
-        drawConnector(endEdge, 1);
+      if (!isRailBridge) {
+        if (position === 'start' || isSingleTileBridge) {
+          // Draw connector at start edge (extending backward)
+          drawConnector(startEdge, -1);
+        }
+        
+        if (position === 'end' || isSingleTileBridge) {
+          // Draw connector at end edge (extending forward)
+          drawConnector(endEdge, 1);
+        }
       }
       
       // ============================================================
