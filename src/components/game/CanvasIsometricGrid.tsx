@@ -1942,7 +1942,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           
           // Draw back tower - shorter and no base
           const backTowerH = 15; // Shorter to avoid intersecting roads
-          const backTowerShiftUp = 2; // Small shift up
+          const backTowerShiftUp = 2.5; // Small shift up
           ctx.fillStyle = supportCol;
           ctx.fillRect(
             backTower.x - suspTowerW/2, 
