@@ -213,7 +213,9 @@ export function createBridgeBuilding(
   bridgeType: BridgeType,
   orientation: BridgeOrientation,
   variant: number,
-  position: 'start' | 'middle' | 'end'
+  position: 'start' | 'middle' | 'end',
+  index: number,
+  span: number
 ): Building {
   return {
     type: 'bridge',
@@ -231,6 +233,8 @@ export function createBridgeBuilding(
     bridgeOrientation: orientation,
     bridgeVariant: variant,
     bridgePosition: position,
+    bridgeIndex: index,
+    bridgeSpan: span,
   };
 }
 
@@ -256,6 +260,7 @@ export function buildBridges(
     }
   });
   
+  const span = sortedTiles.length;
   sortedTiles.forEach((pos, index) => {
     let position: 'start' | 'middle' | 'end';
     if (index === 0) {
@@ -271,7 +276,9 @@ export function buildBridges(
       opportunity.bridgeType,
       opportunity.orientation,
       variant,
-      position
+      position,
+      index,
+      span
     );
   });
 }

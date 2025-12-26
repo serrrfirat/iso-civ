@@ -231,6 +231,8 @@ export interface Building {
   bridgeOrientation?: BridgeOrientation; // Direction the bridge spans (ns or ew)
   bridgeVariant?: number; // Visual variant for this bridge type (0-2)
   bridgePosition?: 'start' | 'middle' | 'end'; // Position within the bridge span
+  bridgeIndex?: number; // Index of this tile within the bridge (0-based)
+  bridgeSpan?: number; // Total number of tiles in this bridge
 }
 
 // City definition for multi-city maps
