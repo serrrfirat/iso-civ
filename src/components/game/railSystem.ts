@@ -645,7 +645,7 @@ function drawTies(
   ) => {
     // Track 0 is the outer curve (offset by +halfSep away from curve center)
     // It has a longer arc length, so use more ties
-    const outerTies = numTies + 2;
+    const outerTies = numTies + 3;
     const from0 = offsetPoint(from, fromPerp, halfSep);
     const to0 = offsetPoint(to, toPerp, halfSep);
     const ctrl0 = offsetPoint(control, curvePerp, halfSep);
