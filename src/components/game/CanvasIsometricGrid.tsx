@@ -3622,14 +3622,17 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         // PERF: Use cached crossing positions instead of O(n²) grid scan
         const trains = trainsRef.current;
         const gateAngles = crossingGateAnglesRef.current;
-        const gateSpeedMult = speed === 0 ? 0 : speed === 1 ? 1 : speed === 2 ? 2.5 : 4;
+        // PERF: Access speed via worldStateRef to avoid animation restart on speed change
+        const currentSpeed = worldStateRef.current.speed;
+        const gateSpeedMult = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
         const crossings = crossingPositionsRef.current;
+        const currentGridSize = worldStateRef.current.gridSize;
         
         // Iterate only over known crossings (O(k) where k = number of crossings)
         for (let i = 0; i < crossings.length; i++) {
           const { x: gx, y: gy } = crossings[i];
           // PERF: Use numeric key instead of string concatenation
-          const key = gy * gridSize + gx;
+          const key = gy * currentGridSize + gx;
           const currentAngle = gateAngles.get(key) ?? 0;
           const crossingState = getCrossingStateForTile(trains, gx, gy);
           
@@ -3688,7 +3691,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateSeaplanes, drawSeaplanes, updateBoats, drawBoats, updateBarges, drawBarges, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile, grid, gridSize, speed]);
+  // PERF: Removed grid, gridSize, speed from deps - they're accessed via worldStateRef to avoid restarting animation on every tick
+  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateSeaplanes, drawSeaplanes, updateBoats, drawBoats, updateBarges, drawBarges, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
   
   // Day/Night cycle lighting rendering - optimized for performance
   useEffect(() => {
@@ -3757,8 +3761,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // PERF: Pre-compute visible diagonal range to skip entire rows of tiles
     // In isometric rendering, screenY = (x + y) * (TILE_HEIGHT / 2), so sum = x + y = screenY * 2 / TILE_HEIGHT
     // Add padding for tall buildings that may extend above their tile position
+    // PERF: Read grid/gridSize from ref to avoid triggering re-render on every simulation tick
+    const currentGrid = worldStateRef.current.grid;
+    const currentGridSize = worldStateRef.current.gridSize;
     const visibleMinSum = Math.max(0, Math.floor((viewTop - TILE_HEIGHT * 6) * 2 / TILE_HEIGHT));
-    const visibleMaxSum = Math.min(gridSize * 2 - 2, Math.ceil((viewBottom + TILE_HEIGHT) * 2 / TILE_HEIGHT));
+    const visibleMaxSum = Math.min(currentGridSize * 2 - 2, Math.ceil((viewBottom + TILE_HEIGHT) * 2 / TILE_HEIGHT));
     
     const gridToScreen = (gx: number, gy: number) => ({
       screenX: (gx - gy) * TILE_WIDTH / 2,
@@ -3790,9 +3797,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // PERF: Only iterate through diagonal bands that intersect the visible viewport
     // This skips entire rows of tiles that can't possibly be visible, significantly reducing iterations
     for (let sum = visibleMinSum; sum <= visibleMaxSum; sum++) {
-      for (let x = Math.max(0, sum - gridSize + 1); x <= Math.min(sum, gridSize - 1); x++) {
+      for (let x = Math.max(0, sum - currentGridSize + 1); x <= Math.min(sum, currentGridSize - 1); x++) {
         const y = sum - x;
-        if (y < 0 || y >= gridSize) continue;
+        if (y < 0 || y >= currentGridSize) continue;
         
         const { screenX, screenY } = gridToScreen(x, y);
         
@@ -3802,7 +3809,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           continue;
         }
         
-        const tile = grid[y][x];
+        const tile = currentGrid[y][x];
         const buildingType = tile.building.type;
         
         if (buildingType === 'road' || buildingType === 'bridge') {
@@ -3956,7 +3963,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     ctx.restore();
     ctx.globalCompositeOperation = 'source-over';
     
-  }, [grid, gridSize, visualHour, offset, zoom, canvasSize.width, canvasSize.height, isMobile, isPanning]);
+  // PERF: Use worldStateRef instead of grid/gridSize in deps to avoid re-running on every simulation tick
+  // Lighting only needs to update when visualHour changes or viewport moves, not every time grid state changes
+  }, [visualHour, offset, zoom, canvasSize.width, canvasSize.height, isMobile, isPanning]);
   
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 1 || (e.button === 0 && e.altKey)) {
