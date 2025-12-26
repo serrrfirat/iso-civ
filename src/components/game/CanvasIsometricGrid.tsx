@@ -247,6 +247,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     buildingQueue: [] as BuildingDrawItem[],
     waterQueue: [] as BuildingDrawItem[],
     roadQueue: [] as BuildingDrawItem[],
+    bridgeQueue: [] as BuildingDrawItem[],
     railQueue: [] as BuildingDrawItem[],
     beachQueue: [] as BuildingDrawItem[],
     baseTileQueue: [] as BuildingDrawItem[],
@@ -942,6 +943,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     queues.buildingQueue.length = 0;
     queues.waterQueue.length = 0;
     queues.roadQueue.length = 0;
+    queues.bridgeQueue.length = 0;
     queues.railQueue.length = 0;
     queues.beachQueue.length = 0;
     queues.baseTileQueue.length = 0;
@@ -951,6 +953,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const buildingQueue = queues.buildingQueue;
     const waterQueue = queues.waterQueue;
     const roadQueue = queues.roadQueue;
+    const bridgeQueue = queues.bridgeQueue;
     const railQueue = queues.railQueue;
     const beachQueue = queues.beachQueue;
     const baseTileQueue = queues.baseTileQueue;
@@ -1798,11 +1801,54 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       }
       
       // ============================================================
+      // DRAW ROAD CONNECTOR AT BRIDGE ENDS (covers road centerline and fills gap)
+      // ============================================================
+      // At the start/end of a bridge, we need to draw a road segment that:
+      // 1. Fills the gap between the road and the elevated bridge deck
+      // 2. Covers up the yellow centerline from the adjacent road
+      
+      const deckElevation = 3;
+      
+      // Travel direction for connector extension (reuse dx/dy/travelLen from above)
+      const travelDirX = dx / travelLen;
+      const travelDirY = dy / travelLen;
+      
+      if (position === 'start' || position === 'end') {
+        // Determine which edge connects to land (road) and which direction to extend
+        const connectorEdge = position === 'start' ? startEdge : endEdge;
+        // For 'start', extend BACKWARD (opposite of travel); for 'end', extend FORWARD (in travel direction)
+        const extensionDir = position === 'start' ? -1 : 1;
+        
+        // Calculate how far to extend beyond the bridge tile (to cover the road's centerline)
+        const extensionAmount = 12; // Extend into the road tile to cover centerline
+        
+        // Extended edge position (going toward the adjacent road)
+        const extendedX = connectorEdge.x + travelDirX * extensionAmount * extensionDir;
+        const extendedY = connectorEdge.y + travelDirY * extensionAmount * extensionDir;
+        
+        // Draw a connector parallelogram from the extended position to the bridge edge
+        // The extended end (in the road) is at ground level, the bridge end is elevated
+        const connectorRoadLeft = { x: extendedX + perpX * halfWidth, y: extendedY + perpY * halfWidth };
+        const connectorRoadRight = { x: extendedX - perpX * halfWidth, y: extendedY - perpY * halfWidth };
+        const connectorBridgeLeft = { x: connectorEdge.x + perpX * halfWidth, y: connectorEdge.y - deckElevation + perpY * halfWidth };
+        const connectorBridgeRight = { x: connectorEdge.x - perpX * halfWidth, y: connectorEdge.y - deckElevation - perpY * halfWidth };
+        
+        // Draw the connector (asphalt color to match road/bridge)
+        ctx.fillStyle = style.asphalt;
+        ctx.beginPath();
+        ctx.moveTo(connectorRoadLeft.x, connectorRoadLeft.y);
+        ctx.lineTo(connectorBridgeLeft.x, connectorBridgeLeft.y);
+        ctx.lineTo(connectorBridgeRight.x, connectorBridgeRight.y);
+        ctx.lineTo(connectorRoadRight.x, connectorRoadRight.y);
+        ctx.closePath();
+        ctx.fill();
+      }
+      
+      // ============================================================
       // DRAW BRIDGE DECK AS SINGLE CONTINUOUS SHAPE
       // ============================================================
       
-      // The deck is elevated uniformly above water - no special handling for start/end
-      const deckElevation = 3;
+      // The deck is elevated uniformly above water
       const startY = startEdge.y - deckElevation;
       const endY = endEdge.y - deckElevation;
       
@@ -1819,9 +1865,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Cable attachment points are the actual deck barrier edges (extended slightly outward)
       // Use the same perpX/perpY as the deck edges for proper alignment
       const barrierOffset = 3; // Extend slightly beyond the barriers
-      // Calculate bridge travel direction for cable extension
-      const travelDirX = (endEdge.x - startEdge.x) / travelLen;
-      const travelDirY = (endEdge.y - startEdge.y) / travelLen;
+      // Use travel direction for cable extension (travelDirX/travelDirY already defined above)
       const cableExtension = 18; // How far cables extend beyond deck edges
       // Use actual deck corner positions for proper edge attachment, extended along bridge direction
       const cableAttachLeft = {
@@ -3050,10 +3094,15 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           const depth = x + y + size.width + size.height - 2;
           waterQueue.push({ screenX, screenY, tile, depth });
         }
-        // Roads and bridges go to their own queue (drawn above water)
-        else if (tile.building.type === 'road' || tile.building.type === 'bridge') {
+        // Roads go to their own queue (drawn above water)
+        else if (tile.building.type === 'road') {
           const depth = x + y;
           roadQueue.push({ screenX, screenY, tile, depth });
+        }
+        // Bridges go to a separate queue (drawn after roads to cover centerlines)
+        else if (tile.building.type === 'bridge') {
+          const depth = x + y;
+          bridgeQueue.push({ screenX, screenY, tile, depth });
         }
         // Rail tiles - drawn after roads, above water
         else if (tile.building.type === 'rail') {
@@ -3164,23 +3213,17 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     for (let i = 0; i < roadQueue.length; i++) {
       const { tile, screenX, screenY } = roadQueue[i];
       
-      // For bridges, draw water underneath instead of grey base tile
-      if (tile.building.type === 'bridge') {
-        // Draw water tile underneath the bridge
-        drawWaterTileAt(ctx, screenX, screenY, tile.x, tile.y);
-      } else {
-        // Draw road base tile first (grey diamond)
-        ctx.fillStyle = '#4a4a4a';
-        ctx.beginPath();
-        ctx.moveTo(screenX + halfTileWidth, screenY);
-        ctx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
-        ctx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
-        ctx.lineTo(screenX, screenY + halfTileHeight);
-        ctx.closePath();
-        ctx.fill();
-      }
+      // Draw road base tile first (grey diamond)
+      ctx.fillStyle = '#4a4a4a';
+      ctx.beginPath();
+      ctx.moveTo(screenX + halfTileWidth, screenY);
+      ctx.lineTo(screenX + tileWidth, screenY + halfTileHeight);
+      ctx.lineTo(screenX + halfTileWidth, screenY + tileHeight);
+      ctx.lineTo(screenX, screenY + halfTileHeight);
+      ctx.closePath();
+      ctx.fill();
       
-      // Draw road markings and sidewalks (or bridge structure)
+      // Draw road markings and sidewalks
       drawBuilding(ctx, screenX, screenY, tile);
       
       // If this road has a rail overlay, draw just the rail tracks (ties and rails, no ballast)
@@ -3188,6 +3231,18 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       if (tile.hasRailOverlay) {
         drawRailTracksOnly(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
       }
+    }
+    
+    // Draw bridges AFTER roads to ensure bridge decks cover road centerlines
+    insertionSortByDepth(bridgeQueue);
+    for (let i = 0; i < bridgeQueue.length; i++) {
+      const { tile, screenX, screenY } = bridgeQueue[i];
+      
+      // Draw water tile underneath the bridge
+      drawWaterTileAt(ctx, screenX, screenY, tile.x, tile.y);
+      
+      // Draw bridge structure
+      drawBuilding(ctx, screenX, screenY, tile);
     }
     
     // Draw rail tracks (above water, similar to roads)
