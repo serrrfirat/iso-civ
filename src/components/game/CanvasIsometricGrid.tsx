@@ -1687,8 +1687,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       
       const style = bridgeStyles[bridgeType]?.[variant] || bridgeStyles.small[0];
       
-      // Bridge width - 50% fatter than roads for visual prominence
-      const bridgeWidthRatio = 0.21;
+      // Bridge width - match road surface width (~45% ratio for good coverage)
+      const bridgeWidthRatio = 0.45;
       const halfWidth = w * bridgeWidthRatio * 0.5;
       
       // For bridges, we draw a SINGLE continuous parallelogram from edge to edge
@@ -1707,34 +1707,21 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       let perpY: number;
       
       if (orientation === 'ns') {
-        // NS bridges span the grid X direction (tiles at gx-1 and gx+1)
-        // In screen space, grid X direction corresponds to NW-SE diagonal
-        // So NS bridges connect the NW edge (northEdge) to SE edge (southEdge)
+        // NS bridges: connect northEdge to southEdge (NW to SE on screen)
         startEdge = { x: northEdge.x, y: northEdge.y };
         endEdge = { x: southEdge.x, y: southEdge.y };
-        
-        // Calculate perpendicular as 90° rotation of bridge direction (like roads do)
-        const dx = endEdge.x - startEdge.x;
-        const dy = endEdge.y - startEdge.y;
-        const len = Math.hypot(dx, dy);
-        // Perpendicular: rotate direction by 90° = (-dy, dx)
-        perpX = -dy / len;
-        perpY = dx / len;
       } else {
-        // EW bridges span the grid Y direction (tiles at gy-1 and gy+1)
-        // In screen space, grid Y direction corresponds to NE-SW diagonal
-        // So EW bridges connect the NE edge (eastEdge) to SW edge (westEdge)
+        // EW bridges: connect eastEdge to westEdge (NE to SW on screen)
         startEdge = { x: eastEdge.x, y: eastEdge.y };
         endEdge = { x: westEdge.x, y: westEdge.y };
-        
-        // Calculate perpendicular as 90° rotation of bridge direction (like roads do)
-        const dx = endEdge.x - startEdge.x;
-        const dy = endEdge.y - startEdge.y;
-        const len = Math.hypot(dx, dy);
-        // Perpendicular: rotate direction by 90° = (-dy, dx)
-        perpX = -dy / len;
-        perpY = dx / len;
       }
+      
+      // Calculate perpendicular as 90° rotation of bridge direction
+      const dx = endEdge.x - startEdge.x;
+      const dy = endEdge.y - startEdge.y;
+      const len = Math.hypot(dx, dy);
+      perpX = -dy / len;
+      perpY = dx / len;
       
       // ============================================================
       // DRAW SUPPORT PILLARS FIRST (they go into the water)
@@ -1835,18 +1822,55 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // DRAW BRIDGE DECK AS SINGLE CONTINUOUS SHAPE
       // ============================================================
       
-      // The deck is elevated slightly above water - same for all tiles to maintain grid alignment
+      // The deck is elevated uniformly above water - no special handling for start/end
       const deckElevation = 3;
       const startY = startEdge.y - deckElevation;
       const endY = endEdge.y - deckElevation;
       
-      // Draw the deck as a simple parallelogram using perpendicular offsets
+      // Use perpendicular direction (90° CCW of travel) for deck corners
+      // This matches how roads compute their perpendicular using getPerp() for proper alignment
+      // perpX and perpY were computed earlier using the bridge direction
+      
+      // Pre-compute deck corners for use in suspension towers and deck drawing
+      const startLeft = { x: startEdge.x + perpX * halfWidth, y: startY + perpY * halfWidth };
+      const startRight = { x: startEdge.x - perpX * halfWidth, y: startY - perpY * halfWidth };
+      const endLeft = { x: endEdge.x + perpX * halfWidth, y: endY + perpY * halfWidth };
+      const endRight = { x: endEdge.x - perpX * halfWidth, y: endY - perpY * halfWidth };
+      
+      // ============================================================
+      // SUSPENSION BRIDGE - BACK TOWER (drawn BEFORE deck for proper layering)
+      // ============================================================
+      const suspTowerW = 4;  // Tower width
+      const suspTowerH = 27; // Tower height
+      const suspTowerSpacing = halfWidth + 24; // Tower spacing from center (further apart)
+      
+      // Tower positions using perpendicular direction for proper road alignment
+      const leftTowerX = cx + perpX * suspTowerSpacing;
+      const leftTowerY = cy + perpY * suspTowerSpacing;
+      const rightTowerX = cx - perpX * suspTowerSpacing;
+      const rightTowerY = cy - perpY * suspTowerSpacing;
+      
+      // The tower with smaller Y is the back tower (drawn first, appears behind)
+      const backTower = leftTowerY < rightTowerY 
+        ? { x: leftTowerX, y: leftTowerY, isLeft: true } 
+        : { x: rightTowerX, y: rightTowerY, isLeft: false };
+      const frontTower = leftTowerY < rightTowerY 
+        ? { x: rightTowerX, y: rightTowerY, isLeft: false } 
+        : { x: leftTowerX, y: leftTowerY, isLeft: true };
+      
+      // Draw back suspension tower BEFORE the deck
+      if (bridgeType === 'suspension' && (position === 'start' || position === 'end') && currentZoom >= 0.5) {
+        ctx.fillStyle = style.support;
+        ctx.fillRect(backTower.x - suspTowerW/2, cy - suspTowerH, suspTowerW, suspTowerH + 8);
+      }
+      
+      // Draw the deck as a parallelogram with tile-edge-aligned sides
       ctx.fillStyle = style.asphalt;
       ctx.beginPath();
-      ctx.moveTo(startEdge.x + perpX * halfWidth, startY + perpY * halfWidth);
-      ctx.lineTo(endEdge.x + perpX * halfWidth, endY + perpY * halfWidth);
-      ctx.lineTo(endEdge.x - perpX * halfWidth, endY - perpY * halfWidth);
-      ctx.lineTo(startEdge.x - perpX * halfWidth, startY - perpY * halfWidth);
+      ctx.moveTo(startLeft.x, startLeft.y);
+      ctx.lineTo(endLeft.x, endLeft.y);
+      ctx.lineTo(endRight.x, endRight.y);
+      ctx.lineTo(startRight.x, startRight.y);
       ctx.closePath();
       ctx.fill();
       
@@ -1857,21 +1881,25 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         const barrierW = 2;
         ctx.fillStyle = style.barrier;
         
-        // Left barrier
+        // Left barrier (using perpendicular direction for proper alignment)
+        const startLeftOuter = { x: startEdge.x + perpX * (halfWidth + barrierW), y: startY + perpY * (halfWidth + barrierW) };
+        const endLeftOuter = { x: endEdge.x + perpX * (halfWidth + barrierW), y: endY + perpY * (halfWidth + barrierW) };
         ctx.beginPath();
-        ctx.moveTo(startEdge.x + perpX * halfWidth, startY + perpY * halfWidth);
-        ctx.lineTo(endEdge.x + perpX * halfWidth, endY + perpY * halfWidth);
-        ctx.lineTo(endEdge.x + perpX * (halfWidth + barrierW), endY + perpY * (halfWidth + barrierW));
-        ctx.lineTo(startEdge.x + perpX * (halfWidth + barrierW), startY + perpY * (halfWidth + barrierW));
+        ctx.moveTo(startLeft.x, startLeft.y);
+        ctx.lineTo(endLeft.x, endLeft.y);
+        ctx.lineTo(endLeftOuter.x, endLeftOuter.y);
+        ctx.lineTo(startLeftOuter.x, startLeftOuter.y);
         ctx.closePath();
         ctx.fill();
         
         // Right barrier  
+        const startRightOuter = { x: startEdge.x - perpX * (halfWidth + barrierW), y: startY - perpY * (halfWidth + barrierW) };
+        const endRightOuter = { x: endEdge.x - perpX * (halfWidth + barrierW), y: endY - perpY * (halfWidth + barrierW) };
         ctx.beginPath();
-        ctx.moveTo(startEdge.x - perpX * halfWidth, startY - perpY * halfWidth);
-        ctx.lineTo(endEdge.x - perpX * halfWidth, endY - perpY * halfWidth);
-        ctx.lineTo(endEdge.x - perpX * (halfWidth + barrierW), endY - perpY * (halfWidth + barrierW));
-        ctx.lineTo(startEdge.x - perpX * (halfWidth + barrierW), startY - perpY * (halfWidth + barrierW));
+        ctx.moveTo(startRight.x, startRight.y);
+        ctx.lineTo(endRight.x, endRight.y);
+        ctx.lineTo(endRightOuter.x, endRightOuter.y);
+        ctx.lineTo(startRightOuter.x, startRightOuter.y);
         ctx.closePath();
         ctx.fill();
       }
@@ -1894,47 +1922,42 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // BRIDGE TYPE-SPECIFIC DECORATIONS
       // ============================================================
       
-      // Suspension bridge towers and cables
+      // ============================================================
+      // SUSPENSION BRIDGE - FRONT TOWER AND CABLES (drawn AFTER deck)
+      // ============================================================
       if (bridgeType === 'suspension' && (position === 'start' || position === 'end') && currentZoom >= 0.5) {
-        const towerW = 4;
-        const towerH = 20;
         const cableColor = style.cable || '#DC143C';
         
-        // Tower position (in middle of tile)
+        // Draw front tower AFTER the deck for proper layering
         ctx.fillStyle = style.support;
+        ctx.fillRect(frontTower.x - suspTowerW/2, cy - suspTowerH, suspTowerW, suspTowerH + 8);
         
-        // Left tower
-        const leftTowerX = cx + perpX * (halfWidth + 6);
-        const leftTowerY = cy + perpY * (halfWidth + 6);
-        ctx.fillRect(leftTowerX - towerW/2, cy - towerH, towerW, towerH + 4);
-        
-        // Right tower
-        const rightTowerX = cx - perpX * (halfWidth + 6);
-        const rightTowerY = cy - perpY * (halfWidth + 6);
-        ctx.fillRect(rightTowerX - towerW/2, cy - towerH, towerW, towerH + 4);
-        
-        // Cables from towers to deck
+        // Cables from both towers to deck corners
         ctx.strokeStyle = cableColor;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.5;
         
+        // Back tower cables (to the "left" side of deck if back is left tower, else to "right" side)
+        const backDeckStart = backTower.isLeft ? startLeft : startRight;
+        const backDeckEnd = backTower.isLeft ? endLeft : endRight;
         ctx.beginPath();
-        ctx.moveTo(leftTowerX, cy - towerH);
-        ctx.lineTo(startEdge.x + perpX * halfWidth, startY);
+        ctx.moveTo(backTower.x, cy - suspTowerH);
+        ctx.lineTo(backDeckStart.x, backDeckStart.y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(backTower.x, cy - suspTowerH);
+        ctx.lineTo(backDeckEnd.x, backDeckEnd.y);
         ctx.stroke();
         
+        // Front tower cables
+        const frontDeckStart = frontTower.isLeft ? startLeft : startRight;
+        const frontDeckEnd = frontTower.isLeft ? endLeft : endRight;
         ctx.beginPath();
-        ctx.moveTo(leftTowerX, cy - towerH);
-        ctx.lineTo(endEdge.x + perpX * halfWidth, endY);
+        ctx.moveTo(frontTower.x, cy - suspTowerH);
+        ctx.lineTo(frontDeckStart.x, frontDeckStart.y);
         ctx.stroke();
-        
         ctx.beginPath();
-        ctx.moveTo(rightTowerX, cy - towerH);
-        ctx.lineTo(startEdge.x - perpX * halfWidth, startY);
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(rightTowerX, cy - towerH);
-        ctx.lineTo(endEdge.x - perpX * halfWidth, endY);
+        ctx.moveTo(frontTower.x, cy - suspTowerH);
+        ctx.lineTo(frontDeckEnd.x, frontDeckEnd.y);
         ctx.stroke();
       }
       
@@ -1944,31 +1967,33 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         ctx.lineWidth = 1.5;
         const trussH = 8;
         
-        // Top beams on both sides
+        // Top beams on both sides (using tile-edge-aligned direction)
         ctx.beginPath();
-        ctx.moveTo(startEdge.x + perpX * halfWidth, startY - trussH);
-        ctx.lineTo(endEdge.x + perpX * halfWidth, endY - trussH);
+        ctx.moveTo(startLeft.x, startLeft.y - trussH);
+        ctx.lineTo(endLeft.x, endLeft.y - trussH);
         ctx.stroke();
         
         ctx.beginPath();
-        ctx.moveTo(startEdge.x - perpX * halfWidth, startY - trussH);
-        ctx.lineTo(endEdge.x - perpX * halfWidth, endY - trussH);
+        ctx.moveTo(startRight.x, startRight.y - trussH);
+        ctx.lineTo(endRight.x, endRight.y - trussH);
         ctx.stroke();
         
         // Vertical supports
         for (let i = 0; i <= 4; i++) {
           const t = i / 4;
-          const px = startEdge.x + (endEdge.x - startEdge.x) * t;
-          const py = startY + (endY - startY) * t;
+          const leftX = startLeft.x + (endLeft.x - startLeft.x) * t;
+          const leftY = startLeft.y + (endLeft.y - startLeft.y) * t;
+          const rightX = startRight.x + (endRight.x - startRight.x) * t;
+          const rightY = startRight.y + (endRight.y - startRight.y) * t;
           
           ctx.beginPath();
-          ctx.moveTo(px + perpX * halfWidth, py);
-          ctx.lineTo(px + perpX * halfWidth, py - trussH);
+          ctx.moveTo(leftX, leftY);
+          ctx.lineTo(leftX, leftY - trussH);
           ctx.stroke();
           
           ctx.beginPath();
-          ctx.moveTo(px - perpX * halfWidth, py);
-          ctx.lineTo(px - perpX * halfWidth, py - trussH);
+          ctx.moveTo(rightX, rightY);
+          ctx.lineTo(rightX, rightY - trussH);
           ctx.stroke();
         }
       }
