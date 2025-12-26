@@ -1860,8 +1860,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Determine if this middle tile should have towers (for long suspension bridges >6 tiles)
       // Place ONE middle tower at the center of the bridge for even spacing
       // For a 9-tile bridge: indices 0,1,2,3,4,5,6,7,8 - middle would be index 4
-      // For a 10-tile bridge: indices 0-9 - middle would be index 4 or 5
-      const middleIndex = Math.floor(bridgeSpan / 2);
+      // For a 10-tile bridge: indices 0-9 - middle would be index 4 (first of two center tiles)
+      // Use (bridgeSpan - 1) / 2 to get true center for both odd and even spans
+      const middleIndex = Math.floor((bridgeSpan - 1) / 2);
       // For bridges with span info: place at exact middle index
       // For old bridges without span info (bridgeSpan defaults to 1): use grid-based fallback
       const hasSpanInfo = building.bridgeSpan !== undefined && building.bridgeSpan > 1;
@@ -1961,25 +1962,30 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         const backAttach = backToLeft < backToRight ? cableAttachLeft : cableAttachRight;
         const frontAttach = backToLeft < backToRight ? cableAttachRight : cableAttachLeft;
         
-        // Back tower cables to its edge
-        ctx.beginPath();
-        ctx.moveTo(backTower.x, cy - suspTowerH + backTowerYOffset);
-        ctx.lineTo(backAttach.startX, backAttach.startY);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(backTower.x, cy - suspTowerH + backTowerYOffset);
-        ctx.lineTo(backAttach.endX, backAttach.endY);
-        ctx.stroke();
+        // Helper to draw a sagging cable arc
+        const drawCableArc = (fromX: number, fromY: number, toX: number, toY: number) => {
+          // Control point is at the midpoint, sagging downward
+          const midX = (fromX + toX) / 2;
+          const midY = (fromY + toY) / 2;
+          const sag = 8; // How much the cable sags downward
+          const controlX = midX;
+          const controlY = midY + sag;
+          
+          ctx.beginPath();
+          ctx.moveTo(fromX, fromY);
+          ctx.quadraticCurveTo(controlX, controlY, toX, toY);
+          ctx.stroke();
+        };
         
-        // Front tower cables to its edge
-        ctx.beginPath();
-        ctx.moveTo(frontTower.x, cy - suspTowerH + frontTowerYOffset);
-        ctx.lineTo(frontAttach.startX, frontAttach.startY);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(frontTower.x, cy - suspTowerH + frontTowerYOffset);
-        ctx.lineTo(frontAttach.endX, frontAttach.endY);
-        ctx.stroke();
+        // Back tower cables to its edge (arcs)
+        const backTowerTop = cy - suspTowerH + backTowerYOffset;
+        drawCableArc(backTower.x, backTowerTop, backAttach.startX, backAttach.startY);
+        drawCableArc(backTower.x, backTowerTop, backAttach.endX, backAttach.endY);
+        
+        // Front tower cables to its edge (arcs)
+        const frontTowerTop = cy - suspTowerH + frontTowerYOffset;
+        drawCableArc(frontTower.x, frontTowerTop, frontAttach.startX, frontAttach.startY);
+        drawCableArc(frontTower.x, frontTowerTop, frontAttach.endX, frontAttach.endY);
       }
       
       // Large bridge truss structure
