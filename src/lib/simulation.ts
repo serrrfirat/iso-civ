@@ -784,9 +784,7 @@ function createBridgeBuilding(
   bridgeType: BridgeType,
   orientation: BridgeOrientation,
   variant: number,
-  position: 'start' | 'middle' | 'end',
-  index: number,
-  span: number
+  position: 'start' | 'middle' | 'end'
 ): Building {
   return {
     type: 'bridge',
@@ -804,8 +802,6 @@ function createBridgeBuilding(
     bridgeOrientation: orientation,
     bridgeVariant: variant,
     bridgePosition: position,
-    bridgeIndex: index,
-    bridgeSpan: span,
   };
 }
 
@@ -941,7 +937,6 @@ function buildBridges(
     opportunity.bridgeType
   );
   
-  const span = opportunity.waterTiles.length;
   opportunity.waterTiles.forEach((pos, index) => {
     let position: 'start' | 'middle' | 'end';
     if (index === 0) {
@@ -956,9 +951,7 @@ function buildBridges(
       opportunity.bridgeType,
       opportunity.orientation,
       variant,
-      position,
-      index,
-      span
+      position
     );
     // Keep the tile as having no zone
     grid[pos.y][pos.x].zone = 'none';
@@ -2643,8 +2636,10 @@ export function placeBuilding(
       }
     }
     
-    // Bridge creation is handled separately during drag operations across water
-    // Removed automatic bridge creation to prevent unintended bridges when placing single road tiles
+    // After placing a road, check if it creates a bridge opportunity
+    if (buildingType === 'road') {
+      checkAndCreateBridges(newGrid, state.gridSize, x, y);
+    }
   }
 
   return { ...state, grid: newGrid };
