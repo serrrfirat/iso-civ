@@ -3664,8 +3664,15 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       drawGreyBaseTile(ctx, screenX, screenY, tile, zoom);
     }
     
-    // NOTE: Suspension bridge towers are now drawn in drawBridgeTile BEFORE the deck
-    // so they appear behind the bridge deck but might be covered by base tiles on adjacent land
+    // Draw suspension bridge towers AGAIN on main canvas after base tiles
+    // This ensures the upper portion of towers (above deck level) appears above base tiles
+    // The lower portion was already drawn in drawBridgeTile before the deck
+    for (let i = 0; i < bridgeQueue.length; i++) {
+      const { tile, screenX, screenY } = bridgeQueue[i];
+      if (tile.building.bridgeType === 'suspension') {
+        drawSuspensionBridgeTowers(ctx, screenX, screenY, tile.building, zoom);
+      }
+    }
     
     // Draw railroad crossing signals and gates AFTER base tiles to ensure they appear on top
     // PERF: Build a Set of crossing keys for O(1) lookup instead of calling isRailroadCrossing
