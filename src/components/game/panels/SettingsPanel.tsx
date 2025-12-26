@@ -611,6 +611,30 @@ export function SettingsPanel() {
             >
               Load Example State 9
             </Button>
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={async () => {
+                const response = await fetch('/example-states/example_state_10.json');
+                const exampleState = await response.json();
+                loadState(JSON.stringify(exampleState));
+                setActivePanel('none');
+              }}
+            >
+              Load Example State 10
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={async () => {
+                const response = await fetch('/example-states/example_state_11.json');
+                const exampleState = await response.json();
+                loadState(JSON.stringify(exampleState));
+                setActivePanel('none');
+              }}
+            >
+              Load Example State 11
+            </Button>
             <div className="mt-4 pt-4 border-t border-border">
               <Label>Day/Night Mode</Label>
               <p className="text-muted-foreground text-xs mb-2">Override the time-of-day appearance without affecting time progression</p>

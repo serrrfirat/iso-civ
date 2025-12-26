@@ -2,6 +2,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react';
+import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import {
   Budget,
   BuildingType,
@@ -161,12 +162,20 @@ const toolZoneMap: Partial<Record<Tool, ZoneType>> = {
 };
 
 // Load game state from localStorage
+// Supports both compressed (lz-string) and uncompressed (legacy) formats
 function loadGameState(): GameState | null {
   if (typeof window === 'undefined') return null;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
-      const parsed = JSON.parse(saved);
+      // Try to decompress first (new format)
+      // If it fails or returns null, fall back to parsing as plain JSON (legacy format)
+      let jsonString = decompressFromUTF16(saved);
+      if (!jsonString) {
+        // Legacy uncompressed format - use the saved string directly
+        jsonString = saved;
+      }
+      const parsed = JSON.parse(jsonString);
       // Validate it has essential properties
       if (parsed && 
           parsed.grid && 
@@ -274,7 +283,8 @@ function loadGameState(): GameState | null {
   return null;
 }
 
-// Save game state to localStorage
+// Save game state to localStorage with lz-string compression
+// Compression typically reduces size by 60-80%, allowing much larger cities
 function saveGameState(state: GameState): void {
   if (typeof window === 'undefined') return;
   try {
@@ -286,12 +296,18 @@ function saveGameState(state: GameState): void {
     
     const serialized = JSON.stringify(state);
     
-    // Check if data is too large (localStorage has ~5-10MB limit)
-    if (serialized.length > 5 * 1024 * 1024) {
+    // Compress the JSON string using lz-string
+    // compressToUTF16 produces valid UTF-16 strings that localStorage handles well
+    const compressed = compressToUTF16(serialized);
+    
+    // Check if compressed data is too large (localStorage has ~5-10MB limit)
+    // With compression, we can handle much larger cities
+    if (compressed.length > 5 * 1024 * 1024) {
+      console.error('Compressed game state too large to save:', compressed.length, 'chars');
       return;
     }
     
-    localStorage.setItem(STORAGE_KEY, serialized);
+    localStorage.setItem(STORAGE_KEY, compressed);
   } catch (e) {
     // Handle quota exceeded errors
     if (e instanceof DOMException && (e.code === 22 || e.code === 1014)) {
@@ -373,9 +389,25 @@ function saveCityForRestore(state: GameState): void {
         savedAt: Date.now(),
       },
     };
-    localStorage.setItem(SAVED_CITY_STORAGE_KEY, JSON.stringify(savedData));
+    const compressed = compressToUTF16(JSON.stringify(savedData));
+    localStorage.setItem(SAVED_CITY_STORAGE_KEY, compressed);
   } catch (e) {
     console.error('Failed to save city for restore:', e);
+  }
+}
+
+// Helper to decompress saved city data (supports both compressed and legacy formats)
+function decompressSavedCity(saved: string): { state?: GameState; info?: SavedCityInfo } | null {
+  // Try to decompress first (new format)
+  let jsonString = decompressFromUTF16(saved);
+  if (!jsonString) {
+    // Legacy uncompressed format
+    jsonString = saved;
+  }
+  try {
+    return JSON.parse(jsonString);
+  } catch {
+    return null;
   }
 }
 
@@ -385,8 +417,8 @@ function loadSavedCityInfo(): SavedCityInfo {
   try {
     const saved = localStorage.getItem(SAVED_CITY_STORAGE_KEY);
     if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.info) {
+      const parsed = decompressSavedCity(saved);
+      if (parsed?.info) {
         return parsed.info as SavedCityInfo;
       }
     }
@@ -402,8 +434,8 @@ function loadSavedCityState(): GameState | null {
   try {
     const saved = localStorage.getItem(SAVED_CITY_STORAGE_KEY);
     if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.state && parsed.state.grid && parsed.state.gridSize && parsed.state.stats) {
+      const parsed = decompressSavedCity(saved);
+      if (parsed?.state && parsed.state.grid && parsed.state.gridSize && parsed.state.stats) {
         return parsed.state as GameState;
       }
     }
@@ -463,17 +495,18 @@ function saveSavedCitiesIndex(cities: SavedCityMeta[]): void {
   }
 }
 
-// Save a city state to localStorage
+// Save a city state to localStorage with compression
 function saveCityState(cityId: string, state: GameState): void {
   if (typeof window === 'undefined') return;
   try {
     const serialized = JSON.stringify(state);
-    // Check if data is too large
-    if (serialized.length > 5 * 1024 * 1024) {
-      console.error('City state too large to save');
+    const compressed = compressToUTF16(serialized);
+    // Check if compressed data is too large
+    if (compressed.length > 5 * 1024 * 1024) {
+      console.error('Compressed city state too large to save');
       return;
     }
-    localStorage.setItem(SAVED_CITY_PREFIX + cityId, serialized);
+    localStorage.setItem(SAVED_CITY_PREFIX + cityId, compressed);
   } catch (e) {
     if (e instanceof DOMException && (e.code === 22 || e.code === 1014)) {
       console.error('localStorage quota exceeded');
@@ -483,13 +516,19 @@ function saveCityState(cityId: string, state: GameState): void {
   }
 }
 
-// Load a saved city state from localStorage
+// Load a saved city state from localStorage (supports compressed and legacy formats)
 function loadCityState(cityId: string): GameState | null {
   if (typeof window === 'undefined') return null;
   try {
     const saved = localStorage.getItem(SAVED_CITY_PREFIX + cityId);
     if (saved) {
-      const parsed = JSON.parse(saved);
+      // Try to decompress first (new format)
+      let jsonString = decompressFromUTF16(saved);
+      if (!jsonString) {
+        // Legacy uncompressed format
+        jsonString = saved;
+      }
+      const parsed = JSON.parse(jsonString);
       if (parsed && parsed.grid && parsed.gridSize && parsed.stats) {
         return parsed as GameState;
       }
