@@ -66,7 +66,7 @@ export type Airplane = {
 };
 
 // Seaplane types for bay/water operations
-export type SeaplaneState = 'taxiing_water' | 'taking_off' | 'flying' | 'landing' | 'splashdown';
+export type SeaplaneState = 'taxiing_water' | 'taxiing_to_dock' | 'docked' | 'taking_off' | 'flying' | 'landing' | 'splashdown';
 
 export type Seaplane = {
   id: number;
@@ -105,6 +105,15 @@ export type Seaplane = {
   taxiTime: number;
   // Seaplane color/style
   color: string;
+  // Dock target (marina/pier) - null if no dock in bay
+  dockTileX: number | null;
+  dockTileY: number | null;
+  dockScreenX: number | null;
+  dockScreenY: number | null;
+  // Time spent docked
+  dockTime: number;
+  // Number of flights completed (for cycle tracking)
+  flightCount: number;
 };
 
 // Helicopter types for hospital/airport transport

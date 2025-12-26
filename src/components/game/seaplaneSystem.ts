@@ -9,19 +9,24 @@ import {
   SEAPLANE_SPAWN_INTERVAL_MAX,
   SEAPLANE_TAXI_TIME_MIN,
   SEAPLANE_TAXI_TIME_MAX,
+  SEAPLANE_DOCK_TIME_MIN,
+  SEAPLANE_DOCK_TIME_MAX,
   SEAPLANE_FLIGHT_TIME_MIN,
   SEAPLANE_FLIGHT_TIME_MAX,
   SEAPLANE_WATER_SPEED,
+  SEAPLANE_DOCK_APPROACH_SPEED,
   SEAPLANE_TAKEOFF_SPEED,
   SEAPLANE_FLIGHT_SPEED_MIN,
   SEAPLANE_FLIGHT_SPEED_MAX,
   SEAPLANE_MIN_ZOOM,
+  SEAPLANE_MAX_FLIGHTS,
   CONTRAIL_MAX_AGE,
   CONTRAIL_SPAWN_INTERVAL,
   WAKE_MAX_AGE,
   WAKE_SPAWN_INTERVAL,
 } from './constants';
-import { findBays, getRandomBayTile, isOverWater, BayInfo } from './gridFinders';
+import { findBays, getRandomBayTile, isOverWater, BayInfo, findMarinasAndPiers, findAdjacentWaterTile, DockInfo } from './gridFinders';
+import { gridToScreen } from './utils';
 
 export interface SeaplaneSystemRefs {
   seaplanesRef: React.MutableRefObject<Seaplane[]>;
@@ -36,6 +41,27 @@ export interface SeaplaneSystemState {
   isMobile: boolean;
 }
 
+// Helper to find docks within a bay's water tiles
+function findDocksInBay(
+  docks: DockInfo[],
+  bayWaterTiles: { x: number; y: number }[],
+  grid: import('@/types/game').Tile[][],
+  gridSize: number
+): { dock: DockInfo; waterTile: { x: number; y: number } }[] {
+  const bayTileSet = new Set(bayWaterTiles.map(t => `${t.x},${t.y}`));
+  const result: { dock: DockInfo; waterTile: { x: number; y: number } }[] = [];
+  
+  for (const dock of docks) {
+    // Find adjacent water tile for this dock
+    const waterTile = findAdjacentWaterTile(grid, gridSize, dock.x, dock.y);
+    if (waterTile && bayTileSet.has(`${waterTile.x},${waterTile.y}`)) {
+      result.push({ dock, waterTile });
+    }
+  }
+  
+  return result;
+}
+
 export function useSeaplaneSystem(
   refs: SeaplaneSystemRefs,
   systemState: SeaplaneSystemState
@@ -47,6 +73,12 @@ export function useSeaplaneSystem(
   const findBaysCallback = useCallback((): BayInfo[] => {
     const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
     return findBays(currentGrid, currentGridSize, SEAPLANE_MIN_BAY_SIZE);
+  }, [worldStateRef]);
+
+  // Find marinas and piers callback
+  const findDocksCallback = useCallback((): DockInfo[] => {
+    const { grid: currentGrid, gridSize: currentGridSize } = worldStateRef.current;
+    return findMarinasAndPiers(currentGrid, currentGridSize);
   }, [worldStateRef]);
 
   // Check if screen position is over water callback
@@ -69,8 +101,9 @@ export function useSeaplaneSystem(
       return;
     }
 
-    // Find bays
+    // Find bays and docks
     const bays = findBaysCallback();
+    const allDocks = findDocksCallback();
     
     // Get cached population count
     const currentGridVersion = gridVersionRef.current;
@@ -108,8 +141,28 @@ export function useSeaplaneSystem(
       // Pick a random bay
       const bay = bays[Math.floor(Math.random() * bays.length)];
       
-      // Get a random tile in the bay for spawn position
-      const spawnTile = getRandomBayTile(bay);
+      // Find docks in this bay
+      const docksInBay = findDocksInBay(allDocks, bay.waterTiles, currentGrid, currentGridSize);
+      
+      // Pick a random dock if available
+      let dockTileX: number | null = null;
+      let dockTileY: number | null = null;
+      let dockScreenX: number | null = null;
+      let dockScreenY: number | null = null;
+      let initialState: 'taxiing_to_dock' | 'taxiing_water' = 'taxiing_water';
+      let spawnTile = getRandomBayTile(bay);
+      
+      if (docksInBay.length > 0) {
+        const chosenDock = docksInBay[Math.floor(Math.random() * docksInBay.length)];
+        dockTileX = chosenDock.waterTile.x;
+        dockTileY = chosenDock.waterTile.y;
+        const dockScreenPos = gridToScreen(chosenDock.waterTile.x, chosenDock.waterTile.y, 0, 0);
+        dockScreenX = dockScreenPos.screenX + TILE_WIDTH / 2;
+        dockScreenY = dockScreenPos.screenY + TILE_HEIGHT / 2;
+        
+        // 60% chance to start by taxiing to dock, 40% chance to taxi around first
+        initialState = Math.random() < 0.6 ? 'taxiing_to_dock' : 'taxiing_water';
+      }
       
       // Random initial angle
       const angle = Math.random() * Math.PI * 2;
@@ -120,7 +173,7 @@ export function useSeaplaneSystem(
         y: spawnTile.screenY,
         angle: angle,
         targetAngle: angle,
-        state: 'taxiing_water',
+        state: initialState,
         speed: SEAPLANE_WATER_SPEED * (0.8 + Math.random() * 0.4),
         altitude: 0,
         targetAltitude: 0,
@@ -135,6 +188,12 @@ export function useSeaplaneSystem(
         lifeTime: SEAPLANE_FLIGHT_TIME_MIN + Math.random() * (SEAPLANE_FLIGHT_TIME_MAX - SEAPLANE_FLIGHT_TIME_MIN),
         taxiTime: SEAPLANE_TAXI_TIME_MIN + Math.random() * (SEAPLANE_TAXI_TIME_MAX - SEAPLANE_TAXI_TIME_MIN),
         color: SEAPLANE_COLORS[Math.floor(Math.random() * SEAPLANE_COLORS.length)],
+        dockTileX,
+        dockTileY,
+        dockScreenX,
+        dockScreenY,
+        dockTime: SEAPLANE_DOCK_TIME_MIN + Math.random() * (SEAPLANE_DOCK_TIME_MAX - SEAPLANE_DOCK_TIME_MIN),
+        flightCount: 0,
       });
       
       // Set next spawn time
@@ -177,6 +236,91 @@ export function useSeaplaneSystem(
       let nextY = seaplane.y;
 
       switch (seaplane.state) {
+        case 'taxiing_to_dock': {
+          // Taxi toward the dock/marina
+          if (seaplane.dockScreenX === null || seaplane.dockScreenY === null) {
+            // No dock, switch to regular taxiing
+            seaplane.state = 'taxiing_water';
+            break;
+          }
+          
+          const distToDock = Math.hypot(seaplane.x - seaplane.dockScreenX, seaplane.y - seaplane.dockScreenY);
+          const angleToDock = Math.atan2(seaplane.dockScreenY - seaplane.y, seaplane.dockScreenX - seaplane.x);
+          
+          // Normalize angle
+          seaplane.targetAngle = angleToDock;
+          
+          // Smooth turning toward dock
+          let angleDiff = seaplane.targetAngle - seaplane.angle;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          const turnRate = Math.PI * delta * 2.0;
+          seaplane.angle += Math.max(-turnRate, Math.min(turnRate, angleDiff));
+          
+          // Slow down as we approach
+          if (distToDock < 60) {
+            seaplane.speed = Math.max(SEAPLANE_DOCK_APPROACH_SPEED * 0.5, seaplane.speed - delta * 15);
+          } else if (distToDock < 100) {
+            seaplane.speed = Math.max(SEAPLANE_DOCK_APPROACH_SPEED, seaplane.speed - delta * 8);
+          }
+          
+          nextX = seaplane.x + Math.cos(seaplane.angle) * seaplane.speed * delta * speedMultiplier;
+          nextY = seaplane.y + Math.sin(seaplane.angle) * seaplane.speed * delta * speedMultiplier;
+          
+          // Check if we're over water
+          if (!isOverWaterCallback(nextX, nextY)) {
+            nextX = seaplane.x;
+            nextY = seaplane.y;
+          }
+          
+          // Spawn wake particles
+          const wakeSpawnInterval = isMobile ? 0.08 : WAKE_SPAWN_INTERVAL;
+          seaplane.wakeSpawnProgress += delta;
+          if (seaplane.wakeSpawnProgress >= wakeSpawnInterval) {
+            seaplane.wakeSpawnProgress -= wakeSpawnInterval;
+            const behindSeaplane = -8;
+            seaplane.wake.push({
+              x: seaplane.x + Math.cos(seaplane.angle) * behindSeaplane,
+              y: seaplane.y + Math.sin(seaplane.angle) * behindSeaplane,
+              age: 0,
+              opacity: 1
+            });
+          }
+          
+          // Transition to docked when close enough
+          if (distToDock < 25) {
+            seaplane.state = 'docked';
+            seaplane.speed = 0;
+            seaplane.wake = []; // Clear wake when docked
+            seaplane.dockTime = SEAPLANE_DOCK_TIME_MIN + Math.random() * (SEAPLANE_DOCK_TIME_MAX - SEAPLANE_DOCK_TIME_MIN);
+          }
+          break;
+        }
+        
+        case 'docked': {
+          // Stay docked at marina/pier
+          seaplane.dockTime -= delta;
+          seaplane.speed = 0;
+          
+          // Keep position at dock
+          if (seaplane.dockScreenX !== null && seaplane.dockScreenY !== null) {
+            nextX = seaplane.dockScreenX;
+            nextY = seaplane.dockScreenY;
+          }
+          
+          // Time to undock and taxi before takeoff
+          if (seaplane.dockTime <= 0) {
+            seaplane.state = 'taxiing_water';
+            seaplane.speed = SEAPLANE_WATER_SPEED * (0.8 + Math.random() * 0.4);
+            seaplane.taxiTime = SEAPLANE_TAXI_TIME_MIN + Math.random() * (SEAPLANE_TAXI_TIME_MAX - SEAPLANE_TAXI_TIME_MIN);
+            // Point away from dock toward bay center
+            const angleToBay = Math.atan2(seaplane.bayScreenY - seaplane.y, seaplane.bayScreenX - seaplane.x);
+            seaplane.angle = angleToBay + (Math.random() - 0.5) * 0.5;
+            seaplane.targetAngle = seaplane.angle;
+          }
+          break;
+        }
+        
         case 'taxiing_water': {
           // Taxi around on water like a boat
           seaplane.taxiTime -= delta;
@@ -318,6 +462,7 @@ export function useSeaplaneSystem(
           if (seaplane.altitude >= 1) {
             seaplane.state = 'flying';
             seaplane.speed = SEAPLANE_FLIGHT_SPEED_MIN + Math.random() * (SEAPLANE_FLIGHT_SPEED_MAX - SEAPLANE_FLIGHT_SPEED_MIN);
+            seaplane.flightCount++;
           }
           break;
         }
@@ -415,9 +560,28 @@ export function useSeaplaneSystem(
             }
           }
           
-          // Remove seaplane when stopped
+          // When stopped, decide next action based on flight count
           if (seaplane.speed <= 1) {
-            continue;
+            // Check if we've completed enough flights to despawn
+            if (seaplane.flightCount >= SEAPLANE_MAX_FLIGHTS) {
+              // Seaplane has done enough flights, remove it
+              continue;
+            }
+            
+            // Otherwise, continue the cycle - taxi to dock or taxi around
+            if (seaplane.dockScreenX !== null && seaplane.dockScreenY !== null) {
+              // Has a dock, taxi to it
+              seaplane.state = 'taxiing_to_dock';
+              seaplane.speed = SEAPLANE_WATER_SPEED * (0.8 + Math.random() * 0.4);
+            } else {
+              // No dock, just taxi around then take off again
+              seaplane.state = 'taxiing_water';
+              seaplane.speed = SEAPLANE_WATER_SPEED * (0.8 + Math.random() * 0.4);
+              seaplane.taxiTime = SEAPLANE_TAXI_TIME_MIN + Math.random() * (SEAPLANE_TAXI_TIME_MAX - SEAPLANE_TAXI_TIME_MIN);
+            }
+            
+            // Reset flight time for next flight
+            seaplane.lifeTime = SEAPLANE_FLIGHT_TIME_MIN + Math.random() * (SEAPLANE_FLIGHT_TIME_MAX - SEAPLANE_FLIGHT_TIME_MIN);
           }
           break;
         }
@@ -431,10 +595,11 @@ export function useSeaplaneSystem(
     }
     
     seaplanesRef.current = updatedSeaplanes;
-  }, [worldStateRef, gridVersionRef, cachedPopulationRef, seaplanesRef, seaplaneIdRef, seaplaneSpawnTimerRef, findBaysCallback, isOverWaterCallback, isMobile]);
+  }, [worldStateRef, gridVersionRef, cachedPopulationRef, seaplanesRef, seaplaneIdRef, seaplaneSpawnTimerRef, findBaysCallback, findDocksCallback, isOverWaterCallback, isMobile]);
 
   return {
     updateSeaplanes,
     findBaysCallback,
+    findDocksCallback,
   };
 }
