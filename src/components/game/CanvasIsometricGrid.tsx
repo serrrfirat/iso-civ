@@ -3110,12 +3110,12 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // For mall modern variants (rows 2-3), shift source Y down to avoid capturing
               // content from the row above that bleeds into the cell boundary
               if (buildingType === 'mall') {
-                sourceY += tileHeight * 0.25; // Shift down ~25% to avoid row above (more than dense due to taller assets)
-                // For row 3 mall variants, crop bottom tighter to avoid picking up industrial assets from row 4
+                sourceY += tileHeight * 0.15; // Shift down ~15% to avoid row above
+                // For row 3 mall variants, crop bottom to avoid picking up industrial assets from row 4
                 if (useModernVariant.row === 3) {
-                  sourceH = tileHeight * 0.70; // Crop 30% off bottom to exclude industrial asset below
+                  sourceH = tileHeight * 0.80; // Crop 20% off bottom to exclude industrial asset below
                 } else {
-                  sourceH = tileHeight * 0.75; // Crop 25% off bottom for other mall rows (we shifted down 25%)
+                  sourceH = tileHeight * 0.85; // Crop 15% off bottom for other mall rows
                 }
               }
               // For apartment_high modern variants, add a bit more height to avoid cutoff at bottom
