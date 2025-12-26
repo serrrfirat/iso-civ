@@ -1754,7 +1754,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // DRAW SUPPORT PILLARS (one per tile, at front position to avoid z-order issues)
       // ============================================================
       const pillarW = 4;
-      const pillarH = 17;
+      const pillarH = 14; 
       
       // Only draw pillar on every other tile to reduce count, and place at back position (0.35)
       // Water tiles toward startEdge are rendered BEFORE this bridge tile, so pillar won't be covered
@@ -1770,8 +1770,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         };
         
         const drawPillar = (px: number, py: number) => {
-          // Draw the side face first (darker)
-          ctx.fillStyle = '#303030';
+          // Draw the side face first (darker concrete)
+          ctx.fillStyle = '#606060';
           ctx.beginPath();
           ctx.moveTo(px - pillarW, py);
           ctx.lineTo(px - pillarW, py + pillarH);
@@ -1780,8 +1780,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           ctx.closePath();
           ctx.fill();
           
-          // Draw the front face
-          ctx.fillStyle = '#404040';
+          // Draw the front face (lighter concrete)
+          ctx.fillStyle = '#787878';
           ctx.beginPath();
           ctx.moveTo(px, py + pillarW/2);
           ctx.lineTo(px, py + pillarH + pillarW/2);
