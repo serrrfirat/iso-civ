@@ -1855,19 +1855,20 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const endLeft = { x: endEdge.x + perpX * halfWidth, y: endY + perpY * halfWidth };
       const endRight = { x: endEdge.x - perpX * halfWidth, y: endY - perpY * halfWidth };
       
-      // Pre-compute cable attachment points using SAME perpendicular as towers (90° perpendicular)
-      // This ensures cables connect properly without crossing
-      const cableStartLeft = { x: startEdge.x + towerPerpX * halfWidth, y: startY + towerPerpY * halfWidth };
-      const cableStartRight = { x: startEdge.x - towerPerpX * halfWidth, y: startY - towerPerpY * halfWidth };
-      const cableEndLeft = { x: endEdge.x + towerPerpX * halfWidth, y: endY + towerPerpY * halfWidth };
-      const cableEndRight = { x: endEdge.x - towerPerpX * halfWidth, y: endY - towerPerpY * halfWidth };
+      // Pre-compute cable attachment points at tile edges (where cables should attach)
+      // Use a wider spread to reach toward the actual tile boundaries
+      const cableSpread = halfWidth * 1.8; // Spread cables outward more
+      const cableStartLeft = { x: startEdge.x + towerPerpX * cableSpread, y: startY + towerPerpY * cableSpread };
+      const cableStartRight = { x: startEdge.x - towerPerpX * cableSpread, y: startY - towerPerpY * cableSpread };
+      const cableEndLeft = { x: endEdge.x + towerPerpX * cableSpread, y: endY + towerPerpY * cableSpread };
+      const cableEndRight = { x: endEdge.x - towerPerpX * cableSpread, y: endY - towerPerpY * cableSpread };
       
       // ============================================================
       // SUSPENSION BRIDGE - BACK TOWER (drawn BEFORE deck for proper layering)
       // ============================================================
       const suspTowerW = 4;  // Tower width
       const suspTowerH = 27; // Tower height
-      const suspTowerSpacing = halfWidth + 24; // Tower spacing from center (further apart)
+      const suspTowerSpacing = w * 0.65; // Tower spacing from center - spread outward to near tile edges
       
       // Tower Y offsets for proper isometric layering
       const backTowerYOffset = -5;  // Back tower shifted up (higher)
@@ -1887,8 +1888,14 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         ? { x: rightTowerX, y: rightTowerY, isLeft: false } 
         : { x: leftTowerX, y: leftTowerY, isLeft: true };
       
+      // Determine if this middle tile should have towers (for long suspension bridges)
+      // Draw towers every 4 tiles on middle sections, using grid position to determine
+      const isMiddleTowerTile = position === 'middle' && bridgeType === 'suspension' && 
+        ((gridX + gridY) % 4 === 0);
+      
       // Draw back suspension tower BEFORE the deck (shifted up)
-      if (bridgeType === 'suspension' && (position === 'start' || position === 'end') && currentZoom >= 0.5) {
+      // Show on start/end tiles OR on middle tower tiles for long bridges
+      if (bridgeType === 'suspension' && (position === 'start' || position === 'end' || isMiddleTowerTile) && currentZoom >= 0.5) {
         ctx.fillStyle = style.support;
         ctx.fillRect(backTower.x - suspTowerW/2, cy - suspTowerH + backTowerYOffset, suspTowerW, suspTowerH + 8);
       }
@@ -1954,7 +1961,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // ============================================================
       // SUSPENSION BRIDGE - FRONT TOWER AND CABLES (drawn AFTER deck)
       // ============================================================
-      if (bridgeType === 'suspension' && (position === 'start' || position === 'end') && currentZoom >= 0.5) {
+      // Show on start/end tiles OR on middle tower tiles for long bridges
+      if (bridgeType === 'suspension' && (position === 'start' || position === 'end' || isMiddleTowerTile) && currentZoom >= 0.5) {
         const cableColor = style.cable || '#DC143C';
         
         // Draw front tower AFTER the deck for proper layering (shifted down)
