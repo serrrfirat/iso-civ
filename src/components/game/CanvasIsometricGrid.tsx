@@ -1745,13 +1745,16 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       
       // ============================================================
       // DRAW SUPPORT PILLARS (one per tile, at front position to avoid z-order issues)
+      // Suspension bridges don't have support pillars - they're suspended by cables
       // ============================================================
       const pillarW = 4;
       const pillarH = 22; // Extended further down into water
       
       // Only draw pillar on every other tile to reduce count, and place at back position (0.35)
       // Water tiles toward startEdge are rendered BEFORE this bridge tile, so pillar won't be covered
-      const shouldDrawPillar = (bridgeIndex % 2 === 0) || position === 'start' || position === 'end';
+      // Suspension bridges skip pillars entirely - they're suspended by cables from towers
+      const shouldDrawPillar = bridgeType !== 'suspension' && 
+        ((bridgeIndex % 2 === 0) || position === 'start' || position === 'end');
       
       if (shouldDrawPillar) {
         // Place pillar toward the "start" edge (back in render order) - water there is already drawn
@@ -1836,7 +1839,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // SUSPENSION BRIDGE - BACK TOWER (drawn BEFORE deck for proper layering)
       // ============================================================
       const suspTowerW = 3;  // Tower width (30% thinner than before)
-      const suspTowerH = 27; // Tower height
+      const suspTowerH = 35; // Tower height (30% taller)
       const suspTowerSpacing = w * 0.65; // Tower spacing from center - spread outward to near tile edges
       
       // Tower Y offsets for proper isometric layering
