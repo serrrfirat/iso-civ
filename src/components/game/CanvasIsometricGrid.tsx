@@ -1818,18 +1818,22 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // Cable attachment points are the actual deck barrier edges (extended slightly outward)
       // Use the same perpX/perpY as the deck edges for proper alignment
       const barrierOffset = 3; // Extend slightly beyond the barriers
-      // Use actual deck corner positions for proper edge attachment
+      // Calculate bridge travel direction for cable extension
+      const travelDirX = (endEdge.x - startEdge.x) / travelLen;
+      const travelDirY = (endEdge.y - startEdge.y) / travelLen;
+      const cableExtension = 18; // How far cables extend beyond deck edges
+      // Use actual deck corner positions for proper edge attachment, extended along bridge direction
       const cableAttachLeft = {
-        startX: startLeft.x + perpX * barrierOffset,
-        startY: startLeft.y + perpY * barrierOffset,
-        endX: endLeft.x + perpX * barrierOffset,
-        endY: endLeft.y + perpY * barrierOffset
+        startX: startLeft.x + perpX * barrierOffset - travelDirX * cableExtension,
+        startY: startLeft.y + perpY * barrierOffset - travelDirY * cableExtension,
+        endX: endLeft.x + perpX * barrierOffset + travelDirX * cableExtension,
+        endY: endLeft.y + perpY * barrierOffset + travelDirY * cableExtension
       };
       const cableAttachRight = {
-        startX: startRight.x - perpX * barrierOffset,
-        startY: startRight.y - perpY * barrierOffset,
-        endX: endRight.x - perpX * barrierOffset,
-        endY: endRight.y - perpY * barrierOffset
+        startX: startRight.x - perpX * barrierOffset - travelDirX * cableExtension,
+        startY: startRight.y - perpY * barrierOffset - travelDirY * cableExtension,
+        endX: endRight.x - perpX * barrierOffset + travelDirX * cableExtension,
+        endY: endRight.y - perpY * barrierOffset + travelDirY * cableExtension
       };
       
       // ============================================================
@@ -1837,7 +1841,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       // ============================================================
       const suspTowerW = 3;  // Tower width (30% thinner than before)
       const suspTowerH = 27; // Tower height
-      const suspTowerSpacing = w * 0.65; // Tower spacing from center - spread outward to near tile edges
+      const suspTowerSpacing = w * 0.45; // Tower spacing from center - moved toward middle of bridge
       
       // Tower Y offsets for proper isometric layering
       const backTowerYOffset = -5;  // Back tower shifted up (higher)
@@ -1992,7 +1996,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       if (bridgeType === 'large' && currentZoom >= 0.5) {
         ctx.strokeStyle = style.accent;
         ctx.lineWidth = 1.5;
-        const trussH = 8;
+        const trussH = 6; // 30% shorter than before (was 8)
         
         // Top beams on both sides (using tile-edge-aligned direction)
         ctx.beginPath();
@@ -3145,6 +3149,14 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const halfTileWidth = tileWidth / 2;
     const halfTileHeight = tileHeight / 2;
     
+    // Draw green base tiles for grass/empty tiles adjacent to water BEFORE bridges
+    // This ensures bridge railings are drawn on top of the green base tiles
+    insertionSortByDepth(greenBaseTileQueue);
+    for (let i = 0; i < greenBaseTileQueue.length; i++) {
+      const { tile, screenX, screenY } = greenBaseTileQueue[i];
+      drawGreenBaseTile(ctx, screenX, screenY, tile, zoom);
+    }
+    
     // Draw roads (above water, needs full redraw including base tile)
     insertionSortByDepth(roadQueue);
     // PERF: Use for loop instead of forEach
@@ -3203,14 +3215,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       
       // Draw the rail tracks
       drawRailTrack(ctx, screenX, screenY, tile.x, tile.y, grid, gridSize, zoom);
-    }
-    
-    // Draw green base tiles for grass/empty tiles adjacent to water (after rail, before crossings)
-    insertionSortByDepth(greenBaseTileQueue);
-    // PERF: Use for loop instead of forEach
-    for (let i = 0; i < greenBaseTileQueue.length; i++) {
-      const { tile, screenX, screenY } = greenBaseTileQueue[i];
-      drawGreenBaseTile(ctx, screenX, screenY, tile, zoom);
     }
     
     // Draw gray building base tiles (after rail, before crossings)
