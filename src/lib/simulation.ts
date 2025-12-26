@@ -751,16 +751,12 @@ const MAX_BRIDGE_SPAN = 10;
 
 /** Bridge type thresholds based on span width */
 const BRIDGE_TYPE_THRESHOLDS = {
-  small: 3,    // 1-3 tiles = small wooden/stone bridge
-  medium: 5,   // 4-5 tiles = medium concrete bridge
-  large: 8,    // 6-8 tiles = large steel bridge
-  suspension: 10, // 9-10 tiles = suspension bridge
+  large: 5,    // 1-5 tiles = truss bridge
+  suspension: 10, // 6-10 tiles = suspension bridge
 } as const;
 
 /** Get the appropriate bridge type for a given span */
 function getBridgeTypeForSpan(span: number): BridgeType {
-  if (span <= BRIDGE_TYPE_THRESHOLDS.small) return 'small';
-  if (span <= BRIDGE_TYPE_THRESHOLDS.medium) return 'medium';
   if (span <= BRIDGE_TYPE_THRESHOLDS.large) return 'large';
   return 'suspension';
 }

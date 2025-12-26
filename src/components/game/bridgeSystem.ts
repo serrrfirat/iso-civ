@@ -15,10 +15,8 @@ export const MAX_BRIDGE_SPAN = 10;
 
 /** Bridge type based on span width */
 export const BRIDGE_TYPE_THRESHOLDS = {
-  small: 3,    // 1-3 tiles = small wooden/stone bridge
-  medium: 5,   // 4-5 tiles = medium concrete bridge
-  large: 8,    // 6-8 tiles = large steel bridge
-  suspension: 10, // 9-10 tiles = suspension bridge
+  large: 5,    // 1-5 tiles = truss bridge
+  suspension: 10, // 6-10 tiles = suspension bridge
 } as const;
 
 /** Bridge visual variants per type */
@@ -193,8 +191,6 @@ export function detectBridgeOpportunity(
  * Get the appropriate bridge type for a given span
  */
 export function getBridgeTypeForSpan(span: number): BridgeType {
-  if (span <= BRIDGE_TYPE_THRESHOLDS.small) return 'small';
-  if (span <= BRIDGE_TYPE_THRESHOLDS.medium) return 'medium';
   if (span <= BRIDGE_TYPE_THRESHOLDS.large) return 'large';
   return 'suspension';
 }
@@ -311,7 +307,7 @@ export function drawBridge(
 ): void {
   if (building.type !== 'bridge') return;
   
-  const bridgeType = building.bridgeType || 'small';
+  const bridgeType = building.bridgeType || 'large';
   const orientation = building.bridgeOrientation || 'ns';
   const variant = building.bridgeVariant || 0;
   const position = building.bridgePosition || 'middle';

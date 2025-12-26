@@ -1662,7 +1662,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       const w = TILE_WIDTH;
       const h = TILE_HEIGHT;
       
-      const bridgeType = building.bridgeType || 'small';
+      const bridgeType = building.bridgeType || 'large';
       const orientation = building.bridgeOrientation || 'ns';
       const variant = building.bridgeVariant || 0;
       const position = building.bridgePosition || 'middle';
@@ -1701,7 +1701,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         ],
       };
       
-      const style = bridgeStyles[bridgeType]?.[variant] || bridgeStyles.small[0];
+      const style = bridgeStyles[bridgeType]?.[variant] || bridgeStyles.large[0];
       
       // Bridge width - rail bridges are 20% skinnier than road bridges
       const bridgeWidthRatio = isRailBridge ? 0.36 : 0.45; // 0.45 * 0.8 = 0.36
