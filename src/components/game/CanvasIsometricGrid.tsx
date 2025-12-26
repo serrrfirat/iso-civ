@@ -1820,7 +1820,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         const extensionDir = position === 'start' ? -1 : 1;
         
         // Calculate how far to extend beyond the bridge tile (to cover the road's centerline)
-        const extensionAmount = 12; // Extend into the road tile to cover centerline
+        const extensionAmount = 8; // Extend into the road tile to cover centerline
         
         // Extended edge position (going toward the adjacent road)
         const extendedX = connectorEdge.x + travelDirX * extensionAmount * extensionDir;

@@ -984,6 +984,10 @@ function checkAndCreateBridges(
  * This is called after a road drag operation completes to create bridges
  * for any valid water crossings in the path.
  * 
+ * IMPORTANT: Bridges are only created if the drag path actually crosses water.
+ * This prevents auto-creating bridges when placing individual road tiles on
+ * opposite sides of water.
+ * 
  * @param state - Current game state
  * @param pathTiles - Array of {x, y} coordinates that were part of the drag
  * @returns Updated game state with bridges created
@@ -993,6 +997,18 @@ export function createBridgesOnPath(
   pathTiles: { x: number; y: number }[]
 ): GameState {
   if (pathTiles.length === 0) return state;
+  
+  // Check if the drag path includes any water tiles
+  // This ensures bridges are only created when actually dragging ACROSS water
+  const hasWaterInPath = pathTiles.some(tile => {
+    const t = state.grid[tile.y]?.[tile.x];
+    return t && t.building.type === 'water';
+  });
+  
+  // If no water tiles were crossed, don't create any bridges
+  if (!hasWaterInPath) {
+    return state;
+  }
   
   const newGrid = state.grid.map(row => row.map(t => ({ ...t, building: { ...t.building } })));
   
