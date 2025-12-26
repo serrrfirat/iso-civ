@@ -288,13 +288,15 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
     'ZONES': ['zone_residential', 'zone_commercial', 'zone_industrial'] as Tool[],
   }), []);
   
+  // Zoning submenu (shown under ZONES section, before BUILDINGS)
+  const zoningSubmenu = useMemo(() => ({
+    key: 'zoning',
+    label: 'Zoning',
+    tools: ['zone_dezone', 'zone_water'] as Tool[]
+  }), []);
+  
   // Submenu categories (hover to expand) - includes all new assets from main
   const submenuCategories = useMemo(() => [
-    {
-      key: 'zoning',
-      label: 'Zoning',
-      tools: ['zone_dezone', 'zone_water'] as Tool[]
-    },
     { 
       key: 'services', 
       label: 'Services', 
@@ -415,6 +417,17 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
                   </Button>
                 );
               })}
+              {/* Zoning submenu - appears after ZONES category */}
+              {category === 'ZONES' && (
+                <HoverSubmenu
+                  key={zoningSubmenu.key}
+                  label={zoningSubmenu.label}
+                  tools={zoningSubmenu.tools}
+                  selectedTool={selectedTool}
+                  money={stats.money}
+                  onSelectTool={setTool}
+                />
+              )}
             </div>
           </div>
         ))}
