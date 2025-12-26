@@ -3745,8 +3745,16 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           drawBuilding(buildingsCtx, screenX, screenY, tile);
         }
         
-        // Draw suspension bridge towers and cables ON TOP of buildings
+        // Draw suspension bridge towers ON TOP of buildings
         // These need to appear above nearby buildings for proper visual layering
+        for (let i = 0; i < bridgeQueue.length; i++) {
+          const { tile, screenX, screenY } = bridgeQueue[i];
+          if (tile.building.bridgeType === 'suspension') {
+            drawSuspensionBridgeTowers(buildingsCtx, screenX, screenY, tile.building, zoom, false);
+          }
+        }
+        
+        // Draw suspension bridge cables ON TOP of towers
         for (let i = 0; i < bridgeQueue.length; i++) {
           const { tile, screenX, screenY } = bridgeQueue[i];
           if (tile.building.bridgeType === 'suspension') {
