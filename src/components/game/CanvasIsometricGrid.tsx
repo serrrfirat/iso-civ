@@ -3093,7 +3093,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // Draw hovered tile highlight (with multi-tile preview for buildings)
     if (hoveredTile && hoveredTile.x >= 0 && hoveredTile.x < gridSize && hoveredTile.y >= 0 && hoveredTile.y < gridSize) {
       // Check if selectedTool is a building type (not a non-building tool)
-      const nonBuildingTools: Tool[] = ['select', 'bulldoze', 'road', 'rail', 'subway', 'tree', 'zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone', 'zone_water'];
+      const nonBuildingTools: Tool[] = ['select', 'bulldoze', 'road', 'rail', 'subway', 'tree', 'zone_residential', 'zone_commercial', 'zone_industrial', 'zone_dezone', 'zone_water', 'zone_land'];
       const isBuildingTool = selectedTool && !nonBuildingTools.includes(selectedTool);
       
       if (isBuildingTool) {

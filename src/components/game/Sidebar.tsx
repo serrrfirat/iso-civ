@@ -292,7 +292,7 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
   const zoningSubmenu = useMemo(() => ({
     key: 'zoning',
     label: 'Zoning',
-    tools: ['zone_dezone', 'zone_water'] as Tool[]
+    tools: ['zone_dezone', 'zone_water', 'zone_land'] as Tool[]
   }), []);
   
   // Submenu categories (hover to expand) - includes all new assets from main

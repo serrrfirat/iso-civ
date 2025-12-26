@@ -410,6 +410,7 @@ export const ToolIcons: Partial<Record<Tool, React.FC<IconProps>>> = {
   zone_industrial: (props) => <ZoneIcon {...props} color="#f59e0b" />, 
   zone_dezone: (props) => <ZoneIcon {...props} color="#94a3b8" />,
   zone_water: (props) => <ZoneIcon {...props} color="#06b6d4" />,
+  zone_land: (props) => <ZoneIcon {...props} color="#059669" />,
   police_station: SafetyIcon,
   fire_station: FireIcon,
   hospital: HealthIcon,
