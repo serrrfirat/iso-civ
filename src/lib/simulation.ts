@@ -2921,6 +2921,23 @@ export function placeWaterTerraform(state: GameState, x: number, y: number): Gam
   return { ...state, grid: newGrid };
 }
 
+// Terraform a tile into land (grass)
+export function placeLandTerraform(state: GameState, x: number, y: number): GameState {
+  const tile = state.grid[y]?.[x];
+  if (!tile) return state;
+  
+  // Only works on water tiles
+  if (tile.building.type !== 'water') return state;
+
+  const newGrid = state.grid.map(row => row.map(t => ({ ...t, building: { ...t.building } })));
+  
+  // Convert water to grass
+  newGrid[y][x].building = createBuilding('grass');
+  newGrid[y][x].zone = 'none';
+
+  return { ...state, grid: newGrid };
+}
+
 // Generate a random advanced city state with developed zones, infrastructure, and buildings
 export function generateRandomAdvancedCity(size: number = DEFAULT_GRID_SIZE, cityName: string = 'Metropolis'): GameState {
   // Start with a base state (terrain generation)

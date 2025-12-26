@@ -81,10 +81,18 @@ function buildMenuItems(): MenuItem[] {
     });
   });
 
-  // Zoning category (de-zone and water terraform)
-  const zoningCategory: Tool[] = ['zone_dezone', 'zone_water'];
+  // Zoning category (de-zone and terraform tools)
+  const zoningCategory: Tool[] = ['zone_dezone', 'zone_water', 'zone_land'];
   zoningCategory.forEach(tool => {
     const info = TOOL_INFO[tool];
+    const keywords = [info.name.toLowerCase(), tool, 'zoning'];
+    if (tool === 'zone_water') {
+      keywords.push('water', 'terraform', 'lake', 'ocean');
+    } else if (tool === 'zone_land') {
+      keywords.push('land', 'terraform', 'grass', 'fill');
+    } else {
+      keywords.push('remove', 'clear');
+    }
     items.push({
       id: tool,
       type: 'tool',
@@ -93,7 +101,7 @@ function buildMenuItems(): MenuItem[] {
       description: info.description,
       cost: info.cost,
       category: 'zoning',
-      keywords: [info.name.toLowerCase(), tool, 'zoning', ...(tool === 'zone_water' ? ['water', 'terraform', 'lake', 'ocean'] : ['remove', 'clear'])],
+      keywords,
     });
   });
 

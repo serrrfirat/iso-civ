@@ -18,6 +18,7 @@ import {
   placeBuilding,
   placeSubway,
   placeWaterTerraform,
+  placeLandTerraform,
   simulateTick,
   checkForDiscoverableCities,
   generateRandomAdvancedCity,
@@ -734,6 +735,20 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         if (tile.building.type === 'water') return prev;
         
         const nextState = placeWaterTerraform(prev, x, y);
+        if (nextState === prev) return prev;
+        
+        return {
+          ...nextState,
+          stats: { ...nextState.stats, money: nextState.stats.money - cost },
+        };
+      }
+      
+      // Handle land terraform tool separately
+      if (tool === 'zone_land') {
+        // Only works on water
+        if (tile.building.type !== 'water') return prev;
+        
+        const nextState = placeLandTerraform(prev, x, y);
         if (nextState === prev) return prev;
         
         return {
