@@ -327,7 +327,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   modernVerticalOffsets: {
     // Adjust these as needed for proper positioning
     apartment_high: -0.80,
-    mall: -2.0, // Shifted up 1 tile from -1.0
+    mall: -1.3, // Shifted down 0.7 tiles from -2.0
   },
   modernScales: {
     // Adjust these as needed for proper sizing
