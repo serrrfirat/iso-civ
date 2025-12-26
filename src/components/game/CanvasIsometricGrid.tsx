@@ -3599,8 +3599,123 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       }
     }
     
+    // Draw road/rail drag preview with bridge validity indication
+    if (isDragging && (selectedTool === 'road' || selectedTool === 'rail') && dragStartTile && dragEndTile) {
+      const minX = Math.min(dragStartTile.x, dragEndTile.x);
+      const maxX = Math.max(dragStartTile.x, dragEndTile.x);
+      const minY = Math.min(dragStartTile.y, dragEndTile.y);
+      const maxY = Math.max(dragStartTile.y, dragEndTile.y);
+      
+      // Collect all tiles in the path
+      const pathTiles: { x: number; y: number; isWater: boolean }[] = [];
+      for (let x = minX; x <= maxX; x++) {
+        for (let y = minY; y <= maxY; y++) {
+          if (x >= 0 && x < gridSize && y >= 0 && y < gridSize) {
+            const tile = grid[y][x];
+            pathTiles.push({ x, y, isWater: tile.building.type === 'water' });
+          }
+        }
+      }
+      
+      // Analyze the path for bridge validity
+      // A valid bridge: water tiles that are bounded by land/road on both ends
+      // An invalid partial crossing: water tiles that don't form a complete bridge
+      const analyzePathForBridges = () => {
+        const result: Map<string, 'valid' | 'invalid' | 'land'> = new Map();
+        
+        // Determine if this is a horizontal or vertical path
+        const isHorizontal = maxX - minX > maxY - minY;
+        
+        // Sort tiles by their position along the path
+        const sortedTiles = [...pathTiles].sort((a, b) => 
+          isHorizontal ? a.x - b.x : a.y - b.y
+        );
+        
+        // Find water segments and check if they're valid bridges
+        let i = 0;
+        while (i < sortedTiles.length) {
+          const tile = sortedTiles[i];
+          
+          if (!tile.isWater) {
+            // Land tile - always valid
+            result.set(`${tile.x},${tile.y}`, 'land');
+            i++;
+            continue;
+          }
+          
+          // Found water - find the extent of this water segment
+          const waterStart = i;
+          while (i < sortedTiles.length && sortedTiles[i].isWater) {
+            i++;
+          }
+          const waterEnd = i - 1;
+          const waterLength = waterEnd - waterStart + 1;
+          
+          // Check if this water segment is bounded by land on both sides
+          const hasLandBefore = waterStart > 0 && !sortedTiles[waterStart - 1].isWater;
+          const hasLandAfter = waterEnd < sortedTiles.length - 1 && !sortedTiles[waterEnd + 1].isWater;
+          
+          // Also check if there's existing land/road adjacent to the start/end of path
+          let hasExistingLandBefore = false;
+          let hasExistingLandAfter = false;
+          
+          if (waterStart === 0) {
+            // Check the tile before the path start
+            const firstWater = sortedTiles[waterStart];
+            const checkX = isHorizontal ? firstWater.x - 1 : firstWater.x;
+            const checkY = isHorizontal ? firstWater.y : firstWater.y - 1;
+            if (checkX >= 0 && checkY >= 0 && checkX < gridSize && checkY < gridSize) {
+              const prevTile = grid[checkY][checkX];
+              hasExistingLandBefore = prevTile.building.type !== 'water';
+            }
+          }
+          
+          if (waterEnd === sortedTiles.length - 1) {
+            // Check the tile after the path end
+            const lastWater = sortedTiles[waterEnd];
+            const checkX = isHorizontal ? lastWater.x + 1 : lastWater.x;
+            const checkY = isHorizontal ? lastWater.y : lastWater.y + 1;
+            if (checkX >= 0 && checkY >= 0 && checkX < gridSize && checkY < gridSize) {
+              const nextTile = grid[checkY][checkX];
+              hasExistingLandAfter = nextTile.building.type !== 'water';
+            }
+          }
+          
+          const isValidBridge = (hasLandBefore || hasExistingLandBefore) && 
+                                (hasLandAfter || hasExistingLandAfter) &&
+                                waterLength <= 10; // Max bridge span
+          
+          // Mark all water tiles in this segment
+          for (let j = waterStart; j <= waterEnd; j++) {
+            const waterTile = sortedTiles[j];
+            result.set(`${waterTile.x},${waterTile.y}`, isValidBridge ? 'valid' : 'invalid');
+          }
+        }
+        
+        return result;
+      };
+      
+      const bridgeAnalysis = analyzePathForBridges();
+      
+      // Draw preview for each tile in the path
+      for (const tile of pathTiles) {
+        const { screenX, screenY } = gridToScreen(tile.x, tile.y, 0, 0);
+        const key = `${tile.x},${tile.y}`;
+        const status = bridgeAnalysis.get(key) || 'land';
+        
+        if (status === 'valid') {
+          // Valid bridge - show blue/cyan placeholder
+          drawHighlight(screenX, screenY, 'rgba(59, 130, 246, 0.5)', '#3b82f6');
+        } else if (status === 'invalid') {
+          // Invalid water crossing - show red
+          drawHighlight(screenX, screenY, 'rgba(239, 68, 68, 0.5)', '#ef4444');
+        }
+        // Land tiles don't need special preview - they're already being placed
+      }
+    }
+    
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-  }, [hoveredTile, selectedTile, selectedTool, offset, zoom, gridSize, grid]);
+  }, [hoveredTile, selectedTile, selectedTool, offset, zoom, gridSize, grid, isDragging, dragStartTile, dragEndTile]);
   
   // Animate decorative car traffic AND emergency vehicles on top of the base canvas
   useEffect(() => {
@@ -4212,6 +4327,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           setDragEndTile({ x: targetX, y: targetY });
           
           // Place all tiles from start to target in a straight line
+          // Skip water tiles - they'll be handled on mouse up for bridge creation
           const minX = Math.min(dragStartTile.x, targetX);
           const maxX = Math.max(dragStartTile.x, targetX);
           const minY = Math.min(dragStartTile.y, targetY);
@@ -4221,6 +4337,13 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             for (let y = minY; y <= maxY; y++) {
               const key = `${x},${y}`;
               if (!placedRoadTilesRef.current.has(key)) {
+                // Skip water tiles during drag - they'll show preview and be handled on mouse up
+                const tile = grid[y]?.[x];
+                if (tile && tile.building.type === 'water') {
+                  // Don't place on water during drag, just mark as "seen"
+                  placedRoadTilesRef.current.add(key);
+                  continue;
+                }
                 placeAtTile(x, y);
                 placedRoadTilesRef.current.add(key);
               }
