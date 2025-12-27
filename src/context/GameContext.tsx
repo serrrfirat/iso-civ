@@ -338,57 +338,72 @@ function tryFreeLocalStorageSpace(): void {
 
 // Save game state to localStorage with lz-string compression
 // Compression typically reduces size by 60-80%, allowing much larger cities
-function saveGameState(state: GameState): void {
+// PERF: Breaks work into chunks with setTimeout to avoid long blocking periods
+function saveGameState(state: GameState, callback?: () => void): void {
   if (typeof window === 'undefined') return;
-  try {
-    // Validate state before saving
-    if (!state || !state.grid || !state.gridSize || !state.stats) {
-      console.error('Invalid game state, cannot save', { state, hasGrid: !!state?.grid, hasGridSize: !!state?.gridSize, hasStats: !!state?.stats });
-      return;
-    }
-    
-    // Optimize state to reduce size
-    const optimizedState = optimizeStateForSave(state);
-    const serialized = JSON.stringify(optimizedState);
-    
-    // Compress the JSON string using lz-string
-    // compressToUTF16 produces valid UTF-16 strings that localStorage handles well
-    const compressed = compressToUTF16(serialized);
-    
-    // Check if compressed data is too large (localStorage has ~5-10MB limit)
-    // With compression, we can handle much larger cities
-    if (compressed.length > 5 * 1024 * 1024) {
-      console.error('Compressed game state too large to save:', compressed.length, 'chars');
-      return;
-    }
-    
-    try {
-      localStorage.setItem(STORAGE_KEY, compressed);
-    } catch (quotaError) {
-      // If quota exceeded, try to free up space and retry
-      if (quotaError instanceof DOMException && (quotaError.code === 22 || quotaError.code === 1014)) {
-        console.warn('localStorage quota exceeded, trying to free space...');
-        tryFreeLocalStorageSpace();
-        // Retry the save
-        try {
-          localStorage.setItem(STORAGE_KEY, compressed);
-          console.log('Save succeeded after freeing space');
-        } catch (retryError) {
-          console.error('localStorage still full after cleanup. Compressed size:', compressed.length, 'chars');
-          throw retryError;
-        }
-      } else {
-        throw quotaError;
-      }
-    }
-  } catch (e) {
-    // Handle quota exceeded errors
-    if (e instanceof DOMException && (e.code === 22 || e.code === 1014)) {
-      console.error('localStorage quota exceeded, cannot save game state. City may be too large.');
-    } else {
-      console.error('Failed to save game state:', e);
-    }
+  
+  // Validate state before saving
+  if (!state || !state.grid || !state.gridSize || !state.stats) {
+    console.error('Invalid game state, cannot save', { state, hasGrid: !!state?.grid, hasGridSize: !!state?.gridSize, hasStats: !!state?.stats });
+    callback?.();
+    return;
   }
+  
+  // PERF: Break up the save into steps with yields to avoid blocking
+  // Step 1: Optimize state (fast)
+  setTimeout(() => {
+    try {
+      const optimizedState = optimizeStateForSave(state);
+      
+      // Step 2: Serialize to JSON (can be slow for large states)
+      setTimeout(() => {
+        try {
+          const serialized = JSON.stringify(optimizedState);
+          
+          // Step 3: Compress (slowest operation)
+          setTimeout(() => {
+            try {
+              const compressed = compressToUTF16(serialized);
+              
+              // Check size limit
+              if (compressed.length > 5 * 1024 * 1024) {
+                console.error('Compressed game state too large to save:', compressed.length, 'chars');
+                callback?.();
+                return;
+              }
+              
+              // Step 4: Write to localStorage (usually fast)
+              setTimeout(() => {
+                try {
+                  localStorage.setItem(STORAGE_KEY, compressed);
+                } catch (quotaError) {
+                  if (quotaError instanceof DOMException && (quotaError.code === 22 || quotaError.code === 1014)) {
+                    console.warn('localStorage quota exceeded, trying to free space...');
+                    tryFreeLocalStorageSpace();
+                    try {
+                      localStorage.setItem(STORAGE_KEY, compressed);
+                    } catch {
+                      console.error('localStorage still full after cleanup');
+                    }
+                  }
+                }
+                callback?.();
+              }, 0);
+            } catch (e) {
+              console.error('Failed to compress game state:', e);
+              callback?.();
+            }
+          }, 0);
+        } catch (e) {
+          console.error('Failed to serialize game state:', e);
+          callback?.();
+        }
+      }, 0);
+    } catch (e) {
+      console.error('Failed to optimize game state:', e);
+      callback?.();
+    }
+  }, 0);
 }
 
 // Clear saved game state
@@ -569,24 +584,45 @@ function saveSavedCitiesIndex(cities: SavedCityMeta[]): void {
 }
 
 // Save a city state to localStorage with compression
+// PERF: Uses setTimeout chain to avoid long blocking periods
 function saveCityState(cityId: string, state: GameState): void {
   if (typeof window === 'undefined') return;
-  try {
-    const serialized = JSON.stringify(state);
-    const compressed = compressToUTF16(serialized);
-    // Check if compressed data is too large
-    if (compressed.length > 5 * 1024 * 1024) {
-      console.error('Compressed city state too large to save');
-      return;
+  
+  // Step 1: Serialize (can be slow)
+  setTimeout(() => {
+    try {
+      const serialized = JSON.stringify(state);
+      
+      // Step 2: Compress (slowest)
+      setTimeout(() => {
+        try {
+          const compressed = compressToUTF16(serialized);
+          
+          if (compressed.length > 5 * 1024 * 1024) {
+            console.error('Compressed city state too large to save');
+            return;
+          }
+          
+          // Step 3: Write to localStorage
+          setTimeout(() => {
+            try {
+              localStorage.setItem(SAVED_CITY_PREFIX + cityId, compressed);
+            } catch (e) {
+              if (e instanceof DOMException && (e.code === 22 || e.code === 1014)) {
+                console.error('localStorage quota exceeded');
+              } else {
+                console.error('Failed to save city state:', e);
+              }
+            }
+          }, 0);
+        } catch (e) {
+          console.error('Failed to compress city state:', e);
+        }
+      }, 0);
+    } catch (e) {
+      console.error('Failed to serialize city state:', e);
     }
-    localStorage.setItem(SAVED_CITY_PREFIX + cityId, compressed);
-  } catch (e) {
-    if (e instanceof DOMException && (e.code === 22 || e.code === 1014)) {
-      console.error('localStorage quota exceeded');
-    } else {
-      console.error('Failed to save city state:', e);
-    }
-  }
+  }, 0);
 }
 
 // Load a saved city state from localStorage (supports compressed and legacy formats)
@@ -705,32 +741,33 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     stateChangedRef.current = true;
   }, [state]);
   
+  // PERF: Track if a save is in progress to avoid overlapping saves
+  const saveInProgressRef = useRef(false);
+  
   // Separate effect that actually performs saves on an interval
   useEffect(() => {
-    // Wait for initial load
-    const checkLoaded = setInterval(() => {
+    // Wait for initial load - just check once after a short delay
+    const checkLoadedTimeout = setTimeout(() => {
       if (!hasLoadedRef.current) {
         return;
       }
-      
-      // Clear the check interval
-      clearInterval(checkLoaded);
       
       // Clear any existing save interval
       if (saveIntervalRef.current) {
         clearInterval(saveIntervalRef.current);
       }
       
-      // Set up interval to save every 3 seconds if there's pending state
+      // Set up interval to save every 5 seconds
+      // PERF: Save operation is broken into chunks internally to avoid blocking
       saveIntervalRef.current = setInterval(() => {
         // Don't save if we just loaded
         if (skipNextSaveRef.current) {
+          skipNextSaveRef.current = false;
           return;
         }
         
-        // Don't save too frequently
-        const timeSinceLastSave = Date.now() - lastSaveTimeRef.current;
-        if (timeSinceLastSave < 2000) {
+        // Don't save if a save is already in progress
+        if (saveInProgressRef.current) {
           return;
         }
         
@@ -739,27 +776,31 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         
-        // PERF: Only do the deep copy when we actually save (not on every state change)
-        // Use structuredClone when available (faster than JSON parse/stringify)
-        const stateToSave = typeof structuredClone === 'function' 
-          ? structuredClone(latestStateRef.current)
-          : JSON.parse(JSON.stringify(latestStateRef.current));
+        // Mark save as in progress
+        saveInProgressRef.current = true;
         stateChangedRef.current = false;
-        
-        // Perform the save
         setIsSaving(true);
-        try {
-          saveGameState(stateToSave);
-          lastSaveTimeRef.current = Date.now();
-          setHasExistingGame(true);
-        } finally {
-          setIsSaving(false);
-        }
-      }, 3000); // Check every 3 seconds
-    }, 100);
+        
+        // PERF: Use setTimeout to yield before the expensive clone operation
+        setTimeout(() => {
+          // Use structuredClone when available (faster than JSON parse/stringify)
+          const stateToSave = typeof structuredClone === 'function' 
+            ? structuredClone(latestStateRef.current)
+            : JSON.parse(JSON.stringify(latestStateRef.current));
+          
+          // saveGameState breaks up work internally with setTimeout
+          saveGameState(stateToSave, () => {
+            lastSaveTimeRef.current = Date.now();
+            setHasExistingGame(true);
+            setIsSaving(false);
+            saveInProgressRef.current = false;
+          });
+        }, 0);
+      }, 5000); // Save every 5 seconds
+    }, 200); // Wait 200ms for initial load
     
     return () => {
-      clearInterval(checkLoaded);
+      clearTimeout(checkLoadedTimeout);
       if (saveIntervalRef.current) {
         clearInterval(saveIntervalRef.current);
       }
