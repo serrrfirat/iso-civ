@@ -1190,7 +1190,7 @@ const withRange = <R extends number, T extends Record<string, unknown>>(
 export const SERVICE_CONFIG = {
   police_station: withRange(13, { type: 'police' as const }),
   fire_station: withRange(18, { type: 'fire' as const }),
-  hospital: withRange(24, { type: 'health' as const }), // 2x service radius
+  hospital: withRange(24, { type: 'health' as const }),
   school: withRange(11, { type: 'education' as const }),
   university: withRange(19, { type: 'education' as const }),
   power_plant: withRange(15, {}),
