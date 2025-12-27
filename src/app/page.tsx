@@ -290,6 +290,8 @@ export default function HomePage() {
     setIsMultiplayer(false);
     setStartFreshGame(false);
     setSavedCities(loadSavedCities());
+    // Clear room code from URL
+    window.history.replaceState({}, '', '/');
   };
 
   // Load a saved city
