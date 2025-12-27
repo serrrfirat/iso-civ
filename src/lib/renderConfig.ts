@@ -159,13 +159,12 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
       { row: 3, col: 1 },
       { row: 3, col: 3 },
     ],
-    // Office high density - Row 3 columns 1-4, Row 2 column 1 (0-indexed: row 2 cols 0-3, row 1 col 0)
+    // Office high density - Row 3 columns 1-3, Row 2 column 1 (0-indexed: row 2 cols 0-2, row 1 col 0)
     office_high: [
       { row: 1, col: 0 },
       { row: 2, col: 0 },
       { row: 2, col: 1 },
       { row: 2, col: 2 },
-      { row: 2, col: 3 },
     ],
     // Commercial high density (mall) - Row 2 col 5, Row 3 cols 4-5, Row 4 most columns (0-indexed: row 1 col 4, row 2 cols 3-4, row 3 except col 3)
     mall: [
@@ -275,7 +274,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     // 3x3 mall needs to shift up ~1.5 tiles (non-dense)
     mall: -1.5,
     // 2x2 residential apartments need shifting up
-    apartment_low: -0.6,  // shifted down 0.4 from -1.0
+    apartment_low: -0.9,  // shifted up 0.3 from -0.6
     apartment_high: -0.60, // Shifted down ~0.4 tiles from -1.0
   },
   constructionVerticalOffsets: {
@@ -314,7 +313,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     apartment_high: -0.80, // Shifted up 0.2 tiles from -0.60
     factory_large: -1.15, // Dense variant shifted up 0.1 tiles from -1.05
     mall: -1.5, // Dense mall shifted up 0.5 tiles from -1.0
-    office_low: -0.7, // Dense office_low same as normal
+    office_low: -0.4, // Dense office_low shifted down 0.3 tiles from -0.7
     office_high: -0.7, // Dense office_high shifted up 0.2 tiles from -0.5
   },
   denseScales: {

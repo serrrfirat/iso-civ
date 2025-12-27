@@ -469,6 +469,9 @@ export function calculateSpriteScale(
     if (buildingType === 'office_high' && variant && variant.row === 2 && variant.col === 1) {
       scaleMultiplier *= 0.7;
     }
+    if (buildingType === 'office_high' && variant && variant.row === 2 && variant.col === 2) {
+      scaleMultiplier *= 0.7; // 3rd row, 3rd col - shrunk 30%
+    }
   }
   
   if (variantType === 'modern') {
@@ -556,8 +559,23 @@ export function calculateSpriteOffsets(
     if (buildingType === 'mall' && variant && variant.row === 2 && variant.col === 4) {
       verticalOffset += 0.5;
     }
+    if (buildingType === 'mall' && variant && variant.row === 3 && variant.col === 0) {
+      verticalOffset += 0.3; // 4th row, 1st col - shifted down 0.3 tiles
+    }
+    if (buildingType === 'mall' && variant && variant.row === 3 && variant.col === 1) {
+      verticalOffset += 0.5; // 4th row, 2nd col - shifted down 0.5 tiles
+    }
+    if (buildingType === 'mall' && variant && variant.row === 3 && variant.col === 2) {
+      verticalOffset += 0.3; // 4th row, 3rd col - shifted down 0.3 tiles
+    }
+    if (buildingType === 'office_high' && variant && variant.row === 2 && variant.col === 0) {
+      verticalOffset += 0.2; // 3rd row, 1st col - shifted down 0.2 tiles
+    }
     if (buildingType === 'office_high' && variant && variant.row === 2 && variant.col === 1) {
       verticalOffset += 0.1;
+    }
+    if (buildingType === 'office_high' && variant && variant.row === 2 && variant.col === 2) {
+      verticalOffset += 0.1; // 3rd row, 3rd col - shifted down 0.1 tiles
     }
   } else if (variantType === 'modern' && activePack.modernVerticalOffsets && 
              buildingType in activePack.modernVerticalOffsets) {
