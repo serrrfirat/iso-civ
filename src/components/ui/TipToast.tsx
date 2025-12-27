@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { X, Lightbulb, SkipForward, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { T, useGT, useMessages } from 'gt-next';
 
 export interface TipToastProps {
   message: string;
@@ -14,6 +15,8 @@ export interface TipToastProps {
 }
 
 function TipToastContent({ message, isVisible, onContinue, onSkipAll }: TipToastProps) {
+  const gt = useGT();
+  const m = useMessages();
   const [isAnimating, setIsAnimating] = useState(false);
   const [shouldRender, setShouldRender] = useState(false);
 
@@ -68,7 +71,7 @@ function TipToastContent({ message, isVisible, onContinue, onSkipAll }: TipToast
           {/* Message */}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground leading-relaxed">
-              {message}
+              {m(message)}
             </p>
           </div>
           
@@ -76,7 +79,7 @@ function TipToastContent({ message, isVisible, onContinue, onSkipAll }: TipToast
           <button
             onClick={onContinue}
             className="flex-shrink-0 p-1 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Dismiss tip"
+            aria-label={gt('Dismiss tip')}
           >
             <X className="w-4 h-4" />
           </button>
@@ -90,8 +93,10 @@ function TipToastContent({ message, isVisible, onContinue, onSkipAll }: TipToast
             onClick={onSkipAll}
             className="text-xs text-muted-foreground hover:text-foreground gap-1"
           >
-            <SkipForward className="w-3.5 h-3.5" />
-            Skip All Tips
+            <T>
+              <SkipForward className="w-3.5 h-3.5" />
+              Skip All Tips
+            </T>
           </Button>
           <Button
             variant="default"
@@ -99,8 +104,10 @@ function TipToastContent({ message, isVisible, onContinue, onSkipAll }: TipToast
             onClick={onContinue}
             className="text-xs gap-1"
           >
-            Continue
-            <ArrowRight className="w-3.5 h-3.5" />
+            <T>
+              Continue
+              <ArrowRight className="w-3.5 h-3.5" />
+            </T>
           </Button>
         </div>
         

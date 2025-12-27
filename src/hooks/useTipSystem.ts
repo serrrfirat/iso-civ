@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { GameState } from '@/types/game';
+import { msg } from 'gt-next';
 
 // Tip definitions with their conditions and messages
 export type TipId = 
@@ -23,7 +24,7 @@ export interface TipDefinition {
 const TIP_DEFINITIONS: TipDefinition[] = [
   {
     id: 'get_started',
-    message: 'Welcome! Start by zoning areas for residential, commercial, and industrial buildings. Then add roads, power, and water to build your city.',
+    message: msg('Welcome! Start by zoning areas for residential, commercial, and industrial buildings. Then add roads, power, and water to build your city.'),
     priority: 0, // Highest priority - shows first on fresh cities
     check: (state: GameState) => {
       // Check if this is a fresh/empty city - no zones placed yet
@@ -50,7 +51,7 @@ const TIP_DEFINITIONS: TipDefinition[] = [
   },
   {
     id: 'needs_utilities',
-    message: 'Buildings need power, water, and roads for construction to begin.',
+    message: msg('Buildings need power, water, and roads for construction to begin.'),
     priority: 1,
     check: (state: GameState) => {
       // Check if there are zoned tiles (even just grass) but no utilities infrastructure
@@ -78,7 +79,7 @@ const TIP_DEFINITIONS: TipDefinition[] = [
   },
   {
     id: 'negative_demand',
-    message: 'Keep an eye on zone demand. Negative demand can cause buildings to become abandoned.',
+    message: msg('Keep an eye on zone demand. Negative demand can cause buildings to become abandoned.'),
     priority: 2,
     check: (state: GameState) => {
       const { residential, commercial, industrial } = state.stats.demand;
@@ -88,7 +89,7 @@ const TIP_DEFINITIONS: TipDefinition[] = [
   },
   {
     id: 'needs_safety_services',
-    message: 'Add fire and police stations to keep your city safe from crime and fires.',
+    message: msg('Add fire and police stations to keep your city safe from crime and fires.'),
     priority: 3,
     check: (state: GameState) => {
       // Check if there are buildings but no fire/police stations
@@ -116,7 +117,7 @@ const TIP_DEFINITIONS: TipDefinition[] = [
   },
   {
     id: 'needs_parks',
-    message: 'Add parks and trees to improve your city\'s environment and make residents happier.',
+    message: msg('Add parks and trees to improve your city\'s environment and make residents happier.'),
     priority: 4,
     check: (state: GameState) => {
       // Check if environment score is low
@@ -125,7 +126,7 @@ const TIP_DEFINITIONS: TipDefinition[] = [
   },
   {
     id: 'needs_health_education',
-    message: 'Build hospitals and schools to improve health and education for your citizens.',
+    message: msg('Build hospitals and schools to improve health and education for your citizens.'),
     priority: 5,
     check: (state: GameState) => {
       // Check if there's population but no hospitals or schools
