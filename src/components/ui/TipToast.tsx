@@ -42,15 +42,19 @@ function TipToastContent({ message, isVisible, onContinue, onSkipAll }: TipToast
   return (
     <div
       className={cn(
-        'fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] pointer-events-auto',
+        'fixed z-[9999] pointer-events-auto',
         'transition-all duration-300 ease-out',
+        // Mobile: top position below toolbar, full width with margins
+        'top-20 left-3 right-3',
+        // Desktop: bottom center position
+        'md:top-auto md:bottom-6 md:left-1/2 md:right-auto md:-translate-x-1/2',
         isAnimating 
           ? 'opacity-100 translate-y-0' 
-          : 'opacity-0 translate-y-4'
+          : cn('opacity-0', 'max-md:-translate-y-4', 'md:translate-y-4')
       )}
       style={{ position: 'fixed' }}
     >
-      <div className="relative bg-card border border-sidebar-border rounded-sm shadow-lg overflow-hidden max-w-md">
+      <div className="relative bg-card border border-sidebar-border rounded-sm shadow-lg overflow-hidden w-full md:w-auto md:max-w-md">
         {/* Top accent border */}
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent" />
         
