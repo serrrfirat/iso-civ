@@ -126,6 +126,10 @@ export class MultiplayerProvider {
       .on('broadcast', { event: 'action' }, ({ payload }) => {
         const action = payload as GameAction;
         if (action.playerId !== this.peerId && this.options.onAction) {
+          // Log received batches for debugging
+          if (action.type === 'placeBatch') {
+            console.log(`[Multiplayer] Received batch with ${action.placements.length} placements from ${action.playerId}`);
+          }
           this.options.onAction(action);
         }
       })
@@ -199,6 +203,11 @@ export class MultiplayerProvider {
       timestamp: Date.now(),
       playerId: this.peerId,
     };
+
+    // Log batch sizes for debugging
+    if (action.type === 'placeBatch') {
+      console.log(`[Multiplayer] Sending batch with ${action.placements.length} placements`);
+    }
 
     // Broadcast to all peers
     this.channel.send({

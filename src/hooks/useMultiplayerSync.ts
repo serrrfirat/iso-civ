@@ -7,8 +7,8 @@ import { GameAction, GameActionInput } from '@/lib/multiplayer/types';
 import { Tool, Budget } from '@/types/game';
 
 // Batch placement buffer for reducing message count during drags
-const BATCH_FLUSH_INTERVAL = 50; // ms - flush every 50ms during drag
-const BATCH_MAX_SIZE = 50; // Max placements before force flush
+const BATCH_FLUSH_INTERVAL = 100; // ms - flush every 100ms during drag
+const BATCH_MAX_SIZE = 100; // Max placements before force flush
 
 /**
  * Hook to sync game actions with multiplayer.
@@ -24,9 +24,15 @@ export function useMultiplayerSync() {
   const lastActionRef = useRef<string | null>(null);
   const initialStateLoadedRef = useRef(false);
   
-  // Batching for placements
+  // Batching for placements - use refs to avoid stale closures
   const placementBufferRef = useRef<Array<{ x: number; y: number; tool: Tool }>>([]);
   const flushTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const multiplayerRef = useRef(multiplayer);
+  
+  // Keep multiplayer ref updated
+  useEffect(() => {
+    multiplayerRef.current = multiplayer;
+  }, [multiplayer]);
 
   // Load initial state when joining a room (received from other players)
   useEffect(() => {
@@ -54,6 +60,7 @@ export function useMultiplayerSync() {
         
       case 'placeBatch':
         // Apply multiple placements from a single message (e.g., road drag)
+        console.log(`[Multiplayer] Received batch with ${action.placements.length} placements`);
         const originalTool = game.state.selectedTool;
         for (const placement of action.placements) {
           game.setTool(placement.tool);
@@ -112,9 +119,10 @@ export function useMultiplayerSync() {
     };
   }, [multiplayer, applyRemoteAction]);
   
-  // Flush batched placements
+  // Flush batched placements - uses ref to avoid stale closure issues
   const flushPlacements = useCallback(() => {
-    if (!multiplayer || placementBufferRef.current.length === 0) return;
+    const mp = multiplayerRef.current;
+    if (!mp || placementBufferRef.current.length === 0) return;
     
     if (flushTimeoutRef.current) {
       clearTimeout(flushTimeoutRef.current);
@@ -124,15 +132,17 @@ export function useMultiplayerSync() {
     const placements = [...placementBufferRef.current];
     placementBufferRef.current = [];
     
+    console.log(`[Multiplayer] Flushing ${placements.length} placements`);
+    
     if (placements.length === 1) {
       // Single placement - send as regular place action
       const p = placements[0];
-      multiplayer.dispatchAction({ type: 'place', x: p.x, y: p.y, tool: p.tool });
+      mp.dispatchAction({ type: 'place', x: p.x, y: p.y, tool: p.tool });
     } else {
       // Multiple placements - send as batch
-      multiplayer.dispatchAction({ type: 'placeBatch', placements });
+      mp.dispatchAction({ type: 'placeBatch', placements });
     }
-  }, [multiplayer]);
+  }, []);
   
   // Register callback to broadcast local placements (with batching)
   useEffect(() => {

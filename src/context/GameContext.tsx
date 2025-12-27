@@ -863,8 +863,9 @@ export function GameProvider({ children, startFresh = false }: { children: React
   );
 
   const placeAtTile = useCallback((x: number, y: number, isRemote = false) => {
-    // Track the actual tool used inside setState for accurate multiplayer broadcast
-    let actualToolUsed: Tool | null = null;
+    // For multiplayer broadcast, we need to capture the tool synchronously
+    // before React batches the setState. We read from the latest state ref.
+    const currentTool = latestStateRef.current.selectedTool;
     
     setState((prev) => {
       const tool = prev.selectedTool;
@@ -898,7 +899,6 @@ export function GameProvider({ children, startFresh = false }: { children: React
         const nextState = placeSubway(prev, x, y);
         if (nextState === prev) return prev;
         
-        actualToolUsed = tool;
         return {
           ...nextState,
           stats: { ...nextState.stats, money: nextState.stats.money - cost },
@@ -915,7 +915,6 @@ export function GameProvider({ children, startFresh = false }: { children: React
         const nextState = placeWaterTerraform(prev, x, y);
         if (nextState === prev) return prev;
         
-        actualToolUsed = tool;
         return {
           ...nextState,
           stats: { ...nextState.stats, money: nextState.stats.money - cost },
@@ -930,7 +929,6 @@ export function GameProvider({ children, startFresh = false }: { children: React
         const nextState = placeLandTerraform(prev, x, y);
         if (nextState === prev) return prev;
         
-        actualToolUsed = tool;
         return {
           ...nextState,
           stats: { ...nextState.stats, money: nextState.stats.money - cost },
@@ -958,13 +956,13 @@ export function GameProvider({ children, startFresh = false }: { children: React
         };
       }
 
-      actualToolUsed = tool;
       return nextState;
     });
     
-    // Broadcast to multiplayer if this is a local action (not remote) and placement succeeded
-    if (!isRemote && actualToolUsed && actualToolUsed !== 'select' && placeCallbackRef.current) {
-      placeCallbackRef.current({ x, y, tool: actualToolUsed });
+    // Broadcast to multiplayer if this is a local action (not remote)
+    // We use the tool captured before setState since React 18 batches async
+    if (!isRemote && currentTool !== 'select' && placeCallbackRef.current) {
+      placeCallbackRef.current({ x, y, tool: currentTool });
     }
   }, []);
 
