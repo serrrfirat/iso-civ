@@ -25,17 +25,12 @@ export function useMultiplayerSync() {
     if (!multiplayer || !multiplayer.initialState || initialStateLoadedRef.current) return;
     if (multiplayer.isHost) return; // Host doesn't need to load initial state
     
-    console.log('[MultiplayerSync] Loading initial state from host...');
-    
     // Use loadState to load the host's game state
     const stateString = JSON.stringify(multiplayer.initialState);
     const success = game.loadState(stateString);
     
     if (success) {
-      console.log('[MultiplayerSync] Initial state loaded successfully');
       initialStateLoadedRef.current = true;
-    } else {
-      console.error('[MultiplayerSync] Failed to load initial state');
     }
   }, [multiplayer?.initialState, multiplayer?.isHost, game]);
 
@@ -61,7 +56,6 @@ export function useMultiplayerSync() {
     }
     
     game.setPlaceCallback((x: number, y: number, tool: Tool) => {
-      console.log('[MultiplayerSync] Broadcasting place action:', { x, y, tool });
       if (tool === 'bulldoze') {
         multiplayer.dispatchAction({ type: 'bulldoze', x, y });
       } else if (tool !== 'select') {
@@ -76,7 +70,6 @@ export function useMultiplayerSync() {
 
   // Apply a remote action to the local game state
   const applyRemoteAction = useCallback((action: GameAction) => {
-    console.log('[MultiplayerSync] Applying remote action:', action.type, action);
     switch (action.type) {
       case 'place':
         // Save current tool, apply placement, restore tool

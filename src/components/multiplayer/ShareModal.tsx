@@ -32,7 +32,6 @@ export function ShareModal({ open, onOpenChange }: ShareModalProps) {
       setIsCreating(true);
       createRoom(state.cityName, playerName, state)
         .then((code) => {
-          console.log('[ShareModal] Room created:', code);
           // Update URL to show room code
           window.history.replaceState({}, '', `/?room=${code}`);
         })

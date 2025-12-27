@@ -680,10 +680,8 @@ export function GameProvider({ children, startFresh = false }: { children: React
     setSavedCities(cities);
     
     // Load game state (unless startFresh is true - used for co-op to start with a new city)
-    console.log('[GameContext] Loading state, startFresh=', startFresh);
     if (!startFresh) {
       const saved = loadGameState();
-      console.log('[GameContext] loadGameState returned:', saved ? { cityName: saved.cityName, gridSize: saved.gridSize } : null);
       if (saved) {
         skipNextSaveRef.current = true; // Set skip flag BEFORE updating state
         setState(saved);

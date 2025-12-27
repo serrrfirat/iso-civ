@@ -122,7 +122,6 @@ export function CoopModal({
   // When we receive the initial state from host, start the game
   useEffect(() => {
     if (waitingForState && initialState) {
-      console.log('[CoopModal] Received state from host, starting game!');
       setWaitingForState(false);
       onStartGame(false, initialState);
       onOpenChange(false);

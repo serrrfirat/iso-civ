@@ -167,7 +167,6 @@ export function MultiplayerContextProvider({
         if (!roomData) {
           throw new Error('Room not found after retries');
         }
-        console.log('[Multiplayer] Room found, connecting via WebRTC to get state...');
         
         // Create multiplayer provider as guest
         const provider = await createMultiplayerProvider({
@@ -188,7 +187,6 @@ export function MultiplayerContextProvider({
           },
           // Game state will be received via WebRTC from host
           onStateReceived: (state) => {
-            console.log('[Multiplayer] Received game state from host via WebRTC!');
             setInitialState(state as GameState);
           },
         });

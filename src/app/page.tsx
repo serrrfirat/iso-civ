@@ -333,27 +333,17 @@ export default function HomePage() {
     
     if (isHost && initialState) {
       // Host starts with the state they created - save it so GameProvider loads it
-      console.log('[Page] Host starting with fresh state', {
-        gridSize: initialState.grid?.length,
-        cityName: initialState.cityName,
-      });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(initialState));
-      setStartFreshGame(false); // Load from localStorage
+      setStartFreshGame(false);
     } else if (isHost) {
-      // Host without state - shouldn't happen but fallback to fresh game
+      // Host without state - fallback to fresh game
       setStartFreshGame(true);
     } else if (initialState) {
-      // Guest received state from host - save it to localStorage so GameProvider loads it
-      console.log('[Page] Guest starting with host state', {
-        hasGrid: !!(initialState as GameState).grid,
-        gridSize: (initialState as GameState).grid?.length,
-        cityName: (initialState as GameState).cityName,
-      });
+      // Guest received state from host - save it so GameProvider loads it
       localStorage.setItem(STORAGE_KEY, JSON.stringify(initialState));
-      setStartFreshGame(false); // Load from localStorage (which now has host's state)
+      setStartFreshGame(false);
     } else {
-      // Guest without state - this shouldn't happen
-      console.error('[Page] Guest starting without initial state!');
+      // Guest without state - fallback to fresh game
       setStartFreshGame(true);
     }
     
