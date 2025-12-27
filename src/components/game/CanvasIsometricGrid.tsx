@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { useMessages } from 'gt-next';
+import { useMessages, T, Var, useGT } from 'gt-next';
 import { useGame } from '@/context/GameContext';
 import { TOOL_INFO, Tile, Building, BuildingType, AdjacentCity, Tool } from '@/types/game';
 import { getBuildingSize, requiresWaterAdjacency, getWaterAdjacency } from '@/lib/simulation';
 import { FireIcon, SafetyIcon } from '@/components/ui/Icons';
 import { getSpriteCoords, BUILDING_TO_SPRITE, SPRITE_VERTICAL_OFFSETS, SPRITE_HORIZONTAL_OFFSETS, getActiveSpritePack } from '@/lib/renderConfig';
+import { selectSpriteSource, calculateSpriteCoords, calculateSpriteScale, calculateSpriteOffsets, getSpriteRenderInfo } from '@/components/game/buildingSprite';
 
 // Import shadcn components
 import { Button } from '@/components/ui/button';
@@ -155,6 +156,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   // PERF: Use latestStateRef for real-time grid access in animation loops
   // This avoids waiting for React state sync which is throttled for performance
   const m = useMessages();
+  const gt = useGT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hoverCanvasRef = useRef<HTMLCanvasElement>(null); // PERF: Separate canvas for hover/selection highlights
   const carsCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -1499,9 +1501,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           }
         } else {
           // ===== TILE RENDERER PATH =====
-          // Handles both single-tile and multi-tile buildings
-          // Get the filtered sprite sheet from cache (or fallback to unfiltered if not available)
-          // Use the active sprite pack's source for cache lookup (activePack already defined above)
+          // Handles both single-tile and multi-tile buildings using extracted sprite utilities
           
           // Check if building is under construction (constructionProgress < 100)
           const isUnderConstruction = tile.building.constructionProgress !== undefined &&
@@ -1512,7 +1512,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           // Phase 2 (40-100%): Construction scaffolding phase - show construction sprite
           const constructionProgress = tile.building.constructionProgress ?? 100;
           const isFoundationPhase = isUnderConstruction && constructionProgress < 40;
-          const isConstructionPhase = isUnderConstruction && constructionProgress >= 40;
           
           // If in foundation phase, draw the foundation plot and skip sprite rendering
           if (isFoundationPhase) {
@@ -1520,7 +1519,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             const buildingSize = getBuildingSize(buildingType);
             
             // For multi-tile buildings, we only draw the foundation from the origin tile
-            // (the other tiles are 'empty' and won't have this building type)
             if (buildingSize.width > 1 || buildingSize.height > 1) {
               // Draw foundation plots for each tile in the footprint
               for (let dy = 0; dy < buildingSize.height; dy++) {
@@ -1534,329 +1532,34 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
               // Single-tile building - just draw one foundation
               drawFoundationPlot(ctx, x, y, w, h, zoom);
             }
-            // Skip the sprite rendering for this tile (foundation plot is already drawn)
             return;
           }
           
-          // Check if building is abandoned
-          const isAbandoned = tile.building.abandoned === true;
-
-          // Use appropriate sprite sheet based on building state
-          // Priority: parks construction > construction > abandoned > parks > dense/modern variants > farm variants > normal
-          let spriteSource = activePack.src;
-          let useDenseVariant: { row: number; col: number } | null = null;
-          let useModernVariant: { row: number; col: number } | null = null;
-          let useFarmVariant: { row: number; col: number } | null = null;
-          let useShopVariant: { row: number; col: number } | null = null;
-          let useStationVariant: { row: number; col: number } | null = null;
-          let useParksBuilding: { row: number; col: number } | null = null;
-          
-          // Check if this is a parks building first
-          const isParksBuilding = activePack.parksBuildings && activePack.parksBuildings[buildingType];
-          
-          if (isConstructionPhase && isParksBuilding && activePack.parksConstructionSrc) {
-            // Parks building under construction (phase 2) - use parks construction sheet
-            useParksBuilding = activePack.parksBuildings![buildingType];
-            spriteSource = activePack.parksConstructionSrc;
-          } else if (isConstructionPhase && activePack.constructionSrc) {
-            // Regular building under construction (phase 2) - use construction sheet
-            spriteSource = activePack.constructionSrc;
-          } else if (isAbandoned && activePack.abandonedSrc) {
-            spriteSource = activePack.abandonedSrc;
-          } else if (isParksBuilding && activePack.parksSrc) {
-            // Check if this building type is from the parks sprite sheet
-            useParksBuilding = activePack.parksBuildings![buildingType];
-            spriteSource = activePack.parksSrc;
-          } else if (activePack.denseSrc && activePack.denseVariants && activePack.denseVariants[buildingType]) {
-            // Check if this building type has dense variants available
-            const denseVariants = activePack.denseVariants[buildingType];
-            const modernVariants = activePack.modernSrc && activePack.modernVariants && activePack.modernVariants[buildingType]
-              ? activePack.modernVariants[buildingType]
-              : [];
-            // Combine both variant pools
-            const allVariants = [
-              ...denseVariants.map(v => ({ ...v, source: 'dense' as const })),
-              ...modernVariants.map(v => ({ ...v, source: 'modern' as const })),
-            ];
-            // Use deterministic random based on tile position to select variant
-            // This ensures the same building always shows the same variant
-            // Equal distribution: 1 original + N variants = N+1 total options
-            const totalOptions = 1 + allVariants.length;
-            const seed = (tile.x * 31 + tile.y * 17) % totalOptions;
-            // seed === 0 means use original, otherwise use variant at seed-1
-            if (seed > 0 && allVariants.length > 0) {
-              const selectedVariant = allVariants[seed - 1];
-              if (selectedVariant.source === 'modern') {
-                useModernVariant = { row: selectedVariant.row, col: selectedVariant.col };
-                spriteSource = activePack.modernSrc!;
-              } else {
-                useDenseVariant = { row: selectedVariant.row, col: selectedVariant.col };
-                spriteSource = activePack.denseSrc;
-              }
-            }
-          } else if (activePack.modernSrc && activePack.modernVariants && activePack.modernVariants[buildingType]) {
-            // Check if this building type has modern variants available (without dense variants)
-            const variants = activePack.modernVariants[buildingType];
-            // Equal distribution: 1 original + N variants = N+1 total options
-            const totalOptions = 1 + variants.length;
-            const seed = (tile.x * 31 + tile.y * 17) % totalOptions;
-            // seed === 0 means use original, otherwise use variant at seed-1
-            if (seed > 0 && variants.length > 0) {
-              useModernVariant = variants[seed - 1];
-              spriteSource = activePack.modernSrc;
-            }
-          } else if (activePack.farmsSrc && activePack.farmsVariants && activePack.farmsVariants[buildingType]) {
-            // Check if this building type has farm variants available (low-density industrial)
-            const variants = activePack.farmsVariants[buildingType];
-            // Use deterministic random based on tile position to select variant
-            // This ensures the same building always shows the same variant
-            // Equal distribution: 1 original + N variants = N+1 total options
-            const totalOptions = 1 + variants.length;
-            const seed = (tile.x * 31 + tile.y * 17) % totalOptions;
-            // seed === 0 means use original, otherwise use variant at seed-1
-            if (seed > 0 && variants.length > 0) {
-              useFarmVariant = variants[seed - 1];
-              spriteSource = activePack.farmsSrc;
-            }
-          } else if (activePack.shopsSrc && activePack.shopsVariants && activePack.shopsVariants[buildingType]) {
-            // Check if this building type has shop variants available (low-density commercial)
-            const variants = activePack.shopsVariants[buildingType];
-            // Use deterministic random based on tile position to select variant
-            // This ensures the same building always shows the same variant
-            // Equal distribution: 1 original + N variants = N+1 total options
-            const totalOptions = 1 + variants.length;
-            const seed = (tile.x * 31 + tile.y * 17) % totalOptions;
-            // seed === 0 means use original, otherwise use variant at seed-1
-            if (seed > 0 && variants.length > 0) {
-              useShopVariant = variants[seed - 1];
-              spriteSource = activePack.shopsSrc;
-            }
-          } else if (activePack.stationsSrc && activePack.stationsVariants && activePack.stationsVariants[buildingType]) {
-            // Check if this building type has station variants available (rail stations)
-            const variants = activePack.stationsVariants[buildingType];
-            // Use deterministic random based on tile position to select variant
-            // This ensures the same building always shows the same variant
-            const seed = (tile.x * 31 + tile.y * 17) % 100;
-            // Always use a station variant if available (100% chance)
-            if (variants.length > 0) {
-              // Select which station variant to use based on position
-              const variantIndex = (tile.x * 7 + tile.y * 13) % variants.length;
-              useStationVariant = variants[variantIndex];
-              spriteSource = activePack.stationsSrc;
-            }
-          }
-
-          const filteredSpriteSheet = getCachedImage(spriteSource, true) || getCachedImage(spriteSource);
+          // Use extracted utilities to determine sprite source, coords, scale, and offsets
+          const spriteSourceInfo = selectSpriteSource(buildingType, tile.building, tile.x, tile.y, activePack);
+          const filteredSpriteSheet = getCachedImage(spriteSourceInfo.source, true) || getCachedImage(spriteSourceInfo.source);
           
           if (filteredSpriteSheet) {
-            // Use naturalWidth/naturalHeight for accurate source dimensions
             const sheetWidth = filteredSpriteSheet.naturalWidth || filteredSpriteSheet.width;
             const sheetHeight = filteredSpriteSheet.naturalHeight || filteredSpriteSheet.height;
             
-            // Get sprite coordinates - either from parks, dense variant, modern variant, farm variant, shop variant, station variant, or normal mapping
-            let coords: { sx: number; sy: number; sw: number; sh: number } | null;
-            let isDenseVariant = false;
-            let isModernVariant = false;
-            let isFarmVariant = false;
-            let isShopVariant = false;
-            let isStationVariant = false;
-            let isParksBuilding = false;
-            if (useParksBuilding) {
-              isParksBuilding = true;
-              // Calculate coordinates from parks sprite sheet using its own grid dimensions
-              const parksCols = activePack.parksCols || 5;
-              const parksRows = activePack.parksRows || 6;
-              const tileWidth = Math.floor(sheetWidth / parksCols);
-              const tileHeight = Math.floor(sheetHeight / parksRows);
-              let sourceY = useParksBuilding.row * tileHeight;
-              let sourceH = tileHeight;
-              
-              // Special handling for buildings that have content bleeding from row above - shift source down to avoid capturing
-              // content from the sprite above it in the sprite sheet
-              if (buildingType === 'marina_docks_small') {
-                sourceY += tileHeight * 0.15; // Shift down 15% to avoid row above clipping (reduced from 25%)
-                sourceH = tileHeight * 0.85; // Reduce height by 15% to avoid row below clipping
-              } else if (buildingType === 'pier_large') {
-                sourceY += tileHeight * 0.2; // Shift down 20% to avoid row above clipping
-                sourceH = tileHeight * 0.8; // Reduce height by 20% to avoid row below clipping
-              } else if (buildingType === 'amphitheater') {
-                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
-              } else if (buildingType === 'mini_golf_course') {
-                sourceY += tileHeight * 0.2; // Shift down 20% to crop lower from the top
-                sourceH = tileHeight * 0.8; // Reduce height by 20% to maintain proper aspect
-              } else if (buildingType === 'cabin_house') {
-                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
-              } else if (buildingType === 'go_kart_track') {
-                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
-              } else if (buildingType === 'greenhouse_garden') {
-                sourceY += tileHeight * 0.1; // Shift down 10% to crop asset above it
-                sourceH = tileHeight * 0.9; // Reduce height by 10% to maintain proper aspect
-              }
-              
-              // Special handling for buildings that need more height to avoid bottom clipping
-              if (buildingType === 'bleachers_field') {
-                sourceH = tileHeight * 1.1; // Increase height by 10% to avoid bottom clipping
-              }
-              
-              coords = {
-                sx: useParksBuilding.col * tileWidth,
-                sy: sourceY,
-                sw: tileWidth,
-                sh: sourceH,
-              };
-            } else if (useDenseVariant) {
-              isDenseVariant = true;
-              // Calculate coordinates directly from dense variant row/col
-              const tileWidth = Math.floor(sheetWidth / activePack.cols);
-              const tileHeight = Math.floor(sheetHeight / activePack.rows);
-              let sourceY = useDenseVariant.row * tileHeight;
-              let sourceH = tileHeight;
-              // For mall dense variants (rows 2-3), shift source Y down to avoid capturing
-              // content from the row above that bleeds into the cell boundary
-              if (buildingType === 'mall') {
-                sourceY += tileHeight * 0.12; // Shift down ~12% to avoid row above
-              }
-              // For factory_large dense variants (row 4), shift source Y down to avoid capturing
-              // content from the row above that bleeds into the cell boundary
-              if (buildingType === 'factory_large') {
-                sourceY += tileHeight * 0.05; // Shift down ~5% to avoid row above
-                sourceH = tileHeight * 0.95; // Reduce height slightly to avoid row below clipping
-              }
-              // For apartment_high dense variants, add a bit more height to avoid cutoff at bottom
-              if (buildingType === 'apartment_high') {
-                sourceH = tileHeight * 1.05; // Add 5% more height at bottom
-              }
-              // For office_high dense variants, shift down to avoid row above
-              if (buildingType === 'office_high') {
-                sourceY += tileHeight * 0.1; // Shift down ~10% to avoid row above
-                sourceH = tileHeight * 0.98; // Slight crop at bottom to avoid row below
-              }
-              // For office_low dense variants, shift down to avoid row above
-              if (buildingType === 'office_low') {
-                sourceY += tileHeight * 0.1; // Shift down ~10% to avoid row above
-              }
-              coords = {
-                sx: useDenseVariant.col * tileWidth,
-                sy: sourceY,
-                sw: tileWidth,
-                sh: sourceH,
-              };
-            } else if (useModernVariant) {
-              isModernVariant = true;
-              // Calculate coordinates directly from modern variant row/col (same layout as dense: cols/rows)
-              const tileWidth = Math.floor(sheetWidth / activePack.cols);
-              const tileHeight = Math.floor(sheetHeight / activePack.rows);
-              let sourceY = useModernVariant.row * tileHeight;
-              let sourceH = tileHeight;
-              // For mall modern variants (rows 2-3), shift source Y down to avoid capturing
-              // content from the row above that bleeds into the cell boundary
-              if (buildingType === 'mall') {
-                sourceY += tileHeight * 0.15; // Shift down ~15% to avoid row above
-                // For row 3 mall variants, crop bottom to avoid picking up industrial assets from row 4
-                if (useModernVariant.row === 3) {
-                  sourceH = tileHeight * 0.95; // Slight crop at bottom to exclude industrial asset
-                } else {
-                  sourceH = tileHeight * 0.85; // Crop 15% off bottom for other mall rows
-                }
-              }
-              // For apartment_high modern variants, add a bit more height to avoid cutoff at bottom
-              if (buildingType === 'apartment_high') {
-                sourceH = tileHeight * 1.05; // Add 5% more height at bottom
-              }
-              coords = {
-                sx: useModernVariant.col * tileWidth,
-                sy: sourceY,
-                sw: tileWidth,
-                sh: sourceH,
-              };
-            } else if (useFarmVariant) {
-              isFarmVariant = true;
-              // Calculate coordinates directly from farm variant row/col
-              const farmsCols = activePack.farmsCols || 5;
-              const farmsRows = activePack.farmsRows || 6;
-              const tileWidth = Math.floor(sheetWidth / farmsCols);
-              const tileHeight = Math.floor(sheetHeight / farmsRows);
-              const sourceY = useFarmVariant.row * tileHeight;
-              const sourceH = tileHeight;
-              coords = {
-                sx: useFarmVariant.col * tileWidth,
-                sy: sourceY,
-                sw: tileWidth,
-                sh: sourceH,
-              };
-            } else if (useShopVariant) {
-              isShopVariant = true;
-              // Calculate coordinates directly from shop variant row/col
-              const shopsCols = activePack.shopsCols || 5;
-              const shopsRows = activePack.shopsRows || 6;
-              const tileWidth = Math.floor(sheetWidth / shopsCols);
-              const tileHeight = Math.floor(sheetHeight / shopsRows);
-              const sourceY = useShopVariant.row * tileHeight;
-              const sourceH = tileHeight;
-              coords = {
-                sx: useShopVariant.col * tileWidth,
-                sy: sourceY,
-                sw: tileWidth,
-                sh: sourceH,
-              };
-            } else if (useStationVariant) {
-              isStationVariant = true;
-              // Calculate coordinates directly from station variant row/col
-              const stationsCols = activePack.stationsCols || 5;
-              const stationsRows = activePack.stationsRows || 6;
-              const tileWidth = Math.floor(sheetWidth / stationsCols);
-              const tileHeight = Math.floor(sheetHeight / stationsRows);
-              let sourceY = useStationVariant.row * tileHeight;
-              let sourceH = tileHeight;
-              
-              // Special handling for rows that have content bleeding from row above
-              // Third row (row 2, 0-indexed) - shift down to avoid capturing content from row above
-              if (useStationVariant.row === 2) {
-                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
-              }
-              // Fourth row (row 3, 0-indexed) - shift down to avoid capturing content from row above
-              // Also reduce height slightly to crop out bottom clipping from row below
-              if (useStationVariant.row === 3) {
-                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
-                sourceH -= tileHeight * 0.05; // Reduce height by 5% to crop bottom clipping
-              }
-              // Fifth row (row 4, 0-indexed) - shift down to avoid capturing content from row above
-              // Also reduce height to crop out bottom clipping from row below
-              if (useStationVariant.row === 4) {
-                sourceY += tileHeight * 0.1; // Shift down 10% to avoid row above clipping
-                sourceH -= tileHeight * 0.1; // Reduce height by 10% to crop bottom clipping
-              }
-              
-              coords = {
-                sx: useStationVariant.col * tileWidth,
-                sy: sourceY,
-                sw: tileWidth,
-                sh: sourceH,
-              };
-            } else {
-              // getSpriteCoords handles building type to sprite key mapping
-              coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight);
-              
-              // Special cropping for factory_large base sprite - crop bottom to remove asset below
-              if (buildingType === 'factory_large' && coords) {
-                const tileHeight = Math.floor(sheetHeight / activePack.rows);
-                coords.sh = coords.sh - tileHeight * 0.08; // Crop 8% from bottom
-              }
-            }
+            // Calculate sprite coordinates using extracted utility
+            const coords = calculateSpriteCoords(buildingType, spriteSourceInfo, sheetWidth, sheetHeight, activePack);
             
             if (coords) {
-              // Get building size to handle multi-tile buildings
+              // Calculate scale and offsets using extracted utilities
+              const scaleMultiplier = calculateSpriteScale(buildingType, spriteSourceInfo, tile.building, activePack);
+              const offsets = calculateSpriteOffsets(buildingType, spriteSourceInfo, tile.building, activePack);
+              
+              // Get building size for positioning
               const buildingSize = getBuildingSize(buildingType);
               const isMultiTile = buildingSize.width > 1 || buildingSize.height > 1;
               
               // Calculate draw position for multi-tile buildings
-              // Multi-tile buildings need to be positioned at the front-most corner
               let drawPosX = x;
               let drawPosY = y;
               
               if (isMultiTile) {
-                // Calculate offset to position sprite at the front-most visible corner
-                // In isometric view, the front-most corner is at (originX + width - 1, originY + height - 1)
                 const frontmostOffsetX = buildingSize.width - 1;
                 const frontmostOffsetY = buildingSize.height - 1;
                 const screenOffsetX = (frontmostOffsetX - frontmostOffsetY) * (w / 2);
@@ -1865,241 +1568,49 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 drawPosY = y + screenOffsetY;
               }
               
-              // Calculate destination size preserving aspect ratio of source sprite
-              // Scale factor: 1.2 base (reduced from 1.5 for ~20% smaller)
-              // Multi-tile buildings scale with their footprint
-              let scaleMultiplier = isMultiTile ? Math.max(buildingSize.width, buildingSize.height) : 1;
-              // Special scale adjustment for airport (no scaling - was scaled up 5%, now scaled down 5%)
-              if (buildingType === 'airport') {
-                scaleMultiplier *= 1.0; // Scale down 5% from previous 1.05
-              }
-              // Special scale adjustment for school (scaled up 5%)
-              if (buildingType === 'school') {
-                scaleMultiplier *= 1.05; // Scale up by 5%
-              }
-              // Special scale adjustment for university (scaled down 5%)
-              if (buildingType === 'university') {
-                scaleMultiplier *= 0.95; // Scale down by 5%
-              }
-              // Special scale adjustment for space_program (scaled up 6%)
-              if (buildingType === 'space_program') {
-                scaleMultiplier *= 1.06; // Scale up by 6% (was 10%, reduced 4%)
-              }
-              // Special scale adjustment for stadium (scaled down 30%)
-              if (buildingType === 'stadium') {
-                scaleMultiplier *= 0.7; // Scale down by 30%
-              }
-              // Special scale adjustment for water_tower (scaled down 10%)
-              if (buildingType === 'water_tower') {
-                scaleMultiplier *= 0.9; // Scale down by 10%
-              }
-              // Special scale adjustment for subway_station (scaled down 30%)
-              if (buildingType === 'subway_station') {
-                scaleMultiplier *= 0.7; // Scale down by 30%
-              }
-              // Special scale adjustment for police_station (scaled down 3%)
-              if (buildingType === 'police_station') {
-                scaleMultiplier *= 0.97; // Scale down by 3%
-              }
-              // Special scale adjustment for fire_station (scaled down 3%)
-              if (buildingType === 'fire_station') {
-                scaleMultiplier *= 0.97; // Scale down by 3%
-              }
-              // Special scale adjustment for hospital (scaled down 10%)
-              if (buildingType === 'hospital') {
-                scaleMultiplier *= 0.9; // Scale down by 10%
-              }
-              // Special scale adjustment for house_small (scaled up 8%)
-              if (buildingType === 'house_small') {
-                scaleMultiplier *= 1.08; // Scale up by 8%
-              }
-              // Special scale adjustment for apartments
-              if (buildingType === 'apartment_low') {
-                scaleMultiplier *= 1.15; // Scale up by 15%
-              }
-              if (buildingType === 'apartment_high') {
-                scaleMultiplier *= 1.38; // Scale up by 38% (20% + 15%)
-              }
-              // Special scale adjustment for office_high (scaled up 20%)
-              if (buildingType === 'office_high') {
-                scaleMultiplier *= 1.20;
-              }
-              // Special scale adjustment for dense mall variants (scaled down 15%)
-              if (buildingType === 'mall' && isDenseVariant) {
-                scaleMultiplier *= 0.85;
-              }
-              // Special scale adjustment for modern mall variants (scaled down 15%)
-              if (buildingType === 'mall' && isModernVariant) {
-                scaleMultiplier *= 0.85;
-              }
-              // Apply dense-specific scale if building uses dense variant and has custom scale in config
-              if (isDenseVariant && activePack.denseScales && buildingType in activePack.denseScales) {
-                scaleMultiplier *= activePack.denseScales[buildingType];
-              }
-              // Per-variant scale adjustments for specific dense variants
-              if (isDenseVariant && buildingType === 'office_high' && useDenseVariant && useDenseVariant.row === 2 && useDenseVariant.col === 1) {
-                scaleMultiplier *= 0.7; // Scale down row 2 col 1 office_high by 30%
-              }
-              // Apply modern-specific scale if building uses modern variant and has custom scale in config
-              if (isModernVariant && activePack.modernScales && buildingType in activePack.modernScales) {
-                scaleMultiplier *= activePack.modernScales[buildingType];
-              }
-              // Apply farm-specific scale if building uses farm variant and has custom scale in config
-              if (isFarmVariant && activePack.farmsScales && buildingType in activePack.farmsScales) {
-                scaleMultiplier *= activePack.farmsScales[buildingType];
-              }
-              // Apply shop-specific scale if building uses shop variant and has custom scale in config
-              if (isShopVariant && activePack.shopsScales && buildingType in activePack.shopsScales) {
-                scaleMultiplier *= activePack.shopsScales[buildingType];
-              }
-              // Apply station-specific scale if building uses station variant and has custom scale in config
-              if (isStationVariant && activePack.stationsScales && buildingType in activePack.stationsScales) {
-                scaleMultiplier *= activePack.stationsScales[buildingType];
-              }
-              // Apply parks-specific scale if building is from parks sheet and has custom scale in config
-              if (isParksBuilding && activePack.parksScales && buildingType in activePack.parksScales) {
-                scaleMultiplier *= activePack.parksScales[buildingType];
-              }
-              // Apply construction-specific scale if building is in construction phase (phase 2) and has custom scale
-              if (isConstructionPhase && activePack.constructionScales && buildingType in activePack.constructionScales) {
-                scaleMultiplier *= activePack.constructionScales[buildingType];
-              }
-              // Apply abandoned-specific scale if building is abandoned and has custom scale
-              if (isAbandoned && activePack.abandonedScales && buildingType in activePack.abandonedScales) {
-                scaleMultiplier *= activePack.abandonedScales[buildingType];
-              }
-              // Apply global scale from sprite pack if available
-              const globalScale = activePack.globalScale ?? 1;
-              const destWidth = w * 1.2 * scaleMultiplier * globalScale;
-              const aspectRatio = coords.sh / coords.sw;  // height/width ratio of source
+              // Calculate destination size
+              const destWidth = w * 1.2 * scaleMultiplier;
+              const aspectRatio = coords.sh / coords.sw;
               const destHeight = destWidth * aspectRatio;
               
-              // Position: center horizontally on tile/footprint, anchor bottom of sprite at tile bottom
-              let drawX = drawPosX + w / 2 - destWidth / 2;
+              // Calculate final position with offsets
+              const drawX = drawPosX + w / 2 - destWidth / 2 + offsets.horizontal * w;
               
-              // Apply per-sprite horizontal offset adjustments
-              const spriteKey = BUILDING_TO_SPRITE[buildingType];
-              let horizontalOffset = (spriteKey && SPRITE_HORIZONTAL_OFFSETS[spriteKey]) ? SPRITE_HORIZONTAL_OFFSETS[spriteKey] * w : 0;
-              // Apply parks-specific horizontal offset if available
-              if (isParksBuilding && activePack.parksHorizontalOffsets && buildingType in activePack.parksHorizontalOffsets) {
-                horizontalOffset = activePack.parksHorizontalOffsets[buildingType] * w;
-              }
-              // Apply farm-specific horizontal offset if available
-              if (isFarmVariant && activePack.farmsHorizontalOffsets && buildingType in activePack.farmsHorizontalOffsets) {
-                horizontalOffset = activePack.farmsHorizontalOffsets[buildingType] * w;
-              }
-              // Apply shop-specific horizontal offset if available
-              if (isShopVariant && activePack.shopsHorizontalOffsets && buildingType in activePack.shopsHorizontalOffsets) {
-                horizontalOffset = activePack.shopsHorizontalOffsets[buildingType] * w;
-              }
-              // Apply station-specific horizontal offset if available
-              if (isStationVariant && activePack.stationsHorizontalOffsets && buildingType in activePack.stationsHorizontalOffsets) {
-                horizontalOffset = activePack.stationsHorizontalOffsets[buildingType] * w;
-              }
-              drawX += horizontalOffset;
-              
-              // Simple positioning: sprite bottom aligns with tile/footprint bottom
-              // Add vertical push to compensate for transparent space at bottom of sprites
-              let drawY: number;
               let verticalPush: number;
               if (isMultiTile) {
-                // Multi-tile sprites need larger push to sit on their footprint
                 const footprintDepth = buildingSize.width + buildingSize.height - 2;
                 verticalPush = footprintDepth * h * 0.25;
               } else {
-                // Single-tile sprites also need push (sprites have transparent bottom padding)
                 verticalPush = destHeight * 0.15;
               }
-              // Use state-specific offset if available, then fall back to building-type or sprite-key offsets
-              // Priority: parks-construction > construction > abandoned > parks > dense > building-type > sprite-key
-              let extraOffset = 0;
-              if (isConstructionPhase && isParksBuilding && activePack.parksConstructionVerticalOffsets && buildingType in activePack.parksConstructionVerticalOffsets) {
-                // Parks building in construction phase (phase 2) - use parks construction offset
-                extraOffset = activePack.parksConstructionVerticalOffsets[buildingType] * h;
-              } else if (isConstructionPhase && activePack.constructionVerticalOffsets && buildingType in activePack.constructionVerticalOffsets) {
-                // Regular building in construction phase (phase 2) - use construction offset
-                extraOffset = activePack.constructionVerticalOffsets[buildingType] * h;
-              } else if (isAbandoned && activePack.abandonedVerticalOffsets && buildingType in activePack.abandonedVerticalOffsets) {
-                // Abandoned buildings may need different positioning than normal
-                extraOffset = activePack.abandonedVerticalOffsets[buildingType] * h;
-              } else if (isParksBuilding && activePack.parksVerticalOffsets && buildingType in activePack.parksVerticalOffsets) {
-                // Parks buildings may need specific positioning
-                extraOffset = activePack.parksVerticalOffsets[buildingType] * h;
-              } else if (isDenseVariant && activePack.denseVerticalOffsets && buildingType in activePack.denseVerticalOffsets) {
-                // Dense variants may need different positioning than normal
-                extraOffset = activePack.denseVerticalOffsets[buildingType] * h;
-                // Per-variant offset adjustments for specific dense variants
-                if (buildingType === 'mall' && useDenseVariant && useDenseVariant.row === 2 && useDenseVariant.col === 4) {
-                  extraOffset += 0.5 * h; // Shift row 2 col 4 mall down 0.5 tiles
-                }
-                if (buildingType === 'office_high' && useDenseVariant && useDenseVariant.row === 2 && useDenseVariant.col === 1) {
-                  extraOffset += 0.1 * h; // Shift row 2 col 1 office_high down 0.1 tiles
-                }
-              } else if (isModernVariant && activePack.modernVerticalOffsets && buildingType in activePack.modernVerticalOffsets) {
-                // Modern variants may need different positioning than normal
-                extraOffset = activePack.modernVerticalOffsets[buildingType] * h;
-              } else if (isFarmVariant && activePack.farmsVerticalOffsets && buildingType in activePack.farmsVerticalOffsets) {
-                // Farm variants may need different positioning than normal
-                extraOffset = activePack.farmsVerticalOffsets[buildingType] * h;
-              } else if (isShopVariant && activePack.shopsVerticalOffsets && buildingType in activePack.shopsVerticalOffsets) {
-                // Shop variants may need different positioning than normal
-                extraOffset = activePack.shopsVerticalOffsets[buildingType] * h;
-              } else if (isStationVariant && activePack.stationsVerticalOffsets && buildingType in activePack.stationsVerticalOffsets) {
-                // Station variants may need different positioning than normal
-                extraOffset = activePack.stationsVerticalOffsets[buildingType] * h;
-              } else if (activePack.buildingVerticalOffsets && buildingType in activePack.buildingVerticalOffsets) {
-                // Building-type-specific offset (for buildings sharing sprites but needing different positioning)
-                extraOffset = activePack.buildingVerticalOffsets[buildingType] * h;
-              } else if (spriteKey && SPRITE_VERTICAL_OFFSETS[spriteKey]) {
-                extraOffset = SPRITE_VERTICAL_OFFSETS[spriteKey] * h;
-              }
-              // Special vertical offset adjustment for hospital (shift up 0.1 tiles)
-              if (buildingType === 'hospital') {
-                extraOffset -= 0.1 * h; // Shift up by 0.1 tiles
-              }
-              verticalPush += extraOffset;
+              verticalPush += offsets.vertical * h;
               
-              drawY = drawPosY + h - destHeight + verticalPush;
+              const drawY = drawPosY + h - destHeight + verticalPush;
               
-              // Check if building should be horizontally flipped
-              // Some buildings are mirrored by default and the flip flag inverts that
-              // Note: marina and pier are NOT in this list - they face the default direction
-              const defaultMirroredBuildings: string[] = [];
-              const isDefaultMirrored = defaultMirroredBuildings.includes(buildingType);
-              
-              // Check if this is a waterfront asset - these use water-facing logic set at build time
+              // Determine flip based on road adjacency or random
               const isWaterfrontAsset = requiresWaterAdjacency(buildingType);
-              
-              // PERF: Determine flip based on cached road adjacency (O(1) lookup instead of O(n) per frame)
-              // Buildings should face roads when possible, otherwise fall back to random
               const shouldRoadMirror = (() => {
-                if (isWaterfrontAsset) return false; // Waterfront buildings use water-facing logic
+                if (isWaterfrontAsset) return false;
                 
-                // PERF: Use pre-computed road adjacency from tile metadata cache
                 const originMetadata = getTileMetadata(tile.x, tile.y);
                 if (originMetadata?.hasAdjacentRoad) {
-                  // Face the road
                   return originMetadata.shouldFlipForRoad;
                 }
                 
-                // No road adjacent - fall back to deterministic random mirroring for visual variety
                 const mirrorSeed = (tile.x * 47 + tile.y * 83) % 100;
                 return mirrorSeed < 50;
               })();
               
-              // Final flip decision: combine default mirror state, explicit flip flag, and road/random mirror
-              const baseFlipped = isDefaultMirrored ? !tile.building.flipped : tile.building.flipped === true;
-              const isFlipped = baseFlipped !== shouldRoadMirror; // XOR: if both true or both false, no flip; if one true, flip
+              const baseFlipped = tile.building.flipped === true;
+              const isFlipped = baseFlipped !== shouldRoadMirror;
               
               if (isFlipped) {
-                // Apply horizontal flip around the center of the sprite
                 ctx.save();
                 const centerX = Math.round(drawX + destWidth / 2);
                 ctx.translate(centerX, 0);
                 ctx.scale(-1, 1);
                 ctx.translate(-centerX, 0);
                 
-                // Draw the flipped sprite
                 ctx.drawImage(
                   filteredSpriteSheet,
                   coords.sx, coords.sy, coords.sw, coords.sh,
@@ -2109,12 +1620,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 
                 ctx.restore();
               } else {
-                // Draw the sprite with correct aspect ratio (normal buildings)
                 ctx.drawImage(
                   filteredSpriteSheet,
-                  coords.sx, coords.sy, coords.sw, coords.sh,  // Source: exact tile from sprite sheet
-                  Math.round(drawX), Math.round(drawY),        // Destination position
-                  Math.round(destWidth), Math.round(destHeight) // Destination size (preserving aspect ratio)
+                  coords.sx, coords.sy, coords.sw, coords.sh,
+                  Math.round(drawX), Math.round(drawY),
+                  Math.round(destWidth), Math.round(destHeight)
                 );
               }
             }
@@ -3567,40 +3077,50 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           }}>
             <DialogContent className="max-w-[400px]">
               <DialogHeader>
-                <DialogTitle>City Discovered!</DialogTitle>
-                <DialogDescription>
-                  Your road has reached the {cityConnectionDialog.direction} border! You&apos;ve discovered {city.name}.
-                </DialogDescription>
+                <T>
+                  <DialogTitle>City Discovered!</DialogTitle>
+                </T>
+                <T>
+                  <DialogDescription>
+                    Your road has reached the <Var>{cityConnectionDialog.direction}</Var> border! You&apos;ve discovered <Var>{city.name}</Var>.
+                  </DialogDescription>
+                </T>
               </DialogHeader>
               <div className="flex flex-col gap-4 mt-4">
-                <div className="text-sm text-muted-foreground">
-                  Connecting to {city.name} will establish a trade route, providing:
-                  <ul className="list-disc list-inside mt-2 space-y-1">
-                    <li>$5,000 one-time bonus</li>
-                    <li>$200/month additional income</li>
-                  </ul>
-                </div>
+                <T>
+                  <div className="text-sm text-muted-foreground">
+                    Connecting to <Var>{city.name}</Var> will establish a trade route, providing:
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li>$5,000 one-time bonus</li>
+                      <li>$200/month additional income</li>
+                    </ul>
+                  </div>
+                </T>
                 <div className="flex gap-2 justify-end">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setCityConnectionDialog(null);
-                      setDragStartTile(null);
-                      setDragEndTile(null);
-                    }}
-                  >
-                    Maybe Later
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      connectToCity(city.id);
-                      setCityConnectionDialog(null);
-                      setDragStartTile(null);
-                      setDragEndTile(null);
-                    }}
-                  >
-                    Connect to {city.name}
-                  </Button>
+                  <T>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setCityConnectionDialog(null);
+                        setDragStartTile(null);
+                        setDragEndTile(null);
+                      }}
+                    >
+                      Maybe Later
+                    </Button>
+                  </T>
+                  <T>
+                    <Button
+                      onClick={() => {
+                        connectToCity(city.id);
+                        setCityConnectionDialog(null);
+                        setDragStartTile(null);
+                        setDragEndTile(null);
+                      }}
+                    >
+                      Connect to <Var>{city.name}</Var>
+                    </Button>
+                  </T>
                 </div>
               </div>
             </DialogContent>
@@ -3619,28 +3139,39 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           const waterCheck = getWaterAdjacency(grid, hoveredTile.x, hoveredTile.y, size.width, size.height, gridSize);
           isWaterfrontPlacementInvalid = !waterCheck.hasWater;
         }
-        
+
+        const toolName = m(TOOL_INFO[selectedTool].name);
+
         return (
           <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-md text-sm ${
-            isWaterfrontPlacementInvalid 
-              ? 'bg-destructive/90 border border-destructive-foreground/30 text-destructive-foreground' 
+            isWaterfrontPlacementInvalid
+              ? 'bg-destructive/90 border border-destructive-foreground/30 text-destructive-foreground'
               : 'bg-card/90 border border-border'
           }`}>
             {isDragging && dragStartTile && dragEndTile && showsDragGrid ? (
               <>
-                {m(TOOL_INFO[selectedTool].name)} - {Math.abs(dragEndTile.x - dragStartTile.x) + 1}x{Math.abs(dragEndTile.y - dragStartTile.y) + 1} area
-                {TOOL_INFO[selectedTool].cost > 0 && ` - $${TOOL_INFO[selectedTool].cost * (Math.abs(dragEndTile.x - dragStartTile.x) + 1) * (Math.abs(dragEndTile.y - dragStartTile.y) + 1)}`}
+                {(() => {
+                  const areaWidth = Math.abs(dragEndTile.x - dragStartTile.x) + 1;
+                  const areaHeight = Math.abs(dragEndTile.y - dragStartTile.y) + 1;
+                  const totalCost = TOOL_INFO[selectedTool].cost * areaWidth * areaHeight;
+                  return (
+                    <>
+                      {gt('{toolName} - {width}x{height} area', { toolName, width: areaWidth, height: areaHeight })}
+                      {TOOL_INFO[selectedTool].cost > 0 && ` - $${totalCost}`}
+                    </>
+                  );
+                })()}
               </>
             ) : isWaterfrontPlacementInvalid ? (
               <>
-                {m(TOOL_INFO[selectedTool].name)} must be placed next to water
+                {gt('{toolName} must be placed next to water', { toolName })}
               </>
             ) : (
               <>
-                {m(TOOL_INFO[selectedTool].name)} at ({hoveredTile.x}, {hoveredTile.y})
+                {gt('{toolName} at ({x}, {y})', { toolName, x: hoveredTile.x, y: hoveredTile.y })}
                 {TOOL_INFO[selectedTool].cost > 0 && ` - $${TOOL_INFO[selectedTool].cost}`}
-                {showsDragGrid && ' - Drag to zone area'}
-                {supportsDragPlace && !showsDragGrid && ' - Drag to place'}
+                {showsDragGrid && gt(' - Drag to zone area')}
+                {supportsDragPlace && !showsDragGrid && gt(' - Drag to place')}
               </>
             )}
           </div>
@@ -3674,21 +3205,21 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                   <SafetyIcon size={14} className="text-blue-400" />
                 )}
                 <span className="text-xs font-semibold text-sidebar-foreground">
-                  {hoveredIncident.type === 'fire' 
+                  {hoveredIncident.type === 'fire'
                     ? getFireNameForTile(hoveredIncident.x, hoveredIncident.y)
-                    : hoveredIncident.crimeType 
+                    : hoveredIncident.crimeType
                       ? getCrimeName(hoveredIncident.crimeType)
-                      : 'Incident'}
+                      : gt('Incident')}
                 </span>
               </div>
               
               {/* Description */}
               <p className="text-[11px] text-muted-foreground leading-tight">
-                {hoveredIncident.type === 'fire' 
+                {hoveredIncident.type === 'fire'
                   ? getFireDescriptionForTile(hoveredIncident.x, hoveredIncident.y)
-                  : hoveredIncident.crimeType 
+                  : hoveredIncident.crimeType
                     ? getCrimeDescription(hoveredIncident.crimeType)
-                    : 'Incident reported.'}
+                    : gt('Incident reported.')}
               </p>
               
               {/* Location */}
