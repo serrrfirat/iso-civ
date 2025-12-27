@@ -172,7 +172,7 @@ export const StatsPanel = React.memo(function StatsPanel() {
 // ============================================================================
 
 export const TopBar = React.memo(function TopBar() {
-  const { state, setSpeed, setTaxRate, isSaving, visualHour } = useGame();
+  const { state, setSpeed, setTaxRate, visualHour } = useGame();
   const { stats, year, month, day, speed, taxRate, cityName } = state;
   const m = useMessages();
   
@@ -185,9 +185,6 @@ export const TopBar = React.memo(function TopBar() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-foreground font-semibold text-sm">{cityName}</h1>
-            {isSaving && (
-              <span className="text-muted-foreground text-xs italic animate-pulse">Saving...</span>
-            )}
           </div>
           <div className="flex items-center gap-2 text-muted-foreground text-xs font-mono tabular-nums">
             <Tooltip>

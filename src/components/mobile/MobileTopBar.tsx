@@ -116,7 +116,7 @@ export function MobileTopBar({
   onCloseTile: () => void;
   onExit?: () => void;
 }) {
-  const { state, setSpeed, setTaxRate, isSaving, visualHour, saveCity } = useGame();
+  const { state, setSpeed, setTaxRate, visualHour, saveCity } = useGame();
   const { stats, year, month, speed, taxRate, cityName } = state;
   const [showDetails, setShowDetails] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
@@ -151,9 +151,6 @@ export function MobileTopBar({
                 <span className="text-foreground font-semibold text-xs truncate max-w-[80px]">
                   {cityName}
                 </span>
-                {isSaving && (
-                  <span className="text-[8px] text-muted-foreground animate-pulse">•</span>
-                )}
               </div>
               <span className="text-muted-foreground text-[10px] font-mono">
                 {monthNames[month - 1]} {year}
