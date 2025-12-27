@@ -89,8 +89,12 @@ export interface LightingSystemConfig {
   isMobile: boolean;
   isPanningRef: React.MutableRefObject<boolean>;
   isPinchZoomingRef: React.MutableRefObject<boolean>;
+  /** Ref to track desktop wheel zooming state */
+  isWheelZoomingRef: React.MutableRefObject<boolean>;
   /** Boolean state value to trigger re-render when panning stops */
   isPanning: boolean;
+  /** Boolean state value to trigger re-render when wheel zooming stops */
+  isWheelZooming: boolean;
 }
 
 // ============================================================================
@@ -317,7 +321,9 @@ export function useLightingSystem(config: LightingSystemConfig): void {
     isMobile,
     isPanningRef,
     isPinchZoomingRef,
+    isWheelZoomingRef,
     isPanning,
+    isWheelZooming,
   } = config;
 
   useEffect(() => {
@@ -328,7 +334,8 @@ export function useLightingSystem(config: LightingSystemConfig): void {
     
     // PERF: Hide lighting during panning/zooming for better performance
     // This prevents ugly light sampling artifacts and improves pan smoothness
-    if (isPanningRef.current || isPinchZoomingRef.current) {
+    // On desktop, also hide during wheel zoom (isWheelZoomingRef)
+    if (isPanningRef.current || isPinchZoomingRef.current || isWheelZoomingRef.current) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;
@@ -404,6 +411,6 @@ export function useLightingSystem(config: LightingSystemConfig): void {
     
   // PERF: Use worldStateRef instead of grid/gridSize in deps to avoid re-running on every simulation tick
   // Lighting only needs to update when visualHour changes or viewport moves, not every time grid state changes
-  // Note: isPanning (boolean state) is in deps so the effect re-runs when panning stops; refs alone don't trigger re-renders
-  }, [canvasRef, worldStateRef, visualHour, offset, zoom, canvasWidth, canvasHeight, isMobile, isPanningRef, isPinchZoomingRef, isPanning]);
+  // Note: isPanning/isWheelZooming (boolean states) are in deps so the effect re-runs when panning/zooming stops; refs alone don't trigger re-renders
+  }, [canvasRef, worldStateRef, visualHour, offset, zoom, canvasWidth, canvasHeight, isMobile, isPanningRef, isPinchZoomingRef, isWheelZoomingRef, isPanning, isWheelZooming]);
 }

@@ -8,7 +8,7 @@
 
 import { Building, BuildingType } from '@/types/game';
 import { SpritePack, getActiveSpritePack, getSpriteCoords, BUILDING_TO_SPRITE, SPRITE_VERTICAL_OFFSETS, SPRITE_HORIZONTAL_OFFSETS } from '@/lib/renderConfig';
-import { getBuildingSize } from '@/lib/simulation';
+import { getBuildingSize, requiresWaterAdjacency } from '@/lib/simulation';
 import { TILE_WIDTH, TILE_HEIGHT } from './types';
 
 // ============================================================================
@@ -689,8 +689,11 @@ export function getSpriteRenderInfo(
   
   const drawY = drawPosY + h - destHeight + verticalPush;
   
-  // Determine flip
+  // Determine flip - waterfront assets should never be mirrored
+  const isWaterfrontAsset = requiresWaterAdjacency(buildingType);
   const shouldRoadMirror = (() => {
+    if (isWaterfrontAsset) return false;
+    
     if (options.hasAdjacentRoad) {
       return options.shouldFlipForRoad ?? false;
     }

@@ -169,8 +169,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const [offset, setOffset] = useState({ x: isMobile ? 200 : 620, y: isMobile ? 100 : 160 });
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [isWheelZooming, setIsWheelZooming] = useState(false); // State to trigger re-render when wheel zooming stops
   const isPanningRef = useRef(false); // Ref for animation loop to check panning state
   const isPinchZoomingRef = useRef(false); // Ref for animation loop to check pinch zoom state
+  const isWheelZoomingRef = useRef(false); // Ref for animation loop to check desktop wheel zoom state
+  const wheelZoomTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Timeout to detect end of wheel zoom
   const zoomRef = useRef(isMobile ? 0.6 : 1); // Ref for animation loop to check zoom level
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const panCandidateRef = useRef<{ startX: number; startY: number; gridX: number; gridY: number } | null>(null);
@@ -2509,7 +2512,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     isMobile,
     isPanningRef,
     isPinchZoomingRef,
+    isWheelZoomingRef,
     isPanning,
+    isWheelZooming,
   });
   
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -2846,6 +2851,19 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, zoom + zoomDelta));
     
     if (newZoom === zoom) return;
+    
+    // PERF: Track wheel zooming state to disable lights during zoom (like mobile pinch zoom)
+    if (!isWheelZoomingRef.current) {
+      isWheelZoomingRef.current = true;
+      setIsWheelZooming(true);
+    }
+    if (wheelZoomTimeoutRef.current) {
+      clearTimeout(wheelZoomTimeoutRef.current);
+    }
+    wheelZoomTimeoutRef.current = setTimeout(() => {
+      isWheelZoomingRef.current = false;
+      setIsWheelZooming(false); // Trigger re-render to restore lights
+    }, 150); // Wait 150ms after last wheel event to consider zooming complete
     
     // World position under the mouse before zoom
     // screen = world * zoom + offset → world = (screen - offset) / zoom
