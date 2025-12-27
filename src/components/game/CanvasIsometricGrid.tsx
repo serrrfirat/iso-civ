@@ -3212,7 +3212,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           </div>
         );
       })()}
-      
     </div>
   );
 }
