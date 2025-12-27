@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useLocale, useSetLocale } from 'gt-next/client';
 import {
   DropdownMenu,
@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 // Language configuration with display names
 const LANGUAGES = [
@@ -70,6 +71,8 @@ interface LanguageSelectorProps {
   variant?: 'default' | 'outline' | 'ghost' | 'secondary';
   /** Size of the icon */
   iconSize?: number;
+  /** Use drawer style instead of dropdown (for mobile) */
+  useDrawer?: boolean;
 }
 
 export function LanguageSelector({ 
@@ -77,12 +80,66 @@ export function LanguageSelector({
   className = '',
   variant = 'ghost',
   iconSize = 16,
+  useDrawer = false,
 }: LanguageSelectorProps) {
   const locale = useLocale();
   const setLocale = useSetLocale();
+  const [isOpen, setIsOpen] = useState(false);
   
   const currentLanguage = LANGUAGES.find(l => l.code === locale) || LANGUAGES[0];
+
+  const handleSelectLanguage = (code: string) => {
+    setLocale(code);
+    setIsOpen(false);
+  };
+
+  // Drawer mode for mobile
+  if (useDrawer) {
+    return (
+      <>
+        <button
+          onClick={() => setIsOpen(true)}
+          className={`h-6 w-5 p-0 m-0 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors ${className}`}
+          title="Change Language"
+        >
+          <GlobeIcon size={iconSize} />
+        </button>
+
+        {isOpen && (
+          <div 
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsOpen(false)}
+          >
+            <Card
+              className="absolute bottom-0 left-0 right-0 rounded-t-xl rounded-b-none border-b-0 safe-area-bottom"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4">
+                <div className="text-xs text-muted-foreground uppercase tracking-wider mb-3">
+                  Select Language
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {LANGUAGES.map((language) => (
+                    <Button
+                      key={language.code}
+                      variant={locale === language.code ? 'default' : 'ghost'}
+                      size="sm"
+                      className="h-10 w-full text-xs justify-center"
+                      onClick={() => handleSelectLanguage(language.code)}
+                    >
+                      {language.name}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+      </>
+    );
+  }
   
+  // Standard dropdown mode
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
