@@ -11,7 +11,7 @@ import React, {
 import {
   MultiplayerProvider,
   createMultiplayerProvider,
-} from '@/lib/multiplayer/yjsProvider';
+} from '@/lib/multiplayer/supabaseProvider';
 import {
   GameAction,
   GameActionInput,
@@ -21,6 +21,16 @@ import {
   RoomData,
 } from '@/lib/multiplayer/types';
 import { GameState } from '@/types/game';
+
+// Generate a random 5-character room code
+function generateRoomCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 5; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
 
 interface MultiplayerContextValue {
   // Connection state
@@ -87,31 +97,16 @@ export function MultiplayerContextProvider({
       setError(null);
 
       try {
-        // Create room via API (uses Edge Config for signaling only - no state storage)
-        const response = await fetch('/api/room', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            cityName,
-            hostId: `host-${Date.now()}`,
-          }),
-        });
+        // Generate room code (no API needed - Supabase channels are created on-demand)
+        const newRoomCode = generateRoomCode();
 
-        if (!response.ok) {
-          const { error } = await response.json();
-          throw new Error(error || 'Failed to create room');
-        }
-
-        const { room } = await response.json();
-        const newRoomCode = room.code;
-
-        // Create multiplayer provider with game state for P2P sharing
+        // Create multiplayer provider
         const provider = await createMultiplayerProvider({
           roomCode: newRoomCode,
           cityName,
           playerName,
           isHost: true,
-          initialGameState: gameState, // Will be sent to guests via WebRTC
+          initialGameState: gameState,
           onConnectionChange: (connected, peerCount) => {
             setConnectionState(connected ? 'connected' : 'disconnected');
           },
@@ -149,32 +144,11 @@ export function MultiplayerContextProvider({
       try {
         const normalizedCode = code.toUpperCase();
         
-        // Verify room exists via API (retry a couple times for Edge Config propagation)
-        let roomData = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const checkResponse = await fetch(`/api/room?code=${normalizedCode}`);
-          if (checkResponse.ok) {
-            const data = await checkResponse.json();
-            roomData = data.room;
-            break;
-          } else if (checkResponse.status === 404 && attempt < 2) {
-            // Room not found - might be Edge Config propagation delay, wait and retry
-            console.log(`[Multiplayer] Room not found, retrying... (${attempt + 1}/3)`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-          } else {
-            const { error } = await checkResponse.json();
-            throw new Error(error || 'Room not found');
-          }
-        }
-        
-        if (!roomData) {
-          throw new Error('Room not found after retries');
-        }
-        
         // Create multiplayer provider as guest
+        // Supabase channels work directly - no need to verify room exists
         const provider = await createMultiplayerProvider({
           roomCode: normalizedCode,
-          cityName: roomData.cityName || 'Co-op City',
+          cityName: 'Co-op City',
           playerName,
           isHost: false,
           onConnectionChange: (connected, peerCount) => {
@@ -188,7 +162,6 @@ export function MultiplayerContextProvider({
               onRemoteActionRef.current(action);
             }
           },
-          // Game state will be received via WebRTC from host
           onStateReceived: (state) => {
             setInitialState(state as GameState);
           },
@@ -202,9 +175,9 @@ export function MultiplayerContextProvider({
         // Return room data
         const room: RoomData = {
           code: normalizedCode,
-          hostId: roomData.hostId || '',
-          cityName: roomData.cityName || 'Co-op City',
-          createdAt: roomData.createdAt || Date.now(),
+          hostId: '',
+          cityName: 'Co-op City',
+          createdAt: Date.now(),
           playerCount: 1,
         };
 

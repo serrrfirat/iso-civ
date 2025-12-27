@@ -8,7 +8,7 @@ interface BaseAction {
   playerId: string;
 }
 
-// Game actions that get synced via Y.js
+// Game actions that get synced via Supabase Realtime
 export type GameAction =
   | (BaseAction & { type: 'place'; x: number; y: number; tool: Tool })
   | (BaseAction & { type: 'bulldoze'; x: number; y: number })
@@ -79,26 +79,7 @@ export interface RoomData {
   playerCount: number;
 }
 
-// Signaling message types for WebRTC handshake
-export type SignalType = 'offer' | 'answer' | 'ice-candidate';
-
-export interface SignalMessage {
-  type: SignalType;
-  from: string;
-  to: string;
-  payload: RTCSessionDescriptionInit | RTCIceCandidateInit;
-  timestamp: number;
-}
-
-// Y.js document structure types
-export interface YDocMeta {
-  hostId: string;
-  createdAt: number;
-  cityName: string;
-  roomCode: string;
-}
-
-// Awareness state for each player
+// Awareness state for each player (used in Supabase Presence)
 export interface AwarenessState {
   player: Player;
   cursor?: { x: number; y: number };
