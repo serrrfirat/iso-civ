@@ -736,12 +736,37 @@ export function useVehicleSystems(
     
     const speedMultiplier = currentSpeed === 0 ? 0 : currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2.5 : 4;
     
-    const baseMaxCars = 600;
-    const maxCars = Math.min(baseMaxCars, Math.max(15, Math.floor(currentGridSize * 1.25)));
+    // Scale car count with road tiles (similar to pedestrians) for proper density on large maps
+    // Use cached road tile count for performance
+    const currentGridVersion = gridVersionRef.current;
+    let roadTileCount: number;
+    if (cachedRoadTileCountRef.current.gridVersion === currentGridVersion) {
+      roadTileCount = cachedRoadTileCountRef.current.count;
+    } else {
+      roadTileCount = 0;
+      for (let y = 0; y < currentGridSize; y++) {
+        for (let x = 0; x < currentGridSize; x++) {
+          const type = currentGrid[y][x].building.type;
+          if (type === 'road' || type === 'bridge') {
+            roadTileCount++;
+          }
+        }
+      }
+      cachedRoadTileCountRef.current = { count: roadTileCount, gridVersion: currentGridVersion };
+    }
+    
+    // Target ~0.5 cars per road tile on desktop, ~0.35 on mobile (for performance)
+    // This ensures large maps with more roads get proportionally more cars
+    const carDensity = isMobile ? 0.35 : 0.5;
+    const targetCars = Math.floor(roadTileCount * carDensity);
+    // Cap at 800 for performance, minimum 15 for small cities
+    const maxCars = Math.min(800, Math.max(15, targetCars));
+    
     carSpawnTimerRef.current -= delta;
     if (carsRef.current.length < maxCars && carSpawnTimerRef.current <= 0) {
-      // Spawn cars at a moderate rate
-      const carsToSpawn = Math.min(2, maxCars - carsRef.current.length);
+      // Spawn cars at a moderate rate - spawn more at once on large maps to catch up faster
+      const deficit = maxCars - carsRef.current.length;
+      const carsToSpawn = Math.min(deficit > 50 ? 4 : 2, deficit);
       let spawnedCount = 0;
       for (let i = 0; i < carsToSpawn; i++) {
         if (spawnRandomCar()) {
@@ -944,7 +969,7 @@ export function useVehicleSystems(
     }
     
     carsRef.current = updatedCars;
-  }, [worldStateRef, carsRef, carSpawnTimerRef, spawnRandomCar, trafficLightTimerRef, isIntersection, isMobile, trainsRef]);
+  }, [worldStateRef, carsRef, carSpawnTimerRef, spawnRandomCar, trafficLightTimerRef, isIntersection, isMobile, trainsRef, gridVersionRef, cachedRoadTileCountRef]);
 
   const updatePedestrians = useCallback((delta: number) => {
     const { grid: currentGrid, gridSize: currentGridSize, speed: currentSpeed, zoom: currentZoom } = worldStateRef.current;
