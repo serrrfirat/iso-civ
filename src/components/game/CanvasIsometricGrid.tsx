@@ -33,24 +33,12 @@ import {
   WorldRenderState,
 } from '@/components/game/types';
 import {
-  TRAFFIC_LIGHT_MIN_ZOOM,
-  DIRECTION_ARROWS_MIN_ZOOM,
-  MEDIAN_PLANTS_MIN_ZOOM,
-  LANE_MARKINGS_MIN_ZOOM,
-  SIDEWALK_MIN_ZOOM,
-  SIDEWALK_MIN_ZOOM_MOBILE,
   SKIP_SMALL_ELEMENTS_ZOOM_THRESHOLD,
   ZOOM_MIN,
   ZOOM_MAX,
   WATER_ASSET_PATH,
   AIRPLANE_SPRITE_SRC,
   TRAIN_MIN_ZOOM,
-  HELICOPTER_MIN_ZOOM,
-  SMOG_MIN_ZOOM,
-  FIREWORK_MIN_ZOOM,
-  NON_LIT_BUILDING_TYPES,
-  RESIDENTIAL_BUILDING_TYPES,
-  COMMERCIAL_BUILDING_TYPES,
 } from '@/components/game/constants';
 import {
   gridToScreen,
@@ -89,23 +77,9 @@ import { useSeaplaneSystem, SeaplaneSystemRefs, SeaplaneSystemState } from '@/co
 import { useEffectsSystems, EffectsSystemRefs, EffectsSystemState } from '@/components/game/effectsSystems';
 import {
   analyzeMergedRoad,
-  getTrafficLightState,
-  drawTrafficLight,
-  getTrafficFlowDirection,
-  drawCrosswalks,
-  ROAD_COLORS,
-  drawRoadArrow,
 } from '@/components/game/trafficSystem';
 import { drawRoad, RoadDrawingOptions } from '@/components/game/roadDrawing';
 import {
-  BRIDGE_STYLES,
-  getBridgeStyle,
-  getBridgeDeckColor,
-  calculateBridgeEdges,
-  getBridgeWidthRatio,
-  getRailBridgeYOffset,
-  parseBridgeProperties,
-  drawPillar as drawBridgePillar,
   drawBridgeTile,
   drawSuspensionBridgeTowers,
   drawSuspensionBridgeOverlay,
@@ -115,14 +89,10 @@ import {
   drawRailTrack,
   drawRailTracksOnly,
   countRailTiles,
-  isRailroadCrossing,
   findRailroadCrossings,
   drawRailroadCrossing,
   getCrossingStateForTile,
   GATE_ANIMATION_SPEED,
-  TRACK_GAUGE_RATIO,
-  TRACK_SEPARATION_RATIO,
-  RAIL_COLORS,
 } from '@/components/game/railSystem';
 import {
   spawnTrain,
