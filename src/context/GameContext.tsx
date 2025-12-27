@@ -3,7 +3,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react';
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
-import { compressAsync } from '@/lib/saveWorkerManager';
+import { serializeAndCompressAsync } from '@/lib/saveWorkerManager';
 import {
   Budget,
   BuildingType,
@@ -339,7 +339,7 @@ function tryFreeLocalStorageSpace(): void {
 
 // Save game state to localStorage with lz-string compression
 // Compression typically reduces size by 60-80%, allowing much larger cities
-// PERF: Uses Web Worker for compression to avoid blocking main thread
+// PERF: Uses Web Worker for BOTH serialization and compression - no main thread blocking!
 async function saveGameStateAsync(state: GameState): Promise<void> {
   if (typeof window === 'undefined') return;
   
@@ -350,12 +350,11 @@ async function saveGameStateAsync(state: GameState): Promise<void> {
   }
   
   try {
-    // Step 1: Optimize and serialize (done on main thread, relatively fast)
+    // Step 1: Optimize state (fast, stays on main thread)
     const optimizedState = optimizeStateForSave(state);
-    const serialized = JSON.stringify(optimizedState);
     
-    // Step 2: Compress using Web Worker (off main thread!)
-    const compressed = await compressAsync(serialized);
+    // Step 2: Serialize + Compress using Web Worker (BOTH operations off main thread!)
+    const compressed = await serializeAndCompressAsync(optimizedState);
     
     // Check size limit
     if (compressed.length > 5 * 1024 * 1024) {
@@ -363,7 +362,7 @@ async function saveGameStateAsync(state: GameState): Promise<void> {
       return;
     }
     
-    // Step 3: Write to localStorage
+    // Step 3: Write to localStorage (fast)
     try {
       localStorage.setItem(STORAGE_KEY, compressed);
     } catch (quotaError) {
@@ -567,13 +566,13 @@ function saveSavedCitiesIndex(cities: SavedCityMeta[]): void {
 }
 
 // Save a city state to localStorage with compression
-// PERF: Uses Web Worker for compression to avoid blocking main thread
+// PERF: Uses Web Worker for BOTH serialization and compression - no main thread blocking!
 async function saveCityStateAsync(cityId: string, state: GameState): Promise<void> {
   if (typeof window === 'undefined') return;
   
   try {
-    const serialized = JSON.stringify(state);
-    const compressed = await compressAsync(serialized);
+    // Both JSON.stringify and compression happen in the worker
+    const compressed = await serializeAndCompressAsync(state);
     
     if (compressed.length > 5 * 1024 * 1024) {
       console.error('Compressed city state too large to save');
@@ -751,21 +750,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         stateChangedRef.current = false;
         setIsSaving(true);
         
-        // PERF: Use setTimeout to yield before the expensive clone operation
-        setTimeout(() => {
-          // Use structuredClone when available (faster than JSON parse/stringify)
-          const stateToSave = typeof structuredClone === 'function' 
-            ? structuredClone(latestStateRef.current)
-            : JSON.parse(JSON.stringify(latestStateRef.current));
-          
-          // saveGameState breaks up work internally with setTimeout
-          saveGameState(stateToSave, () => {
-            lastSaveTimeRef.current = Date.now();
-            setHasExistingGame(true);
-            setIsSaving(false);
-            saveInProgressRef.current = false;
-          });
-        }, 0);
+        // PERF: No need for structuredClone here - the worker handles everything
+        // postMessage internally clones the data when sending to the worker
+        saveGameState(latestStateRef.current, () => {
+          lastSaveTimeRef.current = Date.now();
+          setHasExistingGame(true);
+          setIsSaving(false);
+          saveInProgressRef.current = false;
+        });
       }, 5000); // Save every 5 seconds
     }, 200); // Wait 200ms for initial load
     
