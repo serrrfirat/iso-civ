@@ -12,6 +12,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useCheatCodes } from '@/hooks/useCheatCodes';
 import { VinnieDialog } from '@/components/VinnieDialog';
 import { CommandMenu } from '@/components/ui/CommandMenu';
+import { TipToast } from '@/components/ui/TipToast';
+import { useTipSystem } from '@/hooks/useTipSystem';
 
 // Import game components
 import { OverlayMode } from '@/components/game/types';
@@ -48,6 +50,14 @@ export default function Game({ onExit }: { onExit?: () => void }) {
     setShowVinnieDialog,
     clearTriggeredCheat,
   } = useCheatCodes();
+  
+  // Tip system for helping new players
+  const {
+    currentTip,
+    isVisible: isTipVisible,
+    onContinue: onTipContinue,
+    onSkipAll: onTipSkipAll,
+  } = useTipSystem(state);
   const initialSelectedToolRef = useRef<Tool | null>(null);
   const previousSelectedToolRef = useRef<Tool | null>(null);
   const hasCapturedInitialTool = useRef(false);
@@ -242,6 +252,14 @@ export default function Game({ onExit }: { onExit?: () => void }) {
           {state.activePanel === 'settings' && <SettingsPanel />}
           
           <VinnieDialog open={showVinnieDialog} onOpenChange={setShowVinnieDialog} />
+          
+          {/* Tip Toast for helping new players */}
+          <TipToast
+            message={currentTip || ''}
+            isVisible={isTipVisible}
+            onContinue={onTipContinue}
+            onSkipAll={onTipSkipAll}
+          />
         </div>
       </TooltipProvider>
     );
@@ -278,6 +296,14 @@ export default function Game({ onExit }: { onExit?: () => void }) {
         
         <VinnieDialog open={showVinnieDialog} onOpenChange={setShowVinnieDialog} />
         <CommandMenu />
+        
+        {/* Tip Toast for helping new players */}
+        <TipToast
+          message={currentTip || ''}
+          isVisible={isTipVisible}
+          onContinue={onTipContinue}
+          onSkipAll={onTipSkipAll}
+        />
       </div>
     </TooltipProvider>
   );
