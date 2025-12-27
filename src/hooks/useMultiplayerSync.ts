@@ -148,7 +148,8 @@ export function useMultiplayerSync() {
   }, [multiplayer]);
 
   // Helper to broadcast a placement action
-  const broadcastPlace = useCallback((x: number, y: number, tool: Tool) => {
+  // Uses object parameter to prevent accidental coordinate swapping
+  const broadcastPlace = useCallback(({ x, y, tool }: { x: number; y: number; tool: Tool }) => {
     if (tool === 'bulldoze') {
       broadcastAction({ type: 'bulldoze', x, y });
     } else if (tool !== 'select') {

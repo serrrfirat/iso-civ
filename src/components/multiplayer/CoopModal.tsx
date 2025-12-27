@@ -91,14 +91,16 @@ export function CoopModal({
     
     setIsLoading(true);
     try {
-      // Create a fresh city for co-op
-      const stateToShare = createInitialGameState(DEFAULT_GRID_SIZE, cityName);
+      // Use the current game state if provided, otherwise create a fresh city
+      const stateToShare = currentGameState 
+        ? { ...currentGameState, cityName } 
+        : createInitialGameState(DEFAULT_GRID_SIZE, cityName);
       
       const code = await createRoom(cityName, stateToShare);
       // Update URL to show room code
       window.history.replaceState({}, '', `/?room=${code}`);
       
-      // Start the game immediately with the fresh state
+      // Start the game immediately with the state
       onStartGame(true, stateToShare);
     } catch (err) {
       console.error('Failed to create room:', err);
