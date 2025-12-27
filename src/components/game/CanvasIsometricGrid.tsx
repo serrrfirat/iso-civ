@@ -1029,12 +1029,6 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       }
     }
     
-    // Helper function to check if a tile is adjacent to water (uses pre-computed metadata for O(1) lookup)
-    function isAdjacentToWater(gridX: number, gridY: number): boolean {
-      const metadata = getTileMetadata(gridX, gridY);
-      return metadata?.isAdjacentToWater ?? false;
-    }
-    
     // Helper function to check if a tile is water
     function isWater(gridX: number, gridY: number): boolean {
       if (gridX < 0 || gridX >= gridSize || gridY < 0 || gridY >= gridSize) return false;
