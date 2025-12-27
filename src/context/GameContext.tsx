@@ -3,6 +3,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react';
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
+import { compressAsync } from '@/lib/saveWorkerManager';
 import {
   Budget,
   BuildingType,
@@ -338,72 +339,54 @@ function tryFreeLocalStorageSpace(): void {
 
 // Save game state to localStorage with lz-string compression
 // Compression typically reduces size by 60-80%, allowing much larger cities
-// PERF: Breaks work into chunks with setTimeout to avoid long blocking periods
-function saveGameState(state: GameState, callback?: () => void): void {
+// PERF: Uses Web Worker for compression to avoid blocking main thread
+async function saveGameStateAsync(state: GameState): Promise<void> {
   if (typeof window === 'undefined') return;
   
   // Validate state before saving
   if (!state || !state.grid || !state.gridSize || !state.stats) {
     console.error('Invalid game state, cannot save', { state, hasGrid: !!state?.grid, hasGridSize: !!state?.gridSize, hasStats: !!state?.stats });
-    callback?.();
     return;
   }
   
-  // PERF: Break up the save into steps with yields to avoid blocking
-  // Step 1: Optimize state (fast)
-  setTimeout(() => {
-    try {
-      const optimizedState = optimizeStateForSave(state);
-      
-      // Step 2: Serialize to JSON (can be slow for large states)
-      setTimeout(() => {
-        try {
-          const serialized = JSON.stringify(optimizedState);
-          
-          // Step 3: Compress (slowest operation)
-          setTimeout(() => {
-            try {
-              const compressed = compressToUTF16(serialized);
-              
-              // Check size limit
-              if (compressed.length > 5 * 1024 * 1024) {
-                console.error('Compressed game state too large to save:', compressed.length, 'chars');
-                callback?.();
-                return;
-              }
-              
-              // Step 4: Write to localStorage (usually fast)
-              setTimeout(() => {
-                try {
-                  localStorage.setItem(STORAGE_KEY, compressed);
-                } catch (quotaError) {
-                  if (quotaError instanceof DOMException && (quotaError.code === 22 || quotaError.code === 1014)) {
-                    console.warn('localStorage quota exceeded, trying to free space...');
-                    tryFreeLocalStorageSpace();
-                    try {
-                      localStorage.setItem(STORAGE_KEY, compressed);
-                    } catch {
-                      console.error('localStorage still full after cleanup');
-                    }
-                  }
-                }
-                callback?.();
-              }, 0);
-            } catch (e) {
-              console.error('Failed to compress game state:', e);
-              callback?.();
-            }
-          }, 0);
-        } catch (e) {
-          console.error('Failed to serialize game state:', e);
-          callback?.();
-        }
-      }, 0);
-    } catch (e) {
-      console.error('Failed to optimize game state:', e);
-      callback?.();
+  try {
+    // Step 1: Optimize and serialize (done on main thread, relatively fast)
+    const optimizedState = optimizeStateForSave(state);
+    const serialized = JSON.stringify(optimizedState);
+    
+    // Step 2: Compress using Web Worker (off main thread!)
+    const compressed = await compressAsync(serialized);
+    
+    // Check size limit
+    if (compressed.length > 5 * 1024 * 1024) {
+      console.error('Compressed game state too large to save:', compressed.length, 'chars');
+      return;
     }
-  }, 0);
+    
+    // Step 3: Write to localStorage
+    try {
+      localStorage.setItem(STORAGE_KEY, compressed);
+    } catch (quotaError) {
+      if (quotaError instanceof DOMException && (quotaError.code === 22 || quotaError.code === 1014)) {
+        console.warn('localStorage quota exceeded, trying to free space...');
+        tryFreeLocalStorageSpace();
+        try {
+          localStorage.setItem(STORAGE_KEY, compressed);
+        } catch {
+          console.error('localStorage still full after cleanup');
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to save game state:', e);
+  }
+}
+
+// Wrapper that takes a callback for compatibility with existing code
+function saveGameState(state: GameState, callback?: () => void): void {
+  saveGameStateAsync(state).finally(() => {
+    callback?.();
+  });
 }
 
 // Clear saved game state
@@ -584,45 +567,32 @@ function saveSavedCitiesIndex(cities: SavedCityMeta[]): void {
 }
 
 // Save a city state to localStorage with compression
-// PERF: Uses setTimeout chain to avoid long blocking periods
-function saveCityState(cityId: string, state: GameState): void {
+// PERF: Uses Web Worker for compression to avoid blocking main thread
+async function saveCityStateAsync(cityId: string, state: GameState): Promise<void> {
   if (typeof window === 'undefined') return;
   
-  // Step 1: Serialize (can be slow)
-  setTimeout(() => {
-    try {
-      const serialized = JSON.stringify(state);
-      
-      // Step 2: Compress (slowest)
-      setTimeout(() => {
-        try {
-          const compressed = compressToUTF16(serialized);
-          
-          if (compressed.length > 5 * 1024 * 1024) {
-            console.error('Compressed city state too large to save');
-            return;
-          }
-          
-          // Step 3: Write to localStorage
-          setTimeout(() => {
-            try {
-              localStorage.setItem(SAVED_CITY_PREFIX + cityId, compressed);
-            } catch (e) {
-              if (e instanceof DOMException && (e.code === 22 || e.code === 1014)) {
-                console.error('localStorage quota exceeded');
-              } else {
-                console.error('Failed to save city state:', e);
-              }
-            }
-          }, 0);
-        } catch (e) {
-          console.error('Failed to compress city state:', e);
-        }
-      }, 0);
-    } catch (e) {
-      console.error('Failed to serialize city state:', e);
+  try {
+    const serialized = JSON.stringify(state);
+    const compressed = await compressAsync(serialized);
+    
+    if (compressed.length > 5 * 1024 * 1024) {
+      console.error('Compressed city state too large to save');
+      return;
     }
-  }, 0);
+    
+    localStorage.setItem(SAVED_CITY_PREFIX + cityId, compressed);
+  } catch (e) {
+    if (e instanceof DOMException && (e.code === 22 || e.code === 1014)) {
+      console.error('localStorage quota exceeded');
+    } else {
+      console.error('Failed to save city state:', e);
+    }
+  }
+}
+
+// Wrapper for compatibility
+function saveCityState(cityId: string, state: GameState): void {
+  saveCityStateAsync(cityId, state);
 }
 
 // Load a saved city state from localStorage (supports compressed and legacy formats)
