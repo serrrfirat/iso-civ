@@ -12,8 +12,8 @@ import { RAIL_COLORS, TRACK_GAUGE_RATIO, TRACK_SEPARATION_RATIO } from './railSy
 // Types
 // ============================================================================
 
-/** Bridge style configuration for rendering - internal */
-interface BridgeStyle {
+/** Bridge style configuration for rendering */
+export interface BridgeStyle {
   asphalt: string;
   barrier: string;
   accent: string;
@@ -21,8 +21,8 @@ interface BridgeStyle {
   cable?: string;
 }
 
-/** Bridge edge geometry for rendering - internal */
-interface BridgeEdges {
+/** Bridge edge geometry for rendering */
+export interface BridgeEdges {
   northEdge: { x: number; y: number };
   eastEdge: { x: number; y: number };
   southEdge: { x: number; y: number };
@@ -42,10 +42,10 @@ interface BridgeEdges {
 // ============================================================================
 
 /**
- * Bridge styles by type and variant - internal
+ * Bridge styles by type and variant
  * Each bridge type has multiple visual variants with different color schemes
  */
-const BRIDGE_STYLES: Record<string, BridgeStyle[]> = {
+export const BRIDGE_STYLES: Record<string, BridgeStyle[]> = {
   small: [
     { asphalt: ROAD_COLORS.ASPHALT, barrier: '#707070', accent: '#606060', support: '#404040' },
     { asphalt: '#454545', barrier: '#606060', accent: '#555555', support: '#353535' },
@@ -72,24 +72,24 @@ const BRIDGE_STYLES: Record<string, BridgeStyle[]> = {
 // ============================================================================
 
 /**
- * Get the bridge style for a given bridge type and variant - internal
+ * Get the bridge style for a given bridge type and variant
  */
-function getBridgeStyle(bridgeType: string, variant: number): BridgeStyle {
+export function getBridgeStyle(bridgeType: string, variant: number): BridgeStyle {
   return BRIDGE_STYLES[bridgeType]?.[variant] || BRIDGE_STYLES.large[0];
 }
 
 /**
- * Get the deck fill color for a bridge (different for rail vs road) - internal
+ * Get the deck fill color for a bridge (different for rail vs road)
  */
-function getBridgeDeckColor(isRailBridge: boolean, style: BridgeStyle): string {
+export function getBridgeDeckColor(isRailBridge: boolean, style: BridgeStyle): string {
   return isRailBridge ? RAIL_COLORS.BRIDGE_DECK : style.asphalt;
 }
 
 /**
- * Calculate bridge geometry for rendering - internal
+ * Calculate bridge geometry for rendering
  * Returns edge points and perpendicular vectors for drawing the bridge
  */
-function calculateBridgeEdges(
+export function calculateBridgeEdges(
   x: number,
   y: number,
   adjustedY: number,
@@ -145,23 +145,23 @@ function calculateBridgeEdges(
 }
 
 /**
- * Calculate bridge width ratio based on whether it's a rail or road bridge - internal
+ * Calculate bridge width ratio based on whether it's a rail or road bridge
  */
-function getBridgeWidthRatio(isRailBridge: boolean): number {
+export function getBridgeWidthRatio(isRailBridge: boolean): number {
   return isRailBridge ? 0.36 : 0.45;
 }
 
 /**
- * Get the Y offset for rail bridges (they're shifted down slightly) - internal
+ * Get the Y offset for rail bridges (they're shifted down slightly)
  */
-function getRailBridgeYOffset(isRailBridge: boolean): number {
+export function getRailBridgeYOffset(isRailBridge: boolean): number {
   return isRailBridge ? TILE_HEIGHT * 0.1 : 0;
 }
 
 /**
- * Parse building properties for bridge rendering - internal
+ * Parse building properties for bridge rendering
  */
-function parseBridgeProperties(building: Building) {
+export function parseBridgeProperties(building: Building) {
   const bridgeType = building.bridgeType || 'large';
   const orientation = (building.bridgeOrientation || 'ns') as 'ns' | 'ew';
   const variant = building.bridgeVariant || 0;
@@ -188,9 +188,9 @@ function parseBridgeProperties(building: Building) {
 // ============================================================================
 
 /**
- * Draw a 3D isometric support pillar - internal
+ * Draw a 3D isometric support pillar
  */
-function drawPillar(
+export function drawPillar(
   ctx: CanvasRenderingContext2D,
   px: number,
   py: number,
@@ -234,9 +234,9 @@ function drawPillar(
 // ============================================================================
 
 /**
- * Draw a 3D isometric suspension bridge tower - internal
+ * Draw a 3D isometric suspension bridge tower
  */
-function drawSuspensionTower(
+export function drawSuspensionTower(
   ctx: CanvasRenderingContext2D,
   px: number,
   py: number,

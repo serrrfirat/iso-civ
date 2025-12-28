@@ -122,9 +122,9 @@ const BALL_ACTIVITIES: PedestrianActivity[] = [
 ];
 
 /**
- * Get a random activity for a building type (internal helper)
+ * Get a random activity for a building type
  */
-function getActivityForBuilding(buildingType: BuildingType): PedestrianActivity {
+export function getActivityForBuilding(buildingType: BuildingType): PedestrianActivity {
   const activities = BUILDING_ACTIVITIES[buildingType];
   if (activities && activities.length > 0) {
     return activities[Math.floor(Math.random() * activities.length)];
@@ -133,24 +133,24 @@ function getActivityForBuilding(buildingType: BuildingType): PedestrianActivity 
 }
 
 /**
- * Check if a building type is recreational (internal helper)
+ * Check if a building type is recreational
  */
-function isRecreationalBuilding(buildingType: BuildingType): boolean {
+export function isRecreationalBuilding(buildingType: BuildingType): boolean {
   return RECREATION_BUILDINGS.includes(buildingType);
 }
 
 /**
- * Check if a building type can be entered by pedestrians (internal helper)
+ * Check if a building type can be entered by pedestrians
  */
-function canPedestrianEnterBuilding(buildingType: BuildingType): boolean {
+export function canPedestrianEnterBuilding(buildingType: BuildingType): boolean {
   return ENTERABLE_BUILDINGS.includes(buildingType);
 }
 
 /**
- * Generate random activity position offset within a tile (internal helper)
+ * Generate random activity position offset within a tile
  * Spread pedestrians out within the tile bounds
  */
-function getRandomActivityOffset(): { x: number; y: number } {
+export function getRandomActivityOffset(): { x: number; y: number } {
   // Random offset to spread pedestrians within tile (stays inside diamond)
   return {
     x: (Math.random() - 0.5) * 20,
@@ -877,9 +877,9 @@ export function getPedestrianOpacity(ped: Pedestrian): number {
 // ============================================================================
 
 /**
- * Beach tile info with edge direction (internal type)
+ * Beach tile info with edge direction
  */
-type BeachTileInfo = {
+export type BeachTileInfo = {
   waterX: number;      // Water tile X
   waterY: number;      // Water tile Y
   landX: number;       // Adjacent land tile X
@@ -1023,8 +1023,7 @@ export function spawnPedestrianAtBeach(
 
 /**
  * Check if a pedestrian is a beach-goer (for filtering in draw calls)
- * Currently unused but kept for potential future use
  */
-function isBeachPedestrian(ped: Pedestrian): boolean {
+export function isBeachPedestrian(ped: Pedestrian): boolean {
   return ped.state === 'at_beach';
 }
