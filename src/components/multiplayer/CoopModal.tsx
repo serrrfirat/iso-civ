@@ -43,6 +43,7 @@ export function CoopModal({
   const [isLoading, setIsLoading] = useState(false);
   const [autoJoinAttempted, setAutoJoinAttempted] = useState(false);
   const [waitingForState, setWaitingForState] = useState(false);
+  const [autoJoinError, setAutoJoinError] = useState<string | null>(null);
 
   const {
     connectionState,
@@ -71,10 +72,9 @@ export function CoopModal({
         .catch((err) => {
           console.error('Failed to auto-join room:', err);
           setIsLoading(false);
-          // Clear the URL since this room doesn't exist
-          window.history.replaceState({}, '', '/');
-          // Fall back to showing select modal (room not found)
-          setMode('select');
+          // Show error state instead of redirecting
+          const errorMessage = err instanceof Error ? err.message : gt('Failed to join room');
+          setAutoJoinError(errorMessage);
         });
     }
   }, [open, pendingRoomCode, autoJoinAttempted, joinRoom]);
@@ -91,6 +91,7 @@ export function CoopModal({
       setCopied(false);
       setAutoJoinAttempted(false);
       setWaitingForState(false);
+      setAutoJoinError(null);
     }
   }, [open, waitingForState, autoJoinAttempted, initialState, leaveRoom]);
 
@@ -191,6 +192,88 @@ export function CoopModal({
     window.history.replaceState({}, '', '/');
     setMode('select');
   };
+
+  // If auto-join failed, show error screen
+  if (autoJoinError) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-light text-white flex items-center gap-2">
+              <AlertCircle className="w-6 h-6 text-red-400" />
+              <T>Could Not Join Room</T>
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {autoJoinError === 'Room not found' ? (
+                <T>This room doesn&apos;t exist or may have expired.</T>
+              ) : (
+                <T>There was a problem connecting to the room. This may be due to network issues or server limits.</T>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3 mt-4">
+            {pendingRoomCode && (
+              <Button
+                onClick={() => {
+                  setAutoJoinError(null);
+                  setAutoJoinAttempted(false);
+                  setIsLoading(true);
+                  joinRoom(pendingRoomCode)
+                    .then(() => {
+                      window.history.replaceState({}, '', `/coop/${pendingRoomCode.toUpperCase()}`);
+                      setIsLoading(false);
+                      setWaitingForState(true);
+                    })
+                    .catch((err) => {
+                      setIsLoading(false);
+                      const errorMessage = err instanceof Error ? err.message : gt('Failed to join room');
+                      setAutoJoinError(errorMessage);
+                    });
+                }}
+                className="w-full py-4 text-base font-light bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none"
+              >
+                <T>Try Again</T>
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                setAutoJoinError(null);
+                setMode('create');
+              }}
+              variant="outline"
+              className="w-full py-4 text-base font-light bg-transparent hover:bg-white/10 text-white/70 hover:text-white border border-white/15 rounded-none"
+            >
+              <T>Create New City</T>
+            </Button>
+            <Button
+              onClick={() => {
+                setAutoJoinError(null);
+                setMode('join');
+              }}
+              variant="outline"
+              className="w-full py-4 text-base font-light bg-transparent hover:bg-white/10 text-white/70 hover:text-white border border-white/15 rounded-none"
+            >
+              <T>Join Different Room</T>
+            </Button>
+            <Button
+              onClick={() => {
+                window.location.href = '/';
+              }}
+              variant="ghost"
+              className="w-full py-4 text-base font-light text-slate-500 hover:text-white hover:bg-transparent"
+            >
+              <T>Go to Homepage</T>
+            </Button>
+          </div>
+
+          <p className="text-xs text-slate-600 text-center mt-2">
+            <T>Room code: <Var>{pendingRoomCode}</Var></T>
+          </p>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   // If auto-joining, show loading state
   if (autoJoinAttempted && (isLoading || waitingForState)) {
