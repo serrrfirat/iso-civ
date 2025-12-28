@@ -419,8 +419,8 @@ function generateAdjacentCities(): AdjacentCity[] {
   return cities;
 }
 
-// Check if there's a road tile at any edge of the map in a given direction (internal helper)
-function hasRoadAtEdge(grid: Tile[][], gridSize: number, direction: 'north' | 'south' | 'east' | 'west'): boolean {
+// Check if there's a road tile at any edge of the map in a given direction
+export function hasRoadAtEdge(grid: Tile[][], gridSize: number, direction: 'north' | 'south' | 'east' | 'west'): boolean {
   switch (direction) {
     case 'north':
       // Check top edge (y = 0)
@@ -479,8 +479,7 @@ export function checkForDiscoverableCities(
 
 // Check for cities that are discovered, have roads at their edge, but are not yet connected
 // This can be used to remind players they can connect to a city
-// Currently unused but kept for potential future UI feature
-function getConnectableCities(
+export function getConnectableCities(
   grid: Tile[][],
   gridSize: number,
   adjacentCities: AdjacentCity[]

@@ -1,4 +1,4 @@
-// Consolidated GameContext for IsoCity
+// Consolidated GameContext for the SimCity-like game
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react';

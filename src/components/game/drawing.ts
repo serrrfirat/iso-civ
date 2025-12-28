@@ -10,31 +10,31 @@ import { TILE_WIDTH, TILE_HEIGHT } from './types';
 // Types
 // ============================================================================
 
-/** Color scheme for a tile surface (internal type) */
-type TileColorScheme = {
+/** Color scheme for a tile surface */
+export type TileColorScheme = {
   top: string;
   left: string;
   right: string;
   stroke: string;
 };
 
-/** Corner points of an isometric diamond (internal type) */
-type DiamondCorners = {
+/** Corner points of an isometric diamond */
+export type DiamondCorners = {
   top: { x: number; y: number };
   right: { x: number; y: number };
   bottom: { x: number; y: number };
   left: { x: number; y: number };
 };
 
-/** Beach edge direction for determining inward offset (internal type) */
-type BeachEdge = 'north' | 'east' | 'south' | 'west';
+/** Beach edge direction for determining inward offset */
+export type BeachEdge = 'north' | 'east' | 'south' | 'west';
 
 // ============================================================================
 // Color Constants
 // ============================================================================
 
-/** Zone-based color schemes for grass tiles (internal) */
-const ZONE_COLORS: Record<ZoneType, TileColorScheme> = {
+/** Zone-based color schemes for grass tiles */
+export const ZONE_COLORS: Record<ZoneType, TileColorScheme> = {
   none: {
     top: '#4a7c3f',
     left: '#3d6634',
@@ -61,30 +61,30 @@ const ZONE_COLORS: Record<ZoneType, TileColorScheme> = {
   },
 };
 
-/** Zone border colors (dashed lines) - internal */
-const ZONE_BORDER_COLORS: Record<ZoneType, string> = {
+/** Zone border colors (dashed lines) */
+export const ZONE_BORDER_COLORS: Record<ZoneType, string> = {
   none: 'transparent',
   residential: '#22c55e',
   commercial: '#3b82f6',
   industrial: '#f59e0b',
 };
 
-/** Grey base tile colors for buildings - internal */
-const GREY_TILE_COLORS: TileColorScheme = {
+/** Grey base tile colors for buildings */
+export const GREY_TILE_COLORS: TileColorScheme = {
   top: '#6b7280',
   left: '#4b5563',
   right: '#9ca3af',
   stroke: '#374151',
 };
 
-/** Beach/sidewalk colors - internal */
-const BEACH_COLORS = {
+/** Beach/sidewalk colors */
+export const BEACH_COLORS = {
   fill: '#d4a574',
   curb: '#b8956a',
 } as const;
 
-/** Dirt/foundation plot colors for construction phase 1 - internal */
-const FOUNDATION_COLORS: TileColorScheme = {
+/** Dirt/foundation plot colors for construction phase 1 */
+export const FOUNDATION_COLORS: TileColorScheme = {
   top: '#a67c52',     // Sandy brown top
   left: '#8b6914',    // Darker ochre left face
   right: '#c4a35a',   // Lighter tan right face
@@ -96,7 +96,7 @@ const FOUNDATION_COLORS: TileColorScheme = {
 // ============================================================================
 
 /** Calculate the four corner points of an isometric diamond */
-function getDiamondCorners(x: number, y: number, w = TILE_WIDTH, h = TILE_HEIGHT): DiamondCorners {
+export function getDiamondCorners(x: number, y: number, w = TILE_WIDTH, h = TILE_HEIGHT): DiamondCorners {
   return {
     top: { x: x + w / 2, y },
     right: { x: x + w, y: y + h / 2 },
@@ -121,7 +121,7 @@ const BEACH_INWARD_VECTORS: Record<BeachEdge, { dx: number; dy: number }> = {
  * Draw an isometric diamond (top face of a tile).
  * This is the foundation for all tile rendering.
  */
-function drawIsometricDiamond(
+export function drawIsometricDiamond(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,

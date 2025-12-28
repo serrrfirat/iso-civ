@@ -10,16 +10,16 @@ import { OverlayMode } from './types';
 // Types
 // ============================================================================
 
-/** Service coverage data for a tile (local type for overlay rendering) */
-type ServiceCoverage = {
+/** Service coverage data for a tile */
+export type ServiceCoverage = {
   fire: number;
   police: number;
   health: number;
   education: number;
 };
 
-/** Configuration for an overlay mode (internal type) */
-type OverlayConfig = {
+/** Configuration for an overlay mode */
+export type OverlayConfig = {
   /** Display label */
   label: string;
   /** Tooltip/title text */

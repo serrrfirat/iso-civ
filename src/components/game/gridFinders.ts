@@ -39,8 +39,8 @@ export const SPORTS_TYPES: BuildingType[] = [
   'football_field', 'baseball_stadium', 'stadium', 'swimming_pool', 'skate_park'
 ];
 
-// Recreation areas where pedestrians relax (internal use only)
-const RELAXATION_TYPES: BuildingType[] = [
+// Recreation areas where pedestrians relax
+export const RELAXATION_TYPES: BuildingType[] = [
   'park', 'park_large', 'community_garden', 'pond_park', 'greenhouse_garden',
   'amphitheater', 'campground', 'marina_docks_small', 'pier_large'
 ];
@@ -60,10 +60,10 @@ const ENTERABLE_BUILDING_TYPES: BuildingType[] = [
   'subway_station', 'mountain_lodge'
 ];
 
-// Recreation area types for more specific destination finding (internal use)
-type RecreationType = 'sports' | 'relaxation' | 'active' | 'general';
+// Recreation area types for more specific destination finding
+export type RecreationType = 'sports' | 'relaxation' | 'active' | 'general';
 
-interface RecreationDestination {
+export interface RecreationDestination {
   x: number;
   y: number;
   type: RecreationType;
@@ -190,6 +190,34 @@ export function findEnterableBuildings(
     }
   }
   return buildings;
+}
+
+/**
+ * Check if a building type is a sports facility
+ */
+export function isSportsFacility(buildingType: BuildingType): boolean {
+  return SPORTS_TYPES.includes(buildingType);
+}
+
+/**
+ * Check if a building type is a relaxation area
+ */
+export function isRelaxationArea(buildingType: BuildingType): boolean {
+  return RELAXATION_TYPES.includes(buildingType);
+}
+
+/**
+ * Check if a building type is enterable
+ */
+export function isEnterableBuilding(buildingType: BuildingType): boolean {
+  return ENTERABLE_BUILDING_TYPES.includes(buildingType);
+}
+
+/**
+ * Check if a building type is a park/recreation area
+ */
+export function isRecreationArea(buildingType: BuildingType): boolean {
+  return PARK_TYPES.has(buildingType);
 }
 
 /**
