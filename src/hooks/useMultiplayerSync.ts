@@ -89,7 +89,7 @@ export function useMultiplayerSync() {
     if (!multiplayer || !multiplayer.initialState) return;
     
     // Only load if this is a new state (prevent duplicate loads of same state)
-    const stateKey = JSON.stringify(multiplayer.initialState.stats?.tick || 0);
+    const stateKey = JSON.stringify(multiplayer.initialState.tick || 0);
     if (lastInitialStateRef.current === stateKey && initialStateLoadedRef.current) return;
     
     console.log('[useMultiplayerSync] Received initial state from network, loading...');
