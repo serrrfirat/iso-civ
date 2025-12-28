@@ -4,10 +4,10 @@
  */
 
 import { Tile } from '@/types/game';
-import { TILE_WIDTH, TILE_HEIGHT, CarDirection } from './types';
+import { TILE_WIDTH, TILE_HEIGHT, CarDirection, Train, TrainCarriage, CarriageType, TrainType } from './types';
 
 // ============================================================================
-// Types
+// Types (Rail-specific, not duplicated from entities)
 // ============================================================================
 
 /** Rail track connection pattern */
@@ -37,45 +37,8 @@ export type TrackType =
   | 'terminus_w'      // Dead-end facing west
   | 'single';         // Isolated single track
 
-/** Train carriage type */
-export type CarriageType = 'locomotive' | 'passenger' | 'freight_box' | 'freight_tank' | 'freight_flat' | 'caboose';
-
-/** Train type */
-export type TrainType = 'passenger' | 'freight';
-
-/** Individual train carriage */
-export interface TrainCarriage {
-  type: CarriageType;
-  color: string;
-  // Position along the train's path (0-1 within current tile segment)
-  progress: number;
-  // Current tile position
-  tileX: number;
-  tileY: number;
-  // Direction of travel
-  direction: CarDirection;
-}
-
-/** Complete train with multiple carriages */
-export interface Train {
-  id: number;
-  type: TrainType;
-  carriages: TrainCarriage[];
-  // Lead locomotive position
-  tileX: number;
-  tileY: number;
-  direction: CarDirection;
-  progress: number;
-  speed: number;
-  // Path for the train
-  path: { x: number; y: number }[];
-  pathIndex: number;
-  // Lifecycle
-  age: number;
-  maxAge: number;
-  // Visual
-  color: string;
-}
+// Re-export Train types from ./types for backward compatibility
+export type { Train, TrainCarriage, CarriageType, TrainType };
 
 // ============================================================================
 // Constants
@@ -1357,8 +1320,8 @@ function drawInsetRails(
 /** Railroad crossing state */
 export type CrossingState = 'open' | 'warning' | 'closed';
 
-/** Railroad crossing information */
-export interface RailroadCrossing {
+/** Railroad crossing information - internal (not currently used externally) */
+interface RailroadCrossing {
   tileX: number;
   tileY: number;
   state: CrossingState;
@@ -1368,14 +1331,14 @@ export interface RailroadCrossing {
   trainDistance: number; // Distance in tiles to nearest approaching train
 }
 
-/** Detection radius for triggering crossing warning */
-export const CROSSING_WARNING_DISTANCE = 3; // tiles
+/** Detection radius for triggering crossing warning - internal */
+const CROSSING_WARNING_DISTANCE = 3; // tiles
 
-/** Gate animation speed (degrees per second) */
+/** Gate animation speed (degrees per second) - exported for animation */
 export const GATE_ANIMATION_SPEED = 180; // Takes 0.5s to close/open
 
-/** Crossing light flash interval */
-export const CROSSING_FLASH_INTERVAL = 0.5; // seconds
+/** Crossing light flash interval - internal */
+const CROSSING_FLASH_INTERVAL = 0.5; // seconds
 
 /**
  * Check if a tile has road at position (for crossing detection)
@@ -1478,8 +1441,8 @@ export function getCrossingRailOrientation(
 // Railroad Crossing Drawing Functions
 // ============================================================================
 
-/** Crossing signal colors */
-export const CROSSING_COLORS = {
+/** Crossing signal colors - internal */
+const CROSSING_COLORS = {
   POLE: '#374151',           // Dark gray pole
   LIGHT_OFF: '#1f2937',      // Inactive light
   LIGHT_RED: '#ef4444',      // Active red light
