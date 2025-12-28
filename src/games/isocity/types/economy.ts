@@ -1,13 +1,6 @@
 /**
  * IsoCity Economy Types
- * 
- * Economy-related types for the city builder game.
- * Covers budgets, taxes, stats, and city economics.
  */
-
-// ============================================================================
-// STATS
-// ============================================================================
 
 export interface Stats {
   population: number;
@@ -27,10 +20,6 @@ export interface Stats {
   };
 }
 
-// ============================================================================
-// BUDGET
-// ============================================================================
-
 export interface BudgetCategory {
   name: string;
   funding: number;
@@ -48,24 +37,14 @@ export interface Budget {
   water: BudgetCategory;
 }
 
-// ============================================================================
-// CITY ECONOMY (for multi-city support)
-// ============================================================================
-
-/** Cached economy data for a city */
 export interface CityEconomy {
   population: number;
   jobs: number;
   income: number;
   expenses: number;
   happiness: number;
-  /** Timestamp of last calculation for cache invalidation */
   lastCalculated: number;
 }
-
-// ============================================================================
-// HISTORY
-// ============================================================================
 
 export interface HistoryPoint {
   year: number;

@@ -1,7 +1,5 @@
 /**
  * IsoCity Service Types
- * 
- * City services like police, fire, health, education, and utilities.
  */
 
 export interface ServiceCoverage {

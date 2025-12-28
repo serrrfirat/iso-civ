@@ -1,25 +1,14 @@
 // Game-specific types for rendering and animation
-//
-// This file contains IsoCity-specific entity types that extend the core types.
-// For base types, see @/core/types
 
-import { 
-  CardinalDirection, 
-  GridPosition, 
-  GridPath,
-  BaseParticle,
-  MovingParticle,
-} from '@/core/types';
+import { CardinalDirection } from '@/core/types';
 
-// Isometric tile dimensions (shared constants)
-// Note: These match DEFAULT_TILE_WIDTH/HEIGHT in @/core/types/rendering
+// Isometric tile dimensions
 export const TILE_WIDTH = 64;
 export const HEIGHT_RATIO = 0.60;
 export const TILE_HEIGHT = TILE_WIDTH * HEIGHT_RATIO;
-export const KEY_PAN_SPEED = 520; // Pixels per second for keyboard panning
+export const KEY_PAN_SPEED = 520;
 
-// Car/Vehicle types
-// Alias CardinalDirection for backward compatibility
+// Car/Vehicle types - alias CardinalDirection for backward compatibility
 export type CarDirection = CardinalDirection;
 
 export type Car = {
@@ -463,12 +452,10 @@ export type Firework = {
   sourceTileY: number;
 };
 
-// Direction metadata for vehicle movement
-// Re-export from core for backward compatibility
+// Direction metadata - re-export from core
 export type { DirectionMeta } from '@/core/types/grid';
 
 // World render state
-// Extends BaseWorldRenderState with IsoCity-specific grid type
 export type WorldRenderState = {
   grid: import('@/types/game').Tile[][];
   gridSize: number;
@@ -477,15 +464,6 @@ export type WorldRenderState = {
   speed: number;
   canvasSize: { width: number; height: number };
 };
-
-// Re-export core rendering types for convenience
-export type { 
-  ScreenPosition, 
-  ViewportSize, 
-  CameraState, 
-  ViewportState,
-  BaseWorldRenderState,
-} from '@/core/types/rendering';
 
 // Overlay modes for visualization
 export type OverlayMode = 'none' | 'power' | 'water' | 'fire' | 'police' | 'health' | 'education' | 'subway';

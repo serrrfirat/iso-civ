@@ -1,9 +1,2 @@
-/**
- * Core module
- * 
- * Contains shared types and utilities used across all games.
- * This module is game-agnostic and provides the foundation for
- * isometric game development.
- */
-
+// Core Module - shared types and utilities
 export * from './types';

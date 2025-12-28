@@ -1,105 +1,36 @@
 /**
  * IsoCity Building Types
- * 
- * All building type definitions for the city builder game.
  */
 
-// ============================================================================
-// BUILDING TYPES
-// ============================================================================
-
 export type BuildingType =
-  | 'empty'
-  | 'grass'
-  | 'water'
-  | 'road'
-  | 'bridge'
-  | 'rail'
-  | 'tree'
+  | 'empty' | 'grass' | 'water' | 'road' | 'bridge' | 'rail' | 'tree'
   // Residential
-  | 'house_small'
-  | 'house_medium'
-  | 'mansion'
-  | 'apartment_low'
-  | 'apartment_high'
+  | 'house_small' | 'house_medium' | 'mansion' | 'apartment_low' | 'apartment_high'
   // Commercial
-  | 'shop_small'
-  | 'shop_medium'
-  | 'office_low'
-  | 'office_high'
-  | 'mall'
+  | 'shop_small' | 'shop_medium' | 'office_low' | 'office_high' | 'mall'
   // Industrial
-  | 'factory_small'
-  | 'factory_medium'
-  | 'factory_large'
-  | 'warehouse'
+  | 'factory_small' | 'factory_medium' | 'factory_large' | 'warehouse'
   // Services
-  | 'police_station'
-  | 'fire_station'
-  | 'hospital'
-  | 'school'
-  | 'university'
-  | 'park'
-  | 'park_large'
-  | 'tennis'
+  | 'police_station' | 'fire_station' | 'hospital' | 'school' | 'university'
+  | 'park' | 'park_large' | 'tennis'
   // Utilities
-  | 'power_plant'
-  | 'water_tower'
+  | 'power_plant' | 'water_tower'
   // Transportation
-  | 'subway_station'
-  | 'rail_station'
+  | 'subway_station' | 'rail_station'
   // Special
-  | 'stadium'
-  | 'museum'
-  | 'airport'
-  | 'space_program'
-  | 'city_hall'
-  | 'amusement_park'
+  | 'stadium' | 'museum' | 'airport' | 'space_program' | 'city_hall' | 'amusement_park'
   // Parks (new sprite sheet)
-  | 'basketball_courts'
-  | 'playground_small'
-  | 'playground_large'
-  | 'baseball_field_small'
-  | 'soccer_field_small'
-  | 'football_field'
-  | 'baseball_stadium'
-  | 'community_center'
-  | 'office_building_small'
-  | 'swimming_pool'
-  | 'skate_park'
-  | 'mini_golf_course'
-  | 'bleachers_field'
-  | 'go_kart_track'
-  | 'amphitheater'
-  | 'greenhouse_garden'
-  | 'animal_pens_farm'
-  | 'cabin_house'
-  | 'campground'
-  | 'marina_docks_small'
-  | 'pier_large'
-  | 'roller_coaster_small'
-  | 'community_garden'
-  | 'pond_park'
-  | 'park_gate'
-  | 'mountain_lodge'
-  | 'mountain_trailhead';
+  | 'basketball_courts' | 'playground_small' | 'playground_large'
+  | 'baseball_field_small' | 'soccer_field_small' | 'football_field' | 'baseball_stadium'
+  | 'community_center' | 'office_building_small' | 'swimming_pool' | 'skate_park'
+  | 'mini_golf_course' | 'bleachers_field' | 'go_kart_track' | 'amphitheater'
+  | 'greenhouse_garden' | 'animal_pens_farm' | 'cabin_house' | 'campground'
+  | 'marina_docks_small' | 'pier_large' | 'roller_coaster_small'
+  | 'community_garden' | 'pond_park' | 'park_gate' | 'mountain_lodge' | 'mountain_trailhead';
 
-// ============================================================================
-// BRIDGE TYPES
-// ============================================================================
-
-/** Bridge type based on span width */
 export type BridgeType = 'small' | 'medium' | 'large' | 'suspension';
-
-/** Bridge orientation */
 export type BridgeOrientation = 'ns' | 'ew';
-
-/** What the bridge carries (road or rail) */
 export type BridgeTrackType = 'road' | 'rail';
-
-// ============================================================================
-// BUILDING INTERFACE
-// ============================================================================
 
 export interface Building {
   type: BuildingType;
@@ -111,32 +42,22 @@ export interface Building {
   onFire: boolean;
   fireProgress: number;
   age: number;
-  constructionProgress: number; // 0-100, building is under construction until 100
-  abandoned: boolean; // Building is abandoned due to low demand, produces nothing
-  flipped?: boolean; // Horizontally mirror the sprite (used for waterfront buildings to face water)
-  cityId?: string; // ID of the city this building belongs to (for multi-city support)
-  // Bridge-specific properties
-  bridgeType?: BridgeType; // Type of bridge (small, medium, large, suspension)
-  bridgeOrientation?: BridgeOrientation; // Direction the bridge spans (ns or ew)
-  bridgeVariant?: number; // Visual variant for this bridge type (0-2)
-  bridgePosition?: 'start' | 'middle' | 'end'; // Position within the bridge span
-  bridgeIndex?: number; // Index of this tile within the bridge (0-based)
-  bridgeSpan?: number; // Total number of tiles in this bridge
-  bridgeTrackType?: BridgeTrackType; // What the bridge carries: 'road' or 'rail'
+  constructionProgress: number;
+  abandoned: boolean;
+  flipped?: boolean;
+  cityId?: string;
+  bridgeType?: BridgeType;
+  bridgeOrientation?: BridgeOrientation;
+  bridgeVariant?: number;
+  bridgePosition?: 'start' | 'middle' | 'end';
+  bridgeIndex?: number;
+  bridgeSpan?: number;
+  bridgeTrackType?: BridgeTrackType;
 }
 
-// ============================================================================
-// BUILDING EVOLUTION PATHS
-// ============================================================================
-
-/** Building evolution paths based on zone and level */
 export const RESIDENTIAL_BUILDINGS: BuildingType[] = ['house_small', 'house_medium', 'mansion', 'apartment_low', 'apartment_high'];
 export const COMMERCIAL_BUILDINGS: BuildingType[] = ['shop_small', 'shop_medium', 'office_low', 'office_high', 'mall'];
 export const INDUSTRIAL_BUILDINGS: BuildingType[] = ['factory_small', 'factory_medium', 'warehouse', 'factory_large', 'factory_large'];
-
-// ============================================================================
-// BUILDING STATS
-// ============================================================================
 
 export const BUILDING_STATS: Record<BuildingType, { maxPop: number; maxJobs: number; pollution: number; landValue: number }> = {
   empty: { maxPop: 0, maxJobs: 0, pollution: 0, landValue: 0 },
@@ -178,7 +99,6 @@ export const BUILDING_STATS: Record<BuildingType, { maxPop: number; maxJobs: num
   rail_station: { maxPop: 0, maxJobs: 25, pollution: 2, landValue: 20 },
   city_hall: { maxPop: 0, maxJobs: 60, pollution: 0, landValue: 50 },
   amusement_park: { maxPop: 0, maxJobs: 100, pollution: 8, landValue: 60 },
-  // Parks (new sprite sheet)
   basketball_courts: { maxPop: 0, maxJobs: 2, pollution: -3, landValue: 12 },
   playground_small: { maxPop: 0, maxJobs: 1, pollution: -5, landValue: 15 },
   playground_large: { maxPop: 0, maxJobs: 2, pollution: -8, landValue: 18 },
