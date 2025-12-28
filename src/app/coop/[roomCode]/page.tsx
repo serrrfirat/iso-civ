@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { GameProvider } from '@/context/GameContext';
 import { MultiplayerContextProvider } from '@/context/MultiplayerContext';
 import Game from '@/components/Game';
@@ -55,6 +55,9 @@ export default function CoopPage() {
   const [showGame, setShowGame] = useState(false);
   const [showCoopModal, setShowCoopModal] = useState(true);
   const [startFreshGame, setStartFreshGame] = useState(false);
+  
+  // Ref to track that we're intentionally starting the game (not closing to go home)
+  const isStartingGameRef = useRef(false);
 
   // Handle exit from game - navigate back to homepage
   const handleExitGame = () => {
@@ -63,6 +66,9 @@ export default function CoopPage() {
 
   // Handle co-op game start
   const handleCoopStart = (isHost: boolean, initialState?: GameState, code?: string) => {
+    // Mark that we're intentionally starting the game (not closing to go home)
+    isStartingGameRef.current = true;
+    
     if (isHost && initialState) {
       try {
         const compressed = compressToUTF16(JSON.stringify(initialState));
@@ -97,7 +103,8 @@ export default function CoopPage() {
 
   // Handle modal close - go back to homepage if not connected
   const handleModalClose = (open: boolean) => {
-    if (!open && !showGame) {
+    // Don't redirect if we're intentionally starting the game
+    if (!open && !showGame && !isStartingGameRef.current) {
       router.push('/');
     }
     setShowCoopModal(open);
