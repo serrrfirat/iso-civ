@@ -223,7 +223,7 @@ export function MobileTopBar({
 
             {/* Language selector, Share, and Exit button group */}
             <div className="flex items-center -space-x-0.5">
-              <LanguageSelector useDrawer iconSize={12} className="w-4" />
+              <LanguageSelector useDrawer iconSize={12} />
 
               {onShare && (
                 <button
