@@ -16,6 +16,7 @@ import { useMultiplayer } from '@/context/MultiplayerContext';
 import { GameState } from '@/types/game';
 import { createInitialGameState, DEFAULT_GRID_SIZE } from '@/lib/simulation';
 import { Copy, Check, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { T, useGT, Plural, Var } from 'gt-next';
 
 interface CoopModalProps {
   open: boolean;
@@ -34,14 +35,15 @@ export function CoopModal({
   currentGameState,
   pendingRoomCode,
 }: CoopModalProps) {
+  const gt = useGT();
   const [mode, setMode] = useState<Mode>('select');
-  const [cityName, setCityName] = useState('My Co-op City');
+  const [cityName, setCityName] = useState(gt('My Co-op City'));
   const [joinCode, setJoinCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [autoJoinAttempted, setAutoJoinAttempted] = useState(false);
   const [waitingForState, setWaitingForState] = useState(false);
-  
+
   const {
     connectionState,
     roomCode,
@@ -193,7 +195,7 @@ export function CoopModal({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white" aria-describedby={undefined}>
           <VisuallyHidden.Root>
-            <DialogTitle>Joining Co-op City</DialogTitle>
+            <DialogTitle><T>Joining Co-op City</T></DialogTitle>
           </VisuallyHidden.Root>
           {/* Back button in top left */}
           <Button
@@ -205,15 +207,15 @@ export function CoopModal({
               handleBackFromAutoJoin();
             }}
             className="absolute left-4 top-4 z-50 text-slate-400 hover:text-white hover:bg-slate-800"
-            aria-label="Back"
+            aria-label={gt('Back')}
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          
+
           <div className="flex flex-col items-center justify-center py-8">
             <Loader2 className="w-8 h-8 animate-spin text-slate-400 mb-4" />
-            <p className="text-slate-300">Joining city...</p>
-            <p className="text-slate-500 text-sm mt-1">Waiting for game state</p>
+            <T><p className="text-slate-300">Joining city...</p></T>
+            <T><p className="text-slate-500 text-sm mt-1">Waiting for game state</p></T>
           </div>
         </DialogContent>
       </Dialog>
@@ -227,10 +229,10 @@ export function CoopModal({
         <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl font-light text-white">
-              Co-op Multiplayer
+              <T>Co-op Multiplayer</T>
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              Build a city together with friends in real-time
+              <T>Build a city together with friends in real-time</T>
             </DialogDescription>
           </DialogHeader>
 
@@ -239,14 +241,14 @@ export function CoopModal({
               onClick={() => setMode('create')}
               className="w-full py-6 text-lg font-light bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none"
             >
-              Create City
+              <T>Create City</T>
             </Button>
             <Button
               onClick={() => setMode('join')}
               variant="outline"
               className="w-full py-6 text-lg font-light bg-transparent hover:bg-white/10 text-white/70 hover:text-white border border-white/15 rounded-none"
             >
-              Join City
+              <T>Join City</T>
             </Button>
           </div>
         </DialogContent>
@@ -261,13 +263,14 @@ export function CoopModal({
         <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl font-light text-white">
-            Create Co-op City
-          </DialogTitle>
-          <DialogDescription className="text-slate-400">
-            {roomCode
-              ? 'Share the invite code with friends'
-              : 'Set up your co-op city'
-            }
+              <T>Create Co-op City</T>
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              {roomCode ? (
+                <T>Share the invite code with friends</T>
+              ) : (
+                <T>Set up your co-op city</T>
+              )}
             </DialogDescription>
           </DialogHeader>
 
@@ -275,13 +278,13 @@ export function CoopModal({
             <div className="flex flex-col gap-4 mt-4">
               <div className="space-y-2">
                 <Label htmlFor="cityName" className="text-slate-300">
-                  City Name
+                  <T>City Name</T>
                 </Label>
                 <Input
                   id="cityName"
                   value={cityName}
                   onChange={(e) => setCityName(e.target.value)}
-                  placeholder="My Co-op City"
+                  placeholder={gt('My Co-op City')}
                   className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-500"
                 />
               </div>
@@ -289,7 +292,7 @@ export function CoopModal({
               {error && (
                 <div className="flex items-center gap-2 text-red-400 text-sm">
                   <AlertCircle className="w-4 h-4" />
-                  {error}
+                  <T><Var>{error}</Var></T>
                 </div>
               )}
 
@@ -299,7 +302,7 @@ export function CoopModal({
                   variant="outline"
                   className="flex-1 bg-transparent hover:bg-white/10 text-white/70 border-white/20 rounded-none"
                 >
-                  Back
+                  <T>Back</T>
                 </Button>
                 <Button
                   onClick={handleCreateRoom}
@@ -307,12 +310,12 @@ export function CoopModal({
                   className="flex-1 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none"
                 >
                   {isLoading ? (
-                    <>
+                    <T>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       Creating...
-                    </>
+                    </T>
                   ) : (
-                    'Create City'
+                    <T>Create City</T>
                   )}
                 </Button>
               </div>
@@ -321,9 +324,9 @@ export function CoopModal({
             <div className="flex flex-col gap-4 mt-4">
               {/* Invite Code Display */}
               <div className="bg-slate-800 rounded-lg p-6 text-center">
-                <p className="text-slate-400 text-sm mb-2">Invite Code</p>
+                <T><p className="text-slate-400 text-sm mb-2">Invite Code</p></T>
                 <p className="text-4xl font-mono font-bold tracking-widest text-white">
-                  {roomCode}
+                  <T><Var>{roomCode}</Var></T>
                 </p>
               </div>
 
@@ -334,26 +337,34 @@ export function CoopModal({
                 className="w-full bg-transparent hover:bg-white/10 text-white border-white/20 rounded-none"
               >
                 {copied ? (
-                  <>
+                  <T>
                     <Check className="w-4 h-4 mr-2" />
                     Copied!
-                  </>
+                  </T>
                 ) : (
-                  <>
+                  <T>
                     <Copy className="w-4 h-4 mr-2" />
                     Copy Invite Link
-                  </>
+                  </T>
                 )}
               </Button>
 
               {/* Connected Players */}
               {players.length > 0 && (
                 <div className="bg-slate-800/50 rounded-lg p-4">
-                  <p className="text-slate-400 text-sm mb-2">{players.length} player{players.length !== 1 ? 's' : ''}</p>
+                  <T>
+                    <p className="text-slate-400 text-sm mb-2">
+                      <Plural
+                        n={players.length}
+                        one={<>1 player</>}
+                        other={<><Var>{players.length}</Var> players</>}
+                      />
+                    </p>
+                  </T>
                   <div className="space-y-1">
                     {players.map((player) => (
                       <div key={player.id} className="text-sm text-white">
-                        {player.name}
+                        <T><Var>{player.name}</Var></T>
                       </div>
                     ))}
                   </div>
@@ -365,7 +376,7 @@ export function CoopModal({
                 onClick={() => onOpenChange(false)}
                 className="w-full mt-2 bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 rounded-md"
               >
-                Continue Playing
+                <T>Continue Playing</T>
               </Button>
             </div>
           )}
@@ -380,23 +391,23 @@ export function CoopModal({
       <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white">
         <DialogHeader>
           <DialogTitle className="text-2xl font-light text-white">
-            Join Co-op City
+            <T>Join Co-op City</T>
           </DialogTitle>
           <DialogDescription className="text-slate-400">
-            Enter the 5-character invite code to join
+            <T>Enter the 5-character invite code to join</T>
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4 mt-4">
           <div className="space-y-2">
             <Label htmlFor="joinCode" className="text-slate-300">
-              Invite Code
+              <T>Invite Code</T>
             </Label>
             <Input
               id="joinCode"
               value={joinCode}
               onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 5))}
-              placeholder="ABCDE"
+              placeholder={gt('ABCDE')}
               maxLength={5}
               className="bg-slate-800 border-slate-600 text-white text-center text-2xl font-mono tracking-widest placeholder:text-slate-500"
             />
@@ -405,7 +416,7 @@ export function CoopModal({
           {error && (
             <div className="flex items-center gap-2 text-red-400 text-sm">
               <AlertCircle className="w-4 h-4" />
-              {error}
+              <T><Var>{error}</Var></T>
             </div>
           )}
 
@@ -413,16 +424,16 @@ export function CoopModal({
           {connectionState === 'connecting' && !waitingForState && (
             <div className="flex items-center justify-center gap-2 text-sm text-slate-400">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Connecting...
+              <T>Connecting...</T>
             </div>
           )}
-          
+
           {/* Waiting for state */}
           {waitingForState && (
             <div className="bg-slate-800/50 rounded-lg p-4 text-center">
               <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-400" />
-              <p className="text-slate-300 text-sm">Connecting...</p>
-              <p className="text-slate-500 text-xs mt-1">Waiting for game state</p>
+              <T><p className="text-slate-300 text-sm">Connecting...</p></T>
+              <T><p className="text-slate-500 text-xs mt-1">Waiting for game state</p></T>
             </div>
           )}
 
@@ -432,7 +443,7 @@ export function CoopModal({
               variant="outline"
               className="flex-1 bg-transparent hover:bg-white/10 text-white/70 border-white/20 rounded-none"
             >
-              Back
+              <T>Back</T>
             </Button>
             <Button
               onClick={handleJoinRoom}
@@ -440,12 +451,12 @@ export function CoopModal({
               className="flex-1 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-none"
             >
               {isLoading ? (
-                <>
+                <T>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   Joining...
-                </>
+                </T>
               ) : (
-                'Join City'
+                <T>Join City</T>
               )}
             </Button>
           </div>
