@@ -171,6 +171,11 @@ export class MultiplayerProvider {
       // Broadcast: real-time game actions from other players
       .on('broadcast', { event: 'action' }, ({ payload }) => {
         const action = payload as GameAction;
+        // Guard against malformed payloads
+        if (!action || !action.type || !action.playerId) {
+          console.warn('[Multiplayer] Received invalid action payload:', payload);
+          return;
+        }
         if (action.playerId !== this.peerId && this.options.onAction) {
           this.options.onAction(action);
         }

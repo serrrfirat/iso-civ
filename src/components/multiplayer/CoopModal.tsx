@@ -71,9 +71,10 @@ export function CoopModal({
         .catch((err) => {
           console.error('Failed to auto-join room:', err);
           setIsLoading(false);
-          // Fall back to showing join modal with error
-          setJoinCode(pendingRoomCode);
-          setMode('join');
+          // Clear the URL since this room doesn't exist
+          window.history.replaceState({}, '', '/');
+          // Fall back to showing select modal (room not found)
+          setMode('select');
         });
     }
   }, [open, pendingRoomCode, autoJoinAttempted, joinRoom]);

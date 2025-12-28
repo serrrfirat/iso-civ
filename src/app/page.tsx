@@ -399,6 +399,11 @@ export default function HomePage() {
             
             <Button 
               onClick={async () => {
+                // Clear any room code from URL to prevent multiplayer conflicts
+                if (window.location.search.includes('room=')) {
+                  window.history.replaceState({}, '', '/');
+                  setPendingRoomCode(null);
+                }
                 const response = await fetch('/example-states/example_state_9.json');
                 const exampleState = await response.json();
                 try {
@@ -484,6 +489,11 @@ export default function HomePage() {
               </Button>
               <Button 
                 onClick={async () => {
+                  // Clear any room code from URL to prevent multiplayer conflicts
+                  if (window.location.search.includes('room=')) {
+                    window.history.replaceState({}, '', '/');
+                    setPendingRoomCode(null);
+                  }
                   const response = await fetch('/example-states/example_state_9.json');
                   const exampleState = await response.json();
                   try {

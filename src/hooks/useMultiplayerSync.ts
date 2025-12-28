@@ -58,6 +58,12 @@ export function useMultiplayerSync() {
 
   // Apply a remote action to the local game state
   const applyRemoteAction = useCallback((action: GameAction) => {
+    // Guard against null/undefined actions (can happen with malformed broadcasts)
+    if (!action || !action.type) {
+      console.warn('[useMultiplayerSync] Received invalid action:', action);
+      return;
+    }
+    
     switch (action.type) {
       case 'place':
         // Save current tool, apply placement, restore tool
