@@ -175,28 +175,3 @@ export async function updatePlayerCount(
   }
 }
 
-/**
- * Delete old rooms (cleanup - can be called periodically or via cron)
- * Deletes rooms not updated in the last 24 hours
- */
-export async function cleanupOldRooms(): Promise<number> {
-  try {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    
-    const { data, error } = await supabase
-      .from('game_rooms')
-      .delete()
-      .lt('updated_at', cutoff)
-      .select('room_code');
-
-    if (error) {
-      console.error('[Database] Failed to cleanup rooms:', error);
-      return 0;
-    }
-
-    return data?.length ?? 0;
-  } catch (e) {
-    console.error('[Database] Error cleaning up rooms:', e);
-    return 0;
-  }
-}
