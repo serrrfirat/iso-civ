@@ -419,7 +419,13 @@ export default function HomePage() {
   if (showGame) {
     const gameContent = (
       <main className="h-screen w-screen overflow-hidden">
-        <Game onExit={handleExitGame} />
+        <Game onExit={handleExitGame} onShare={() => setShowCoopModal(true)} />
+        <CoopModal
+          open={showCoopModal}
+          onOpenChange={setShowCoopModal}
+          onStartGame={handleCoopStart}
+          pendingRoomCode={pendingRoomCode}
+        />
       </main>
     );
 

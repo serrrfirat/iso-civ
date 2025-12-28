@@ -36,7 +36,7 @@ import { CanvasIsometricGrid } from '@/components/game/CanvasIsometricGrid';
 // Cargo type names for notifications
 const CARGO_TYPE_NAMES = [msg('containers'), msg('bulk materials'), msg('oil')];
 
-export default function Game({ onExit }: { onExit?: () => void }) {
+export default function Game({ onExit, onShare }: { onExit?: () => void; onShare?: () => void }) {
   const gt = useGT();
   const m = useMessages();
   const { state, setTool, setActivePanel, addMoney, addNotification, setSpeed } = useGame();
@@ -251,6 +251,7 @@ export default function Game({ onExit }: { onExit?: () => void }) {
             selectedTile={selectedTile && state.selectedTool === 'select' ? state.grid[selectedTile.y][selectedTile.x] : null}
             services={state.services}
             onCloseTile={() => setSelectedTile(null)}
+            onShare={onShare}
             onExit={onExit}
           />
           
