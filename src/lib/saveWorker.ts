@@ -2,15 +2,17 @@
 // Handles expensive JSON serialization and LZ-string compression off the main thread
 // This file is bundled separately by Next.js/Webpack
 
-import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
+import { compressToUTF16, decompressFromUTF16, compressToEncodedURIComponent } from 'lz-string';
 
 export type SaveWorkerMessage = 
   | { type: 'serialize-compress'; id: number; state: unknown }
-  | { type: 'decompress-parse'; id: number; compressed: string };
+  | { type: 'decompress-parse'; id: number; compressed: string }
+  | { type: 'serialize-compress-uri'; id: number; state: unknown }; // For Supabase DB saves
 
 export type SaveWorkerResponse = 
   | { type: 'serialized-compressed'; id: number; compressed: string; error?: string }
-  | { type: 'decompressed-parsed'; id: number; state: unknown; error?: string };
+  | { type: 'decompressed-parsed'; id: number; state: unknown; error?: string }
+  | { type: 'serialized-compressed-uri'; id: number; compressed: string; error?: string };
 
 // Worker message handler
 self.onmessage = (event: MessageEvent<SaveWorkerMessage>) => {
@@ -32,6 +34,28 @@ self.onmessage = (event: MessageEvent<SaveWorkerMessage>) => {
     } catch (error) {
       self.postMessage({
         type: 'serialized-compressed',
+        id,
+        compressed: '',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+  
+  // Serialize and compress for Supabase (URI-safe encoding)
+  if (type === 'serialize-compress-uri') {
+    try {
+      const { state } = event.data as { type: 'serialize-compress-uri'; id: number; state: unknown };
+      const serialized = JSON.stringify(state);
+      const compressed = compressToEncodedURIComponent(serialized);
+      
+      self.postMessage({
+        type: 'serialized-compressed-uri',
+        id,
+        compressed,
+      });
+    } catch (error) {
+      self.postMessage({
+        type: 'serialized-compressed-uri',
         id,
         compressed: '',
         error: error instanceof Error ? error.message : 'Unknown error',

@@ -35,6 +35,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import { GameState } from '@/types/game';
+import { serializeAndCompressForDBAsync } from '@/lib/saveWorkerManager';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
@@ -52,6 +53,7 @@ export interface GameRoomRow {
 
 /**
  * Create a new game room in the database
+ * PERF: Uses Web Worker for serialization + compression - no main thread blocking!
  */
 export async function createGameRoom(
   roomCode: string,
@@ -59,7 +61,8 @@ export async function createGameRoom(
   gameState: GameState
 ): Promise<boolean> {
   try {
-    const compressed = compressToEncodedURIComponent(JSON.stringify(gameState));
+    // PERF: Both JSON.stringify and lz-string compression happen in the worker
+    const compressed = await serializeAndCompressForDBAsync(gameState);
     
     const { error } = await supabase
       .from('game_rooms')
@@ -116,13 +119,15 @@ export async function loadGameRoom(
 
 /**
  * Update game state in a room
+ * PERF: Uses Web Worker for serialization + compression - no main thread blocking!
  */
 export async function updateGameRoom(
   roomCode: string,
   gameState: GameState
 ): Promise<boolean> {
   try {
-    const compressed = compressToEncodedURIComponent(JSON.stringify(gameState));
+    // PERF: Both JSON.stringify and lz-string compression happen in the worker
+    const compressed = await serializeAndCompressForDBAsync(gameState);
     
     const { error } = await supabase
       .from('game_rooms')
