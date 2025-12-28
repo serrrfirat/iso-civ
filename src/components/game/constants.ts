@@ -1,5 +1,6 @@
-import { BuildingType } from '@/types/game';
-import { CarDirection, DirectionMeta, TILE_WIDTH, TILE_HEIGHT } from './types';
+import { BuildingType } from '@/games/isocity/types';
+import { DirectionMeta } from '@/core/types';
+import { CarDirection, TILE_WIDTH, TILE_HEIGHT } from './types';
 
 // Vehicle colors (duller/muted versions)
 export const CAR_COLORS = ['#d97777', '#d4a01f', '#2ba67a', '#4d84c8', '#9a6ac9'];
