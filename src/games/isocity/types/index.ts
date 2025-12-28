@@ -4,3 +4,4 @@ export * from './zones';
 export * from './economy';
 export * from './services';
 export * from './game';
+export * from './entities';

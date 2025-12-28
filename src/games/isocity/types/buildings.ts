@@ -1,6 +1,8 @@
 // IsoCity building type definitions
+// Extends core base types with city-builder specific properties
 
 import { msg } from 'gt-next';
+import { BaseBuilding } from '@/core/types';
 
 export type BuildingType =
   | 'empty'
@@ -87,9 +89,12 @@ export type BridgeOrientation = 'ns' | 'ew';
 // What the bridge carries (road or rail)
 export type BridgeTrackType = 'road' | 'rail';
 
-export interface Building {
+/**
+ * IsoCity Building - extends BaseBuilding with city-builder specific properties
+ */
+export interface Building extends BaseBuilding {
   type: BuildingType;
-  level: number;
+  // City-builder specific properties
   population: number;
   jobs: number;
   powered: boolean;

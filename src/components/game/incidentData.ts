@@ -82,7 +82,7 @@ export type CrimeType =
   | 'prostitution'
   | 'solicitation';
 
-export interface CrimeData {
+interface CrimeData {
   name: string;
   description: string;
   severity: 'low' | 'medium' | 'high' | 'critical';
@@ -90,7 +90,7 @@ export interface CrimeData {
   weight: number; // relative spawn frequency (higher = more common)
 }
 
-export const CRIME_DATA: Record<CrimeType, CrimeData> = {
+const CRIME_DATA: Record<CrimeType, CrimeData> = {
   // Violent Crimes (critical/high severity, longer duration)
   armed_robbery: {
     name: 'Armed Robbery',
@@ -514,8 +514,8 @@ export const CRIME_DATA: Record<CrimeType, CrimeData> = {
   },
 };
 
-// Get all crime types as an array
-export const CRIME_TYPES = Object.keys(CRIME_DATA) as CrimeType[];
+// Get all crime types as an array (internal)
+const CRIME_TYPES = Object.keys(CRIME_DATA) as CrimeType[];
 
 // Get a weighted random crime type
 export function getRandomCrimeType(): CrimeType {
@@ -536,7 +536,7 @@ export function getRandomCrimeType(): CrimeType {
 // FIRE TYPES
 // ============================================================================
 
-export type FireType =
+type FireType =
   | 'structural'
   | 'electrical'
   | 'kitchen'
@@ -548,13 +548,13 @@ export type FireType =
   | 'gas_leak'
   | 'arson';
 
-export interface FireData {
+interface FireData {
   name: string;
   description: string;
   severity: 'minor' | 'moderate' | 'major' | 'catastrophic';
 }
 
-export const FIRE_DATA: Record<FireType, FireData> = {
+const FIRE_DATA: Record<FireType, FireData> = {
   structural: {
     name: 'Structure Fire',
     description: 'Flames spreading through building. Multiple floors at risk. Evacuate immediately.',
@@ -607,10 +607,10 @@ export const FIRE_DATA: Record<FireType, FireData> = {
   },
 };
 
-export const FIRE_TYPES = Object.keys(FIRE_DATA) as FireType[];
+const FIRE_TYPES = Object.keys(FIRE_DATA) as FireType[];
 
-// Get a random fire type (weighted toward structural/electrical for realism)
-export function getRandomFireType(): FireType {
+// Get a random fire type (weighted toward structural/electrical for realism) - internal use
+function getRandomFireType(): FireType {
   const weights: Record<FireType, number> = {
     structural: 25,
     electrical: 20,
