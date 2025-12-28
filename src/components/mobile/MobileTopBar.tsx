@@ -20,8 +20,8 @@ import {
   SafetyIcon,
   EnvironmentIcon,
   CloseIcon,
-  ShareIcon,
 } from '@/components/ui/Icons';
+import { Users } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -222,23 +222,23 @@ export function MobileTopBar({
             </div>
 
             {/* Language selector, Share, and Exit button group */}
-            <div className="flex items-center">
-              <LanguageSelector useDrawer iconSize={12} />
+            <div className="flex items-center -space-x-0.5">
+              <LanguageSelector useDrawer iconSize={12} className="w-4" />
 
               {onShare && (
                 <button
                   onClick={onShare}
-                  className="h-6 w-5 p-0 m-0 flex items-center justify-center text-muted-foreground hover:text-foreground"
-                  title="Share"
+                  className="h-6 w-4 p-0 m-0 flex items-center justify-center text-muted-foreground hover:text-foreground"
+                  title="Invite Players"
                 >
-                  <ShareIcon size={12} />
+                  <Users className="w-3 h-3" />
                 </button>
               )}
 
               {onExit && (
                 <button
                   onClick={() => setShowExitDialog(true)}
-                  className="h-6 w-5 p-0 m-0 flex items-center justify-center text-muted-foreground hover:text-foreground"
+                  className="h-6 w-4 p-0 m-0 flex items-center justify-center text-muted-foreground hover:text-foreground"
                   title="Exit to Main Menu"
                 >
                   <svg 
