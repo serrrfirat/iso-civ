@@ -102,41 +102,52 @@ export default function ThumbnailPreview() {
   const pathParam = searchParams.get('path') || '/';
 
   useEffect(() => {
+    const abortController = new AbortController();
     const baseUrl = window.location.origin;
     const fullUrl = `${baseUrl}${pathParam}`;
     setInputUrl(fullUrl);
-    fetchOGData(fullUrl);
-  }, [pathParam]);
 
-  async function fetchOGData(url: string) {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const response = await fetch(url);
-      const html = await response.text();
+    async function fetchOGData() {
+      setLoading(true);
+      setError(null);
       
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      
-      const getMeta = (property: string): string => {
-        const el = doc.querySelector(`meta[property="${property}"], meta[name="${property}"]`);
-        return el?.getAttribute('content') || '';
-      };
-      
-      const title = getMeta('og:title') || doc.querySelector('title')?.textContent || '';
-      const description = getMeta('og:description') || getMeta('description') || '';
-      const image = getMeta('og:image') || getMeta('twitter:image') || '';
-      const siteName = getMeta('og:site_name') || '';
-      
-      setOG({ title, description, image, siteName, url });
-    } catch (err) {
-      setError('Failed to fetch OG data');
-      console.error(err);
-    } finally {
-      setLoading(false);
+      try {
+        const response = await fetch(fullUrl, { signal: abortController.signal });
+        const html = await response.text();
+        
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        const getMeta = (property: string): string => {
+          const el = doc.querySelector(`meta[property="${property}"], meta[name="${property}"]`);
+          return el?.getAttribute('content') || '';
+        };
+        
+        const title = getMeta('og:title') || doc.querySelector('title')?.textContent || '';
+        const description = getMeta('og:description') || getMeta('description') || '';
+        const image = getMeta('og:image') || getMeta('twitter:image') || '';
+        const siteName = getMeta('og:site_name') || '';
+        
+        setOG({ title, description, image, siteName, url: fullUrl });
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+          return; // Request was cancelled, ignore
+        }
+        setError('Failed to fetch OG data');
+        console.error(err);
+      } finally {
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
+      }
     }
-  }
+
+    fetchOGData();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [pathParam]);
 
   const quickLinks = [
     { label: 'Homepage', path: '/' },
