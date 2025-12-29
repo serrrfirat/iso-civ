@@ -19,10 +19,13 @@ import {
 import { GameState } from '@/types/game';
 import { msg } from 'gt-next';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Lazy init: only create client when Supabase is configured
+const supabase = supabaseUrl && supabaseKey 
+  ? createClient(supabaseUrl, supabaseKey) 
+  : null;
 
 // Throttle state saves to avoid excessive database writes
 const STATE_SAVE_INTERVAL = 3000; // Save state every 3 seconds max
@@ -58,6 +61,9 @@ export class MultiplayerProvider {
   private saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(options: MultiplayerProviderOptions) {
+    if (!supabase) {
+      throw new Error('Multiplayer requires Supabase configuration');
+    }
     this.options = options;
     this.roomCode = options.roomCode;
     this.peerId = generatePlayerId();
@@ -310,7 +316,7 @@ export class MultiplayerProvider {
     }
     
     this.channel.unsubscribe();
-    supabase.removeChannel(this.channel);
+    supabase?.removeChannel(this.channel);
   }
 }
 

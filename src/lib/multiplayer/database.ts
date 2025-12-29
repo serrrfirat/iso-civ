@@ -37,10 +37,13 @@ import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from
 import { GameState } from '@/types/game';
 import { serializeAndCompressForDBAsync } from '@/lib/saveWorkerManager';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Lazy init: only create client when Supabase is configured
+const supabase = supabaseUrl && supabaseKey 
+  ? createClient(supabaseUrl, supabaseKey) 
+  : null;
 
 // Maximum city size limit for Supabase storage (20MB)
 const MAX_CITY_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
@@ -90,6 +93,7 @@ export async function createGameRoom(
   cityName: string,
   gameState: GameState
 ): Promise<boolean> {
+  if (!supabase) return false;
   try {
     // PERF: Both JSON.stringify and lz-string compression happen in the worker
     const compressed = await serializeAndCompressForDBAsync(gameState);
@@ -128,6 +132,7 @@ export async function createGameRoom(
 export async function loadGameRoom(
   roomCode: string
 ): Promise<{ gameState: GameState; cityName: string } | null> {
+  if (!supabase) return null;
   try {
     const { data, error } = await supabase
       .from('game_rooms')
@@ -163,6 +168,7 @@ export async function updateGameRoom(
   roomCode: string,
   gameState: GameState
 ): Promise<boolean> {
+  if (!supabase) return false;
   try {
     // PERF: Both JSON.stringify and lz-string compression happen in the worker
     const compressed = await serializeAndCompressForDBAsync(gameState);
@@ -195,6 +201,7 @@ export async function updateGameRoom(
  * Check if a room exists
  */
 export async function roomExists(roomCode: string): Promise<boolean> {
+  if (!supabase) return false;
   try {
     const { data, error } = await supabase
       .from('game_rooms')
@@ -215,6 +222,7 @@ export async function updatePlayerCount(
   roomCode: string,
   count: number
 ): Promise<void> {
+  if (!supabase) return;
   try {
     await supabase
       .from('game_rooms')
