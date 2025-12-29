@@ -42,6 +42,35 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Maximum city size limit for Supabase storage (20MB)
+const MAX_CITY_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+
+export class CitySizeLimitError extends Error {
+  public readonly sizeBytes: number;
+  public readonly limitBytes: number;
+  
+  constructor(sizeBytes: number, limitBytes: number = MAX_CITY_SIZE_BYTES) {
+    const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2);
+    const limitMB = (limitBytes / (1024 * 1024)).toFixed(0);
+    super(`City size (${sizeMB}MB) exceeds maximum allowed size (${limitMB}MB)`);
+    this.name = 'CitySizeLimitError';
+    this.sizeBytes = sizeBytes;
+    this.limitBytes = limitBytes;
+  }
+}
+
+/**
+ * Check if compressed data exceeds the size limit
+ * @throws CitySizeLimitError if size exceeds limit
+ */
+function checkCitySize(compressed: string): void {
+  // For URI-encoded strings (ASCII), byte length ≈ string length
+  const sizeBytes = compressed.length;
+  if (sizeBytes > MAX_CITY_SIZE_BYTES) {
+    throw new CitySizeLimitError(sizeBytes);
+  }
+}
+
 export interface GameRoomRow {
   room_code: string;
   city_name: string;
@@ -54,6 +83,7 @@ export interface GameRoomRow {
 /**
  * Create a new game room in the database
  * PERF: Uses Web Worker for serialization + compression - no main thread blocking!
+ * @throws CitySizeLimitError if the city size exceeds the maximum allowed size
  */
 export async function createGameRoom(
   roomCode: string,
@@ -63,6 +93,9 @@ export async function createGameRoom(
   try {
     // PERF: Both JSON.stringify and lz-string compression happen in the worker
     const compressed = await serializeAndCompressForDBAsync(gameState);
+    
+    // Check if city size exceeds limit before saving
+    checkCitySize(compressed);
     
     const { error } = await supabase
       .from('game_rooms')
@@ -80,6 +113,10 @@ export async function createGameRoom(
 
     return true;
   } catch (e) {
+    // Re-throw CitySizeLimitError so callers can handle it specifically
+    if (e instanceof CitySizeLimitError) {
+      throw e;
+    }
     console.error('[Database] Error creating room:', e);
     return false;
   }
@@ -120,6 +157,7 @@ export async function loadGameRoom(
 /**
  * Update game state in a room
  * PERF: Uses Web Worker for serialization + compression - no main thread blocking!
+ * @throws CitySizeLimitError if the city size exceeds the maximum allowed size
  */
 export async function updateGameRoom(
   roomCode: string,
@@ -128,6 +166,9 @@ export async function updateGameRoom(
   try {
     // PERF: Both JSON.stringify and lz-string compression happen in the worker
     const compressed = await serializeAndCompressForDBAsync(gameState);
+    
+    // Check if city size exceeds limit before saving
+    checkCitySize(compressed);
     
     const { error } = await supabase
       .from('game_rooms')
@@ -141,6 +182,10 @@ export async function updateGameRoom(
 
     return true;
   } catch (e) {
+    // Re-throw CitySizeLimitError so callers can handle it specifically
+    if (e instanceof CitySizeLimitError) {
+      throw e;
+    }
     console.error('[Database] Error updating room:', e);
     return false;
   }
