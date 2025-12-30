@@ -338,7 +338,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
   
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="max-w-[700px] max-h-[90vh]">
+      <DialogContent className="max-w-[900px] max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>Sprite Test View</DialogTitle>
           <DialogDescription>
@@ -347,9 +347,9 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setSelectedTab} className="w-full">
-          <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${availableTabs.length}, 1fr)` }}>
+          <TabsList className="flex flex-wrap gap-1 w-full">
             {availableTabs.map(tab => (
-              <TabsTrigger key={tab.id} value={tab.id} className="text-xs">
+              <TabsTrigger key={tab.id} value={tab.id} className="flex-shrink-0 text-xs">
                 {tab.label}
               </TabsTrigger>
             ))}
@@ -364,9 +364,9 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
           />
         </div>
         
-        <div className="text-xs text-muted-foreground space-y-1">
+        <div className="space-y-1 text-xs text-muted-foreground">
           <p>Sprite sheet: {currentSheetInfo} ({gridInfo} grid)</p>
-          <p>Edit offsets in <code className="bg-muted px-1 rounded">src/lib/renderConfig.ts</code> → each sprite pack&apos;s verticalOffsets</p>
+          <p>Edit offsets in <code className="px-1 rounded bg-muted">src/lib/renderConfig.ts</code> → each sprite pack&apos;s verticalOffsets</p>
         </div>
       </DialogContent>
     </Dialog>
