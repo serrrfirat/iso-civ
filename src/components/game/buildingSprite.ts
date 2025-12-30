@@ -20,7 +20,7 @@ export interface SpriteSourceResult {
   /** Path to the sprite sheet to use */
   source: string;
   /** Type of variant being used */
-  variantType: 'normal' | 'construction' | 'abandoned' | 'parks' | 'parksConstruction' | 'dense' | 'modern' | 'farm' | 'shop' | 'station';
+  variantType: 'normal' | 'construction' | 'abandoned' | 'parks' | 'parksConstruction' | 'dense' | 'modern' | 'farm' | 'shop' | 'station' | 'services';
   /** Variant coordinates if using a variant sheet (row, col) */
   variant: { row: number; col: number } | null;
 }
@@ -70,7 +70,8 @@ export interface SpriteRenderInfo {
  * 6. Farm variants (low-density industrial)
  * 7. Shop variants (low-density commercial)
  * 8. Station variants (rail stations)
- * 9. Normal (default sprite sheet)
+ * 9. Services variants (level-based service buildings)
+ * 10. Normal (default sprite sheet)
  */
 export function selectSpriteSource(
   buildingType: BuildingType,
@@ -212,6 +213,21 @@ export function selectSpriteSource(
         source: activePack.stationsSrc,
         variantType: 'station',
         variant: variants[variantIndex],
+      };
+    }
+  }
+  
+  // Services variants (level-based selection)
+  if (activePack.servicesSrc && activePack.servicesVariants && activePack.servicesVariants[buildingType]) {
+    const variants = activePack.servicesVariants[buildingType];
+    if (variants.length > 0) {
+      // Use building.level (1-based) to select variant (0-based index)
+      // Clamp level to available variants: Math.min(building.level - 1, variants.length - 1)
+      const levelIndex = Math.max(0, Math.min(building.level - 1, variants.length - 1));
+      return {
+        source: activePack.servicesSrc,
+        variantType: 'services',
+        variant: variants[levelIndex],
       };
     }
   }
@@ -399,6 +415,21 @@ export function calculateSpriteCoords(
     };
   }
   
+  // Services variants
+  if (variantType === 'services' && variant) {
+    const servicesCols = activePack.servicesCols || 5;
+    const servicesRows = activePack.servicesRows || 6;
+    const tileWidth = Math.floor(sheetWidth / servicesCols);
+    const tileHeight = Math.floor(sheetHeight / servicesRows);
+    
+    return {
+      sx: variant.col * tileWidth,
+      sy: variant.row * tileHeight,
+      sw: tileWidth,
+      sh: tileHeight,
+    };
+  }
+  
   // Normal, construction, or abandoned - use getSpriteCoords
   const coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, activePack);
   
@@ -495,6 +526,10 @@ export function calculateSpriteScale(
     scaleMultiplier *= activePack.stationsScales[buildingType];
   }
   
+  if (variantType === 'services' && activePack.servicesScales && buildingType in activePack.servicesScales) {
+    scaleMultiplier *= activePack.servicesScales[buildingType];
+  }
+  
   if ((variantType === 'parks' || variantType === 'parksConstruction') && 
       activePack.parksScales && buildingType in activePack.parksScales) {
     scaleMultiplier *= activePack.parksScales[buildingType];
@@ -589,6 +624,9 @@ export function calculateSpriteOffsets(
   } else if (variantType === 'station' && activePack.stationsVerticalOffsets && 
              buildingType in activePack.stationsVerticalOffsets) {
     verticalOffset = activePack.stationsVerticalOffsets[buildingType];
+  } else if (variantType === 'services' && activePack.servicesVerticalOffsets && 
+             buildingType in activePack.servicesVerticalOffsets) {
+    verticalOffset = activePack.servicesVerticalOffsets[buildingType];
   } else if (activePack.buildingVerticalOffsets && buildingType in activePack.buildingVerticalOffsets) {
     verticalOffset = activePack.buildingVerticalOffsets[buildingType];
   } else {
@@ -627,6 +665,11 @@ export function calculateSpriteOffsets(
   if (variantType === 'station' && activePack.stationsHorizontalOffsets && 
       buildingType in activePack.stationsHorizontalOffsets) {
     horizontalOffset = activePack.stationsHorizontalOffsets[buildingType];
+  }
+  
+  if (variantType === 'services' && activePack.servicesHorizontalOffsets && 
+      buildingType in activePack.servicesHorizontalOffsets) {
+    horizontalOffset = activePack.servicesHorizontalOffsets[buildingType];
   }
   
   return { vertical: verticalOffset, horizontal: horizontalOffset };

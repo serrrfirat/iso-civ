@@ -130,6 +130,20 @@ export interface SpritePack {
   stationsHorizontalOffsets?: Record<string, number>;
   // Per-building-type scale adjustments for STATIONS sprite sheet buildings
   stationsScales?: Record<string, number>;
+  // Path to the services sprite sheet (for service buildings with level variants)
+  servicesSrc?: string;
+  // Services layout configuration (columns and rows for the services sheet)
+  servicesCols?: number;
+  servicesRows?: number;
+  // Services variants: maps building type to available level variants in the services sheet
+  // Each variant specifies row and column (0-indexed) in the services sprite sheet
+  servicesVariants?: Record<string, { row: number; col: number }[]>;
+  // Per-building-type vertical offset adjustments for SERVICES sprite sheet buildings
+  servicesVerticalOffsets?: Record<string, number>;
+  // Per-building-type horizontal offset adjustments for SERVICES sprite sheet buildings
+  servicesHorizontalOffsets?: Record<string, number>;
+  // Per-building-type scale adjustments for SERVICES sprite sheet buildings
+  servicesScales?: Record<string, number>;
   // Maps building types to sprite keys in spriteOrder
   buildingToSprite: Record<string, string>;
   // Optional global scale multiplier for all sprites in this pack
@@ -518,6 +532,77 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
   stationsHorizontalOffsets: {},
   stationsScales: {
     rail_station: 0.85, // Scale down 15% for better fit
+  },
+  // Services sprite sheet configuration (service buildings with level progression)
+  servicesSrc: '/assets/sprites_red_water_new_services.png',
+  servicesCols: 5,
+  servicesRows: 6,
+  servicesVariants: {
+    // Police Station levels - Row 0, columns 1-5 (0-indexed: row 0, cols 0-4)
+    police_station: [
+      { row: 0, col: 0 }, // Level 1
+      { row: 0, col: 1 }, // Level 2
+      { row: 0, col: 2 }, // Level 3
+      { row: 0, col: 3 }, // Level 4
+      { row: 0, col: 4 }, // Level 5
+    ],
+    // Fire Station levels - Row 1, columns 1-5 (0-indexed: row 1, cols 0-4)
+    fire_station: [
+      { row: 1, col: 0 }, // Level 1
+      { row: 1, col: 1 }, // Level 2
+      { row: 1, col: 2 }, // Level 3
+      { row: 1, col: 3 }, // Level 4
+      { row: 1, col: 4 }, // Level 5
+    ],
+    // Hospital levels - Row 2, columns 1-5 (0-indexed: row 2, cols 0-4)
+    hospital: [
+      { row: 2, col: 0 }, // Level 1
+      { row: 2, col: 1 }, // Level 2
+      { row: 2, col: 2 }, // Level 3
+      { row: 2, col: 3 }, // Level 4
+      { row: 2, col: 4 }, // Level 5
+    ],
+    // School levels - Row 3, columns 1-5 (0-indexed: row 3, cols 0-4)
+    school: [
+      { row: 3, col: 0 }, // Level 1
+      { row: 3, col: 1 }, // Level 2
+      { row: 3, col: 2 }, // Level 3
+      { row: 3, col: 3 }, // Level 4
+      { row: 3, col: 4 }, // Level 5
+    ],
+    // University levels - Row 4, columns 1-5 (0-indexed: row 4, cols 0-4)
+    university: [
+      { row: 4, col: 0 }, // Level 1
+      { row: 4, col: 1 }, // Level 2
+      { row: 4, col: 2 }, // Level 3
+      { row: 4, col: 3 }, // Level 4
+      { row: 4, col: 4 }, // Level 5
+    ],
+    // Infrastructure levels - Row 5 (0-indexed: row 5)
+    // Water Tower and Power Plant variants
+    power_plant: [
+      { row: 5, col: 0 }, // Level 1
+      { row: 5, col: 1 }, // Level 1
+      { row: 5, col: 2 }, // Level 2
+      { row: 5, col: 3 }, // Level 3
+      { row: 5, col: 4 }, // Level 4
+    ],
+  },
+  servicesVerticalOffsets: {
+    // Adjust vertical positioning for each service building type
+    police_station: -0.2,
+    fire_station: -0.3,
+    hospital: -0.65,
+    school: -0.35,
+    university: -0.55,
+    power_plant: -0.3,
+  },
+  servicesHorizontalOffsets: {
+    // Adjust horizontal positioning if needed
+  },
+  servicesScales: {
+    // Scale adjustments for better visual fit
+    // Add specific scales if buildings need resizing
   },
   buildingToSprite: {
     house_small: 'house_small',
