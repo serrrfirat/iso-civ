@@ -38,6 +38,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { openCommandMenu } from '@/components/ui/CommandMenu';
+import { Users } from 'lucide-react';
+import { ShareModal } from '@/components/multiplayer/ShareModal';
+import { useMultiplayerOptional } from '@/context/MultiplayerContext';
 import {
   Dialog,
   DialogContent,
@@ -464,6 +467,19 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
   const { state, setTool, setActivePanel, saveCity, expandCity, shrinkCity } = useGame();
   const { selectedTool, stats, activePanel } = state;
   const [showExitDialog, setShowExitDialog] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const multiplayer = useMultiplayerOptional();
+  const hasShownShareModalRef = useRef(false);
+  
+  // Auto-show share modal when first connecting as host (not guest)
+  // Guests have initialState set (received from host), hosts don't
+  useEffect(() => {
+    const isHost = multiplayer?.connectionState === 'connected' && multiplayer?.roomCode && !multiplayer?.initialState;
+    if (isHost && !hasShownShareModalRef.current) {
+      hasShownShareModalRef.current = true;
+      setShowShareModal(true);
+    }
+  }, [multiplayer?.connectionState, multiplayer?.roomCode, multiplayer?.initialState]);
   const m = useMessages();
   
   const handleSaveAndExit = useCallback(() => {
@@ -569,6 +585,18 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </Button>
+            {/* Invite button - only show if in multiplayer context */}
+            {multiplayer && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setShowShareModal(true)}
+                title="Invite Players"
+                className="h-7 w-7 text-muted-foreground hover:text-sidebar-foreground"
+              >
+                <Users className="w-4 h-4" />
+              </Button>
+            )}
             {onExit && (
               <Button
                 variant="ghost"
@@ -595,6 +623,10 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
         {/* Direct categories (TOOLS, ZONES) */}
         {Object.entries(directCategories).map(([category, tools]) => (
           <div key={category} className="mb-1">
+            {/* Separator above ZONES */}
+            {category === 'ZONES' && (
+              <div className="mx-4 my-2 h-px bg-sidebar-border/50" />
+            )}
             <div className="px-4 py-2 text-[10px] font-bold tracking-widest text-muted-foreground">
               {m((CATEGORY_LABELS[category] || category) as Parameters<typeof m>[0])}
             </div>
@@ -698,6 +730,13 @@ export const Sidebar = React.memo(function Sidebar({ onExit }: { onExit?: () => 
         onSaveAndExit={handleSaveAndExit}
         onExitWithoutSaving={handleExitWithoutSaving}
       />
+      
+      {multiplayer && (
+        <ShareModal
+          open={showShareModal}
+          onOpenChange={setShowShareModal}
+        />
+      )}
     </div>
   );
 });

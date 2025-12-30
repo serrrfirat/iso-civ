@@ -100,8 +100,11 @@ import {
   drawTrains,
   MIN_RAIL_TILES_FOR_TRAINS,
   MAX_TRAINS,
+  MAX_TRAINS_MOBILE,
   TRAIN_SPAWN_INTERVAL,
+  TRAIN_SPAWN_INTERVAL_MOBILE,
   TRAINS_PER_RAIL_TILES,
+  TRAINS_PER_RAIL_TILES_MOBILE,
 } from '@/components/game/trainSystem';
 import { Train } from '@/components/game/types';
 import { useLightingSystem } from '@/components/game/lightingSystem';
@@ -776,20 +779,23 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       return;
     }
 
-    // Calculate max trains based on rail network size
-    const maxTrains = Math.min(MAX_TRAINS, Math.ceil(railTileCount / TRAINS_PER_RAIL_TILES));
+    // Calculate max trains based on rail network size - lower limits on mobile
+    const maxTrainsLimit = isMobile ? MAX_TRAINS_MOBILE : MAX_TRAINS;
+    const trainsPerTile = isMobile ? TRAINS_PER_RAIL_TILES_MOBILE : TRAINS_PER_RAIL_TILES;
+    const maxTrains = Math.min(maxTrainsLimit, Math.ceil(railTileCount / trainsPerTile));
     
     // Speed multiplier based on game speed
     const speedMultiplier = currentSpeed === 1 ? 1 : currentSpeed === 2 ? 2 : 3;
 
-    // Spawn timer
+    // Spawn timer - slower on mobile
+    const spawnInterval = isMobile ? TRAIN_SPAWN_INTERVAL_MOBILE : TRAIN_SPAWN_INTERVAL;
     trainSpawnTimerRef.current -= delta;
     if (trainsRef.current.length < maxTrains && trainSpawnTimerRef.current <= 0) {
       const newTrain = spawnTrain(currentGrid, currentGridSize, trainIdRef);
       if (newTrain) {
         trainsRef.current.push(newTrain);
       }
-      trainSpawnTimerRef.current = TRAIN_SPAWN_INTERVAL;
+      trainSpawnTimerRef.current = spawnInterval;
     }
 
     // Update existing trains (pass all trains for collision detection)
@@ -876,6 +882,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       }
       if (currentSpritePack.infrastructureSrc) {
         loadSpriteImage(currentSpritePack.infrastructureSrc, true).catch(console.error);
+      }
+      if (currentSpritePack.mansionsSrc) {
+        loadSpriteImage(currentSpritePack.mansionsSrc, true).catch(console.error);
       }
       // Load airplane sprite sheet (always loaded, not dependent on sprite pack)
       loadSpriteImage(AIRPLANE_SPRITE_SRC, false).catch(console.error);
@@ -2380,7 +2389,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       lastTime = time;
       lastRenderTime = time;
       
-      if (delta > 0) {
+      // PERF: Skip ALL vehicle/entity updates during mobile panning/zooming (not just drawing)
+      // This provides a massive performance boost for big cities on mobile
+      const skipMobileUpdates = isMobile && (isPanningRef.current || isPinchZoomingRef.current);
+      
+      if (delta > 0 && !skipMobileUpdates) {
         updateCars(delta);
         spawnCrimeIncidents(delta); // Spawn new crime incidents
         updateCrimeIncidents(delta); // Update/decay crime incidents
@@ -2994,7 +3007,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full overflow-hidden touch-none"
+      className="overflow-hidden relative w-full h-full touch-none"
       style={{ 
         cursor: isPanning ? 'grabbing' : isDragging ? 'crosshair' : 'default',
       }}
@@ -3067,7 +3080,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
             setDragStartTile(null);
             setDragEndTile(null);
           }}>
-            <DialogContent className="max-w-[400px]">
+            <DialogContent 
+              className="max-w-[400px]"
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
               <DialogHeader>
                 <T>
                   <DialogTitle>City Discovered!</DialogTitle>
@@ -3082,7 +3099,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                 <T>
                   <div className="text-sm text-muted-foreground">
                     Connecting to <Var>{city.name}</Var> will establish a trade route, providing:
-                    <ul className="list-disc list-inside mt-2 space-y-1">
+                    <ul className="mt-2 space-y-1 list-disc list-inside">
                       <li>$5,000 one-time bonus</li>
                       <li>$200/month additional income</li>
                     </ul>
@@ -3092,7 +3109,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                   <T>
                     <Button
                       variant="outline"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setCityConnectionDialog(null);
                         setDragStartTile(null);
                         setDragEndTile(null);
@@ -3103,7 +3121,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
                   </T>
                   <T>
                     <Button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         connectToCity(city.id);
                         setCityConnectionDialog(null);
                         setDragStartTile(null);
@@ -3137,8 +3156,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         return (
           <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-md text-sm ${
             isWaterfrontPlacementInvalid
-              ? 'bg-destructive/90 border border-destructive-foreground/30 text-destructive-foreground'
-              : 'bg-card/90 border border-border'
+              ? 'border bg-destructive/90 border-destructive-foreground/30 text-destructive-foreground'
+              : 'border bg-card/90 border-border'
           }`}>
             {isDragging && dragStartTile && dragEndTile && showsDragGrid ? (
               <>
@@ -3190,7 +3209,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           >
             <div className="bg-sidebar border border-sidebar-border rounded-md shadow-lg px-3 py-2 w-[220px]">
               {/* Header */}
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex gap-2 items-center mb-1">
                 {hoveredIncident.type === 'fire' ? (
                   <FireIcon size={14} className="text-red-400" />
                 ) : (
