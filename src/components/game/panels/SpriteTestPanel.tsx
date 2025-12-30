@@ -19,6 +19,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
     parks: null,
     parksConstruction: null,
     services: null,
+    infrastructure: null,
   });
   
   // Load all sprite sheets from current pack
@@ -51,6 +52,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
       loadSheet(currentSpritePack.parksSrc, 'parks'),
       loadSheet(currentSpritePack.parksConstructionSrc, 'parksConstruction'),
       loadSheet(currentSpritePack.servicesSrc, 'services'),
+      loadSheet(currentSpritePack.infrastructureSrc, 'infrastructure'),
     ]);
   }, [currentSpritePack]);
   
@@ -63,6 +65,7 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
     { id: 'parks', label: 'Parks', available: !!spriteSheets.parks },
     { id: 'parksConstruction', label: 'Parks Construction', available: !!spriteSheets.parksConstruction },
     { id: 'services', label: 'Services', available: !!spriteSheets.services },
+    { id: 'infrastructure', label: 'Infrastructure', available: !!spriteSheets.infrastructure },
   ].filter(tab => tab.available), [spriteSheets]);
   
   // Derive the actual active tab - fall back to first available if selected is not available
@@ -218,6 +221,23 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
           });
         });
       });
+    } else if (activeTab === 'infrastructure' && currentSpritePack.infrastructureSrc && currentSpritePack.infrastructureVariants) {
+      // Infrastructure sprite sheet - use infrastructureVariants mapping (level progression)
+      sheetCols = currentSpritePack.infrastructureCols || 5;
+      sheetRows = currentSpritePack.infrastructureRows || 6;
+      const tileWidth = Math.floor(sheetWidth / sheetCols);
+      const tileHeight = Math.floor(sheetHeight / sheetRows);
+      
+      Object.entries(currentSpritePack.infrastructureVariants).forEach(([buildingType, variants]) => {
+        variants.forEach((variant, variantIndex) => {
+          const sx = variant.col * tileWidth;
+          const sy = variant.row * tileHeight;
+          itemsToRender.push({
+            label: `${buildingType} (level ${variantIndex + 1})`,
+            coords: { sx, sy, sw: tileWidth, sh: tileHeight },
+          });
+        });
+      });
     }
     
     const rows = Math.ceil(itemsToRender.length / cols);
@@ -305,12 +325,15 @@ export function SpriteTestPanel({ onClose }: { onClose: () => void }) {
                           activeTab === 'modern' ? currentSpritePack.modernSrc :
                           activeTab === 'parksConstruction' ? currentSpritePack.parksConstructionSrc :
                           activeTab === 'services' ? currentSpritePack.servicesSrc :
+                          activeTab === 'infrastructure' ? currentSpritePack.infrastructureSrc :
                           currentSpritePack.parksSrc;
   
   const gridInfo = (activeTab === 'parks' || activeTab === 'parksConstruction') && currentSpritePack.parksCols && currentSpritePack.parksRows
     ? `${currentSpritePack.parksCols}x${currentSpritePack.parksRows}`
     : activeTab === 'services' && currentSpritePack.servicesCols && currentSpritePack.servicesRows
     ? `${currentSpritePack.servicesCols}x${currentSpritePack.servicesRows}`
+    : activeTab === 'infrastructure' && currentSpritePack.infrastructureCols && currentSpritePack.infrastructureRows
+    ? `${currentSpritePack.infrastructureCols}x${currentSpritePack.infrastructureRows}`
     : `${currentSpritePack.cols}x${currentSpritePack.rows}`;
   
   return (

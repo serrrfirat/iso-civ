@@ -20,7 +20,7 @@ export interface SpriteSourceResult {
   /** Path to the sprite sheet to use */
   source: string;
   /** Type of variant being used */
-  variantType: 'normal' | 'construction' | 'abandoned' | 'parks' | 'parksConstruction' | 'dense' | 'modern' | 'farm' | 'shop' | 'station' | 'services';
+  variantType: 'normal' | 'construction' | 'abandoned' | 'parks' | 'parksConstruction' | 'dense' | 'modern' | 'farm' | 'shop' | 'station' | 'services' | 'infrastructure';
   /** Variant coordinates if using a variant sheet (row, col) */
   variant: { row: number; col: number } | null;
 }
@@ -232,6 +232,19 @@ export function selectSpriteSource(
     }
   }
   
+  // Infrastructure variants (level-based selection for utility buildings)
+  if (activePack.infrastructureSrc && activePack.infrastructureVariants && activePack.infrastructureVariants[buildingType]) {
+    const variants = activePack.infrastructureVariants[buildingType];
+    if (variants.length > 0) {
+      const levelIndex = Math.max(0, Math.min(building.level - 1, variants.length - 1));
+      return {
+        source: activePack.infrastructureSrc,
+        variantType: 'infrastructure',
+        variant: variants[levelIndex],
+      };
+    }
+  }
+  
   // Default: normal sprite sheet
   return {
     source: activePack.src,
@@ -430,6 +443,21 @@ export function calculateSpriteCoords(
     };
   }
   
+  // Infrastructure variants
+  if (variantType === 'infrastructure' && variant) {
+    const infraCols = activePack.infrastructureCols || 5;
+    const infraRows = activePack.infrastructureRows || 6;
+    const tileWidth = Math.floor(sheetWidth / infraCols);
+    const tileHeight = Math.floor(sheetHeight / infraRows);
+    
+    return {
+      sx: variant.col * tileWidth,
+      sy: variant.row * tileHeight,
+      sw: tileWidth,
+      sh: tileHeight,
+    };
+  }
+  
   // Normal, construction, or abandoned - use getSpriteCoords
   const coords = getSpriteCoords(buildingType, sheetWidth, sheetHeight, activePack);
   
@@ -530,6 +558,10 @@ export function calculateSpriteScale(
     scaleMultiplier *= activePack.servicesScales[buildingType];
   }
   
+  if (variantType === 'infrastructure' && activePack.infrastructureScales && buildingType in activePack.infrastructureScales) {
+    scaleMultiplier *= activePack.infrastructureScales[buildingType];
+  }
+  
   if ((variantType === 'parks' || variantType === 'parksConstruction') && 
       activePack.parksScales && buildingType in activePack.parksScales) {
     scaleMultiplier *= activePack.parksScales[buildingType];
@@ -627,6 +659,9 @@ export function calculateSpriteOffsets(
   } else if (variantType === 'services' && activePack.servicesVerticalOffsets && 
              buildingType in activePack.servicesVerticalOffsets) {
     verticalOffset = activePack.servicesVerticalOffsets[buildingType];
+  } else if (variantType === 'infrastructure' && activePack.infrastructureVerticalOffsets && 
+             buildingType in activePack.infrastructureVerticalOffsets) {
+    verticalOffset = activePack.infrastructureVerticalOffsets[buildingType];
   } else if (activePack.buildingVerticalOffsets && buildingType in activePack.buildingVerticalOffsets) {
     verticalOffset = activePack.buildingVerticalOffsets[buildingType];
   } else {
@@ -670,6 +705,11 @@ export function calculateSpriteOffsets(
   if (variantType === 'services' && activePack.servicesHorizontalOffsets && 
       buildingType in activePack.servicesHorizontalOffsets) {
     horizontalOffset = activePack.servicesHorizontalOffsets[buildingType];
+  }
+  
+  if (variantType === 'infrastructure' && activePack.infrastructureHorizontalOffsets && 
+      buildingType in activePack.infrastructureHorizontalOffsets) {
+    horizontalOffset = activePack.infrastructureHorizontalOffsets[buildingType];
   }
   
   return { vertical: verticalOffset, horizontal: horizontalOffset };

@@ -144,6 +144,20 @@ export interface SpritePack {
   servicesHorizontalOffsets?: Record<string, number>;
   // Per-building-type scale adjustments for SERVICES sprite sheet buildings
   servicesScales?: Record<string, number>;
+  // Path to the infrastructure sprite sheet (water/power/waste management buildings with level variants)
+  infrastructureSrc?: string;
+  // Infrastructure layout configuration (columns and rows for the infrastructure sheet)
+  infrastructureCols?: number;
+  infrastructureRows?: number;
+  // Infrastructure variants: maps building type to available level variants in the infrastructure sheet
+  // Each variant specifies row and column (0-indexed) in the infrastructure sprite sheet
+  infrastructureVariants?: Record<string, { row: number; col: number }[]>;
+  // Per-building-type vertical offset adjustments for INFRASTRUCTURE sprite sheet buildings
+  infrastructureVerticalOffsets?: Record<string, number>;
+  // Per-building-type horizontal offset adjustments for INFRASTRUCTURE sprite sheet buildings
+  infrastructureHorizontalOffsets?: Record<string, number>;
+  // Per-building-type scale adjustments for INFRASTRUCTURE sprite sheet buildings
+  infrastructureScales?: Record<string, number>;
   // Maps building types to sprite keys in spriteOrder
   buildingToSprite: Record<string, string>;
   // Optional global scale multiplier for all sprites in this pack
@@ -604,6 +618,25 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     // Scale adjustments for better visual fit
     // Add specific scales if buildings need resizing
   },
+  // Infrastructure sprite sheet configuration (utility buildings with level progression)
+  infrastructureSrc: '/assets/sprites_red_water_new_services-2.png',
+  infrastructureCols: 5,
+  infrastructureRows: 6,
+  infrastructureVariants: {
+    // Water Tower levels - Row 1, columns 1-5 (0-indexed: row 0, cols 0-4)
+    water_tower: [
+      { row: 0, col: 0 }, // Level 1
+      { row: 0, col: 1 }, // Level 2
+      { row: 0, col: 2 }, // Level 3
+      { row: 0, col: 3 }, // Level 4
+      { row: 0, col: 4 }, // Level 5
+    ],
+  },
+  infrastructureVerticalOffsets: {
+    water_tower: -0.5, // Match existing water_tower offset
+  },
+  infrastructureHorizontalOffsets: {},
+  infrastructureScales: {},
   buildingToSprite: {
     house_small: 'house_small',
     house_medium: 'house_medium',
