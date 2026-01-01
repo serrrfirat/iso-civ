@@ -10,7 +10,7 @@ Made with [Cursor](https://cursor.com)
 
 ## Features
 
--   **Isometric Rendering Engine**: Custom-built rendering system using HTML5 Canvas (`CanvasIsometricGrid`) capable of handling complex depth sorting and layer management.
+-   **Isometric Rendering Engine**: Custom-built rendering system using HTML5 Canvas (`CanvasIsometricGrid`) capable of handling complex depth sorting, layer management, and both image and drawn sprites.
 -   **Dynamic Simulation**:
     -   **Traffic System**: Autonomous vehicles including cars, trains, and aircraft (planes/seaplanes).
     -   **Pedestrian System**: Pathfinding and crowd simulation for city inhabitants.
@@ -21,9 +21,8 @@ Made with [Cursor](https://cursor.com)
 
 ## Tech Stack
 
--   **Framework**: [Next.js 14+](https://nextjs.org/) (App Router)
+-   **Framework**: [Next.js 16](https://nextjs.org/)
 -   **Language**: [TypeScript](https://www.typescriptlang.org/)
--   **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/) components.
 -   **Graphics**: HTML5 Canvas API (No external game engine libraries; pure native implementation).
 -   **Icons**: Lucide React.
 
