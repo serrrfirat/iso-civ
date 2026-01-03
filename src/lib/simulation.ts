@@ -1199,7 +1199,7 @@ export const SERVICE_CONFIG = {
 } as const;
 
 // Building types that provide services
-const SERVICE_BUILDING_TYPES = new Set([
+export const SERVICE_BUILDING_TYPES = new Set([
   'police_station', 'fire_station', 'hospital', 'school', 'university',
   'power_plant', 'water_tower'
 ]);

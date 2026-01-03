@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { CloseIcon } from '@/components/ui/Icons';
 import { useGame } from '@/context/GameContext';
-import { SERVICE_CONFIG } from '@/lib/simulation';
+import { SERVICE_CONFIG, SERVICE_BUILDING_TYPES } from '@/lib/simulation';
 
 interface TileInfoPanelProps {
   tile: Tile;
@@ -34,8 +34,7 @@ export function TileInfoPanel({
   const { state, upgradeServiceBuilding } = useGame();
   
   // Check if this is a service building
-  const serviceBuildingTypes = ['police_station', 'fire_station', 'hospital', 'school', 'university', 'power_plant', 'water_tower'];
-  const isServiceBuilding = serviceBuildingTypes.includes(tile.building.type);
+  const isServiceBuilding = SERVICE_BUILDING_TYPES.has(tile.building.type);
   
   // Calculate upgrade cost and info for service buildings
   const upgradeInfo = useMemo(() => {
