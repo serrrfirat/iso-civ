@@ -620,7 +620,7 @@ const SPRITE_PACK_SPRITES4: SpritePack = {
     // Adjust vertical positioning for each service building type
     police_station: -0.3,
     fire_station: -0.3,
-    hospital: -0.65,
+    hospital: -0.50,
     school: -0.35,
     university: -0.55,
     power_plant: -0.3,
