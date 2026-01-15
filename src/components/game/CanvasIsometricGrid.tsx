@@ -19,6 +19,7 @@ import {
   TILE_HEIGHT,
   KEY_PAN_SPEED,
   Car,
+  Bus,
   Airplane,
   Helicopter,
   Seaplane,
@@ -30,6 +31,7 @@ import {
   OverlayMode,
   Pedestrian,
   Firework,
+  Cloud,
   WorldRenderState,
 } from '@/components/game/types';
 import {
@@ -163,6 +165,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   const carsRef = useRef<Car[]>([]);
   const carIdRef = useRef(0);
   const carSpawnTimerRef = useRef(0);
+  const busesRef = useRef<Bus[]>([]);
+  const busIdRef = useRef(0);
+  const busSpawnTimerRef = useRef(0);
   const emergencyVehiclesRef = useRef<EmergencyVehicle[]>([]);
   const emergencyVehicleIdRef = useRef(0);
   const emergencyDispatchTimerRef = useRef(0);
@@ -231,6 +236,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
   // Factory smog system refs
   const factorySmogRef = useRef<FactorySmog[]>([]);
   const smogLastGridVersionRef = useRef(-1); // Track when to rebuild factory list
+
+  // Cloud system refs
+  const cloudsRef = useRef<Cloud[]>([]);
+  const cloudIdRef = useRef(0);
+  const cloudSpawnTimerRef = useRef(0);
 
   // Traffic light system timer (cumulative time for cycling through states)
   const trafficLightTimerRef = useRef(0);
@@ -302,6 +312,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     carsRef,
     carIdRef,
     carSpawnTimerRef,
+    busesRef,
+    busIdRef,
+    busSpawnTimerRef,
     emergencyVehiclesRef,
     emergencyVehicleIdRef,
     emergencyDispatchTimerRef,
@@ -338,8 +351,10 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     updateEmergencyDispatch,
     updateEmergencyVehicles,
     updateCars,
+    updateBuses,
     updatePedestrians,
     drawCars,
+    drawBuses,
     drawPedestrians,
     drawRecreationPedestrians,
     drawEmergencyVehicles,
@@ -433,6 +448,9 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     fireworkLastHourRef,
     factorySmogRef,
     smogLastGridVersionRef,
+    cloudsRef,
+    cloudIdRef,
+    cloudSpawnTimerRef,
   };
 
   const effectsSystemState: EffectsSystemState = {
@@ -446,6 +464,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     drawFireworks,
     updateSmog,
     drawSmog,
+    updateClouds,
+    drawClouds,
   } = useEffectsSystems(effectsSystemRefs, effectsSystemState);
   
   // PERF: Sync worldStateRef from latestStateRef (real-time) instead of React state (throttled)
@@ -556,6 +576,11 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     // Clear factory smog
     factorySmogRef.current = [];
     smogLastGridVersionRef.current = -1;
+    
+    // Clear clouds
+    cloudsRef.current = [];
+    cloudIdRef.current = 0;
+    cloudSpawnTimerRef.current = 0;
     
     // Reset traffic light timer
     trafficLightTimerRef.current = 0;
@@ -2395,6 +2420,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
       
       if (delta > 0 && !skipMobileUpdates) {
         updateCars(delta);
+        updateBuses(delta);
         spawnCrimeIncidents(delta); // Spawn new crime incidents
         updateCrimeIncidents(delta); // Update/decay crime incidents
         updateEmergencyVehicles(delta); // Update emergency vehicles!
@@ -2407,6 +2433,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         updateTrains(delta); // Update trains on rail network
         updateFireworks(delta, visualHour); // Update fireworks (nighttime only)
         updateSmog(delta); // Update factory smog particles
+        updateClouds(delta, visualHour); // Update atmospheric clouds
         navLightFlashTimerRef.current += delta * 3; // Update nav light flash timer
         trafficLightTimerRef.current += delta; // Update traffic light cycle timer
         crossingFlashTimerRef.current += delta; // Update crossing flash timer
@@ -2455,6 +2482,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
         clearAirCanvas();
       } else {
         drawCars(ctx);
+        drawBuses(ctx);
         if (!skipSmallElements) {
           drawBoats(ctx); // Draw boats on water (skip when panning zoomed out on desktop)
         }
@@ -2477,7 +2505,8 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
           drawHelicopters(airCtx); // Draw helicopters (skip when panning zoomed out on desktop)
           drawSeaplanes(airCtx); // Draw seaplanes (skip when panning zoomed out on desktop)
         }
-        drawAirplanes(airCtx); // Draw airplanes above everything
+        drawClouds(airCtx, visualHour); // Draw atmospheric clouds (above helicopters)
+        drawAirplanes(airCtx); // Draw airplanes above clouds
         drawFireworks(airCtx); // Draw fireworks above everything (nighttime only)
       }
     };
@@ -2485,7 +2514,7 @@ export function CanvasIsometricGrid({ overlayMode, selectedTile, setSelectedTile
     animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
   // PERF: Removed grid, gridSize, speed from deps - they're accessed via worldStateRef to avoid restarting animation on every tick
-  }, [canvasSize.width, canvasSize.height, updateCars, drawCars, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateSeaplanes, drawSeaplanes, updateBoats, drawBoats, updateBarges, drawBarges, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, visualHour, isMobile]);
+  }, [canvasSize.width, canvasSize.height, updateCars, updateBuses, drawCars, drawBuses, spawnCrimeIncidents, updateCrimeIncidents, updateEmergencyVehicles, drawEmergencyVehicles, updatePedestrians, drawPedestrians, drawRecreationPedestrians, updateAirplanes, drawAirplanes, updateHelicopters, drawHelicopters, updateSeaplanes, drawSeaplanes, updateBoats, drawBoats, updateBarges, drawBarges, updateTrains, drawTrainsCallback, drawIncidentIndicators, updateFireworks, drawFireworks, updateSmog, drawSmog, updateClouds, drawClouds, visualHour, isMobile]);
   
   // Day/Night cycle lighting rendering - extracted to useLightingSystem hook
   useLightingSystem({
