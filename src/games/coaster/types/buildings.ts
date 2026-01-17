@@ -25,12 +25,12 @@ export type BuildingType =
   | 'station_futuristic_1' | 'station_futuristic_2' | 'station_futuristic_3' | 'station_futuristic_4' | 'station_futuristic_5'
   
   // Trees & Vegetation (Sheet 2)
-  | 'tree_oak' | 'tree_maple' | 'tree_birch' | 'tree_elm' | 'tree_willow'
-  | 'tree_pine' | 'tree_spruce' | 'tree_fir' | 'tree_cedar' | 'tree_redwood'
-  | 'tree_palm' | 'tree_banana' | 'tree_bamboo' | 'tree_coconut' | 'tree_tropical'
-  | 'tree_cherry' | 'tree_magnolia' | 'tree_dogwood' | 'tree_jacaranda' | 'tree_wisteria'
-  | 'bush_hedge' | 'bush_flowering' | 'topiary_ball' | 'topiary_spiral' | 'topiary_animal'
-  | 'flowers_bed' | 'flowers_planter' | 'flowers_hanging' | 'flowers_wild' | 'ground_cover'
+  | 'tree_oak' | 'tree_maple' | 'tree_birch' | 'tree_elm' | 'tree_willow' | 'tree_deciduous_extra'
+  | 'tree_pine' | 'tree_spruce' | 'tree_fir' | 'tree_cedar' | 'tree_redwood' | 'tree_evergreen_extra'
+  | 'tree_palm' | 'tree_banana' | 'tree_bamboo' | 'tree_coconut' | 'tree_tropical' | 'tree_tropical_extra'
+  | 'tree_cherry' | 'tree_magnolia' | 'tree_dogwood' | 'tree_jacaranda' | 'tree_wisteria' | 'tree_flowering_extra'
+  | 'bush_hedge' | 'bush_flowering' | 'topiary_ball' | 'topiary_spiral' | 'topiary_animal' | 'flowers_square_bed'
+  | 'flowers_bed' | 'flowers_planter' | 'flowers_hanging' | 'flowers_wild' | 'ground_cover' | 'ground_stones'
   
   // Benches, Lamps & Path Furniture (Sheet 3)
   | 'bench_wooden' | 'bench_metal' | 'bench_ornate' | 'bench_modern' | 'bench_rustic'
@@ -146,12 +146,12 @@ export const COASTER_STATIONS: BuildingType[] = [
 ];
 
 export const TREES: BuildingType[] = [
-  'tree_oak', 'tree_maple', 'tree_birch', 'tree_elm', 'tree_willow',
-  'tree_pine', 'tree_spruce', 'tree_fir', 'tree_cedar', 'tree_redwood',
-  'tree_palm', 'tree_banana', 'tree_bamboo', 'tree_coconut', 'tree_tropical',
-  'tree_cherry', 'tree_magnolia', 'tree_dogwood', 'tree_jacaranda', 'tree_wisteria',
-  'bush_hedge', 'bush_flowering', 'topiary_ball', 'topiary_spiral', 'topiary_animal',
-  'flowers_bed', 'flowers_planter', 'flowers_hanging', 'flowers_wild', 'ground_cover',
+  'tree_oak', 'tree_maple', 'tree_birch', 'tree_elm', 'tree_willow', 'tree_deciduous_extra',
+  'tree_pine', 'tree_spruce', 'tree_fir', 'tree_cedar', 'tree_redwood', 'tree_evergreen_extra',
+  'tree_palm', 'tree_banana', 'tree_bamboo', 'tree_coconut', 'tree_tropical', 'tree_tropical_extra',
+  'tree_cherry', 'tree_magnolia', 'tree_dogwood', 'tree_jacaranda', 'tree_wisteria', 'tree_flowering_extra',
+  'bush_hedge', 'bush_flowering', 'topiary_ball', 'topiary_spiral', 'topiary_animal', 'flowers_square_bed',
+  'flowers_bed', 'flowers_planter', 'flowers_hanging', 'flowers_wild', 'ground_cover', 'ground_stones',
 ];
 
 export const PATH_FURNITURE: BuildingType[] = [

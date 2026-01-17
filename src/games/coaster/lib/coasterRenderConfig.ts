@@ -57,13 +57,13 @@ const STATIONS_SHEET: SpriteSheet = {
     { name: 'station_inverted_2', row: 2, col: 1, offsetY: -20, scale: 1.2 },
     { name: 'station_inverted_3', row: 2, col: 2, offsetY: -20, scale: 1.2 },
     { name: 'station_inverted_4', row: 2, col: 3, offsetY: -20, scale: 1.2 },
-    { name: 'station_inverted_5', row: 2, col: 4, offsetY: -20, scale: 1.2 },
+    { name: 'station_inverted_5', row: 2, col: 4, offsetY: -14, scale: 1.15 },
     // Row 3: Water Coaster Stations
     { name: 'station_water_1', row: 3, col: 0, offsetY: -20, scale: 1.2 },
     { name: 'station_water_2', row: 3, col: 1, offsetY: -20, scale: 1.2 },
     { name: 'station_water_3', row: 3, col: 2, offsetY: -20, scale: 1.2 },
     { name: 'station_water_4', row: 3, col: 3, offsetY: -20, scale: 1.2 },
-    { name: 'station_water_5', row: 3, col: 4, offsetY: -20, scale: 1.2 },
+    { name: 'station_water_5', row: 3, col: 4, offsetX: -6, offsetY: -20, scale: 1.15 },
     // Row 4: Mine Train Stations
     { name: 'station_mine_1', row: 4, col: 0, offsetY: -20, scale: 1.2 },
     { name: 'station_mine_2', row: 4, col: 1, offsetY: -20, scale: 1.2 },
@@ -82,7 +82,7 @@ const STATIONS_SHEET: SpriteSheet = {
 const TREES_SHEET: SpriteSheet = {
   id: 'trees',
   src: '/assets/coaster/trees.png',
-  cols: 5,
+  cols: 6,
   rows: 6,
   sprites: [
     // Row 0: Deciduous Trees
@@ -91,36 +91,42 @@ const TREES_SHEET: SpriteSheet = {
     { name: 'tree_birch', row: 0, col: 2, offsetY: -30, scale: 1.0 },
     { name: 'tree_elm', row: 0, col: 3, offsetY: -30, scale: 1.0 },
     { name: 'tree_willow', row: 0, col: 4, offsetY: -30, scale: 1.0 },
+    { name: 'tree_deciduous_extra', row: 0, col: 5, offsetY: -30, scale: 1.0 },
     // Row 1: Evergreen Trees
     { name: 'tree_pine', row: 1, col: 0, offsetY: -35, scale: 1.0 },
     { name: 'tree_spruce', row: 1, col: 1, offsetY: -35, scale: 1.0 },
     { name: 'tree_fir', row: 1, col: 2, offsetY: -35, scale: 1.0 },
     { name: 'tree_cedar', row: 1, col: 3, offsetY: -35, scale: 1.0 },
     { name: 'tree_redwood', row: 1, col: 4, offsetY: -40, scale: 1.1 },
+    { name: 'tree_evergreen_extra', row: 1, col: 5, offsetY: -35, scale: 1.0 },
     // Row 2: Tropical Trees
     { name: 'tree_palm', row: 2, col: 0, offsetY: -35, scale: 1.0 },
     { name: 'tree_banana', row: 2, col: 1, offsetY: -30, scale: 1.0 },
     { name: 'tree_bamboo', row: 2, col: 2, offsetY: -30, scale: 1.0 },
     { name: 'tree_coconut', row: 2, col: 3, offsetY: -35, scale: 1.0 },
     { name: 'tree_tropical', row: 2, col: 4, offsetY: -30, scale: 1.0 },
+    { name: 'tree_tropical_extra', row: 2, col: 5, offsetY: -30, scale: 1.0 },
     // Row 3: Flowering Trees
     { name: 'tree_cherry', row: 3, col: 0, offsetY: -30, scale: 1.0 },
     { name: 'tree_magnolia', row: 3, col: 1, offsetY: -30, scale: 1.0 },
     { name: 'tree_dogwood', row: 3, col: 2, offsetY: -30, scale: 1.0 },
     { name: 'tree_jacaranda', row: 3, col: 3, offsetY: -30, scale: 1.0 },
     { name: 'tree_wisteria', row: 3, col: 4, offsetY: -30, scale: 1.0 },
+    { name: 'tree_flowering_extra', row: 3, col: 5, offsetY: -30, scale: 1.0 },
     // Row 4: Bushes & Topiary
     { name: 'bush_hedge', row: 4, col: 0, offsetY: -10, scale: 0.9 },
     { name: 'bush_flowering', row: 4, col: 1, offsetY: -10, scale: 0.9 },
     { name: 'topiary_ball', row: 4, col: 2, offsetY: -10, scale: 0.9 },
     { name: 'topiary_spiral', row: 4, col: 3, offsetY: -15, scale: 0.9 },
     { name: 'topiary_animal', row: 4, col: 4, offsetY: -15, scale: 0.9 },
+    { name: 'flowers_square_bed', row: 4, col: 5, offsetY: -5, scale: 0.8 },
     // Row 5: Flowers & Ground Cover
     { name: 'flowers_bed', row: 5, col: 0, offsetY: -5, scale: 0.8 },
     { name: 'flowers_planter', row: 5, col: 1, offsetY: -10, scale: 0.8 },
     { name: 'flowers_hanging', row: 5, col: 2, offsetY: -15, scale: 0.8 },
     { name: 'flowers_wild', row: 5, col: 3, offsetY: -5, scale: 0.8 },
     { name: 'ground_cover', row: 5, col: 4, offsetY: -5, scale: 0.8 },
+    { name: 'ground_stones', row: 5, col: 5, offsetY: -5, scale: 0.8 },
   ],
 };
 
@@ -158,13 +164,13 @@ const FURNITURE_SHEET: SpriteSheet = {
     { name: 'sign_directional', row: 4, col: 0, offsetY: -20, scale: 0.8 },
     { name: 'sign_ride', row: 4, col: 1, offsetY: -20, scale: 0.8 },
     { name: 'sign_info', row: 4, col: 2, offsetY: -15, scale: 0.8 },
-    { name: 'sign_welcome', row: 4, col: 3, offsetY: -20, scale: 0.8 },
+    { name: 'sign_welcome', row: 4, col: 3, offsetX: -10, offsetY: -20, scale: 0.8 },
     { name: 'sign_sponsored', row: 4, col: 4, offsetY: -20, scale: 0.8 },
     // Row 5: Path Decorations
     { name: 'path_bollard', row: 5, col: 0, offsetY: -10, scale: 0.7 },
     { name: 'path_chain', row: 5, col: 1, offsetY: -10, scale: 0.8 },
     { name: 'path_railing', row: 5, col: 2, offsetY: -10, scale: 0.8 },
-    { name: 'path_archway', row: 5, col: 3, offsetY: -25, scale: 0.9 },
+    { name: 'path_archway', row: 5, col: 3, offsetX: -8, offsetY: -25, scale: 0.9 },
     { name: 'path_gate', row: 5, col: 4, offsetY: -15, scale: 0.8 },
   ],
 };
@@ -236,14 +242,14 @@ const FOUNTAINS_SHEET: SpriteSheet = {
     { name: 'fountain_large_1', row: 2, col: 0, offsetY: -30, scale: 1.1 },
     { name: 'fountain_large_2', row: 2, col: 1, offsetY: -30, scale: 1.1 },
     { name: 'fountain_large_3', row: 2, col: 2, offsetY: -30, scale: 1.1 },
-    { name: 'fountain_large_4', row: 2, col: 3, offsetY: -30, scale: 1.1 },
+    { name: 'fountain_large_4', row: 2, col: 3, offsetX: -5, offsetY: -30, scale: 1.05 },
     { name: 'fountain_large_5', row: 2, col: 4, offsetY: -30, scale: 1.1 },
     // Row 3: Ponds
     { name: 'pond_small', row: 3, col: 0, offsetY: -5, scale: 0.9 },
     { name: 'pond_medium', row: 3, col: 1, offsetY: -5, scale: 0.9 },
     { name: 'pond_large', row: 3, col: 2, offsetY: -5, scale: 0.9 },
     { name: 'pond_koi', row: 3, col: 3, offsetY: -5, scale: 0.9 },
-    { name: 'pond_lily', row: 3, col: 4, offsetY: -5, scale: 0.9 },
+    { name: 'pond_lily', row: 3, col: 4, offsetY: -5, scale: 0.85 },
     // Row 4: Waterfalls & streams
     { name: 'waterfall_small', row: 4, col: 0, offsetY: -10, scale: 0.9 },
     { name: 'waterfall_medium', row: 4, col: 1, offsetY: -10, scale: 0.9 },
@@ -362,7 +368,7 @@ const RIDES_LARGE_SHEET: SpriteSheet = {
     { name: 'ride_ferris_double', row: 0, col: 3, offsetY: -50, scale: 1.1 },
     { name: 'ride_ferris_led', row: 0, col: 4, offsetY: -55, scale: 1.15 },
     // Row 1: Drop rides
-    { name: 'ride_drop_tower', row: 1, col: 0, offsetY: -60, scale: 1.15 },
+    { name: 'ride_drop_tower', row: 1, col: 0, offsetY: -55, scale: 1.1 },
     { name: 'ride_space_shot', row: 1, col: 1, offsetY: -60, scale: 1.15 },
     { name: 'ride_observation_tower', row: 1, col: 2, offsetY: -60, scale: 1.15 },
     { name: 'ride_sky_swing', row: 1, col: 3, offsetY: -50, scale: 1.1 },
@@ -380,17 +386,17 @@ const RIDES_LARGE_SHEET: SpriteSheet = {
     { name: 'ride_inversion', row: 3, col: 3, offsetY: -40, scale: 1.05 },
     { name: 'ride_meteorite', row: 3, col: 4, offsetY: -40, scale: 1.05 },
     // Row 4: Transport rides
-    { name: 'ride_log_flume', row: 4, col: 0, offsetY: -30, scale: 1.05 },
+    { name: 'ride_log_flume', row: 4, col: 0, offsetX: 6, offsetY: -30, scale: 1.05 },
     { name: 'ride_rapids', row: 4, col: 1, offsetY: -30, scale: 1.05 },
     { name: 'ride_train_station', row: 4, col: 2, offsetY: -30, scale: 1.05 },
     { name: 'ride_monorail_station', row: 4, col: 3, offsetY: -30, scale: 1.05 },
-    { name: 'ride_chairlift', row: 4, col: 4, offsetY: -30, scale: 1.05 },
+    { name: 'ride_chairlift', row: 4, col: 4, offsetY: -30, scale: 0.95 },
     // Row 5: Shows
     { name: 'show_4d', row: 5, col: 0, offsetY: -25, scale: 1.0 },
     { name: 'show_stunt', row: 5, col: 1, offsetY: -25, scale: 1.0 },
     { name: 'show_dolphin', row: 5, col: 2, offsetY: -25, scale: 1.0 },
     { name: 'show_amphitheater', row: 5, col: 3, offsetY: -25, scale: 1.0 },
-    { name: 'show_parade_float', row: 5, col: 4, offsetY: -25, scale: 1.0 },
+    { name: 'show_parade_float', row: 5, col: 4, offsetY: -22, scale: 1.0 },
   ],
 };
 
@@ -474,7 +480,7 @@ const THEME_MODERN_SHEET: SpriteSheet = {
     { name: 'theme_mascot', row: 4, col: 1, offsetY: -20, scale: 0.9 },
     { name: 'theme_scoreboard', row: 4, col: 2, offsetY: -20, scale: 0.95 },
     { name: 'theme_goal_post', row: 4, col: 3, offsetY: -20, scale: 0.95 },
-    { name: 'theme_checkered_flag', row: 4, col: 4, offsetY: -20, scale: 0.95 },
+    { name: 'theme_checkered_flag', row: 4, col: 4, offsetX: 6, offsetY: -20, scale: 0.95 },
     // Row 5: Modern art
     { name: 'theme_geometric', row: 5, col: 0, offsetY: -20, scale: 0.95 },
     { name: 'theme_water_wall', row: 5, col: 1, offsetY: -20, scale: 0.95 },
