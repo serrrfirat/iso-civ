@@ -503,7 +503,7 @@ export function CoasterProvider({ children }: { children: React.ReactNode }) {
       }
       
       // Map tools to building types (tool name is often the building type)
-      const toolToBuildingType: Record<string, BuildingType> = {
+      const toolToBuildingType: Record<string, BuildingType | BuildingType[]> = {
         // Trees
         'tree_oak': 'tree_oak',
         'tree_maple': 'tree_maple',
@@ -555,9 +555,34 @@ export function CoasterProvider({ children }: { children: React.ReactNode }) {
         'food_icecream': 'food_icecream',
         'food_cotton_candy': 'food_cotton_candy',
         'food_popcorn': 'snack_popcorn',
+        // Shops
+        'shop_souvenir': ['shop_souvenir_1', 'shop_souvenir_2'],
+        'shop_toys': 'shop_toys',
+        'shop_photo': 'shop_photo',
+        'restroom': 'restroom',
+        'first_aid': 'first_aid',
+        // Rides
+        'ride_carousel': 'ride_carousel',
+        'ride_teacups': 'ride_teacups',
+        'ride_ferris_wheel': ['ride_ferris_classic', 'ride_ferris_modern', 'ride_ferris_led'],
+        'ride_drop_tower': 'ride_drop_tower',
+        'ride_swing_ride': 'ride_swing_ride',
+        'ride_bumper_cars': 'ride_bumper_cars',
+        'ride_go_karts': 'ride_go_karts',
+        'ride_haunted_house': 'ride_haunted_house',
+        'ride_log_flume': 'ride_log_flume',
+        // Coaster stations
+        'coaster_station': ['station_wooden_1', 'station_steel_1', 'station_inverted_1', 'station_water_1'],
+        // Infrastructure
+        'park_entrance': 'infra_main_entrance',
+        'staff_building': 'infra_office',
       };
       
-      const buildingType = toolToBuildingType[tool];
+      const buildingEntry = toolToBuildingType[tool];
+      const buildingType = Array.isArray(buildingEntry)
+        ? buildingEntry[Math.floor(Math.random() * buildingEntry.length)]
+        : buildingEntry;
+      
       if (buildingType) {
         tile.building = { 
           ...createEmptyBuilding(), 

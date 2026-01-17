@@ -57,9 +57,9 @@ export type BuildingType =
   | 'cart_pirate' | 'cart_space' | 'cart_medieval' | 'cart_western' | 'cart_tropical'
   
   // Shops & Retail (Sheet 6)
-  | 'shop_souvenir_1' | 'shop_souvenir_2' | 'shop_photo'
-  | 'shop_toys' | 'shop_plush' | 'shop_apparel'
-  | 'shop_candy' | 'shop_fudge' | 'shop_jewelry'
+  | 'shop_souvenir_1' | 'shop_souvenir_2' | 'shop_photo' | 'shop_ticket' | 'shop_collectibles'
+  | 'shop_toys' | 'shop_plush' | 'shop_apparel' | 'shop_bricks' | 'shop_rc'
+  | 'shop_candy' | 'shop_fudge' | 'shop_jewelry' | 'shop_popcorn' | 'shop_soda_fountain'
   | 'game_ring_toss' | 'game_balloon' | 'game_shooting' | 'game_darts' | 'game_basketball'
   | 'arcade_building' | 'vr_experience' | 'photo_booth' | 'caricature' | 'face_paint'
   | 'restroom' | 'first_aid' | 'lockers' | 'stroller_rental' | 'atm'
@@ -173,9 +173,9 @@ export const FOOD_STANDS: BuildingType[] = [
 ];
 
 export const SHOPS: BuildingType[] = [
-  'shop_souvenir_1', 'shop_souvenir_2', 'shop_photo',
-  'shop_toys', 'shop_plush', 'shop_apparel',
-  'shop_candy', 'shop_fudge', 'shop_jewelry',
+  'shop_souvenir_1', 'shop_souvenir_2', 'shop_photo', 'shop_ticket', 'shop_collectibles',
+  'shop_toys', 'shop_plush', 'shop_apparel', 'shop_bricks', 'shop_rc',
+  'shop_candy', 'shop_fudge', 'shop_jewelry', 'shop_popcorn', 'shop_soda_fountain',
   'game_ring_toss', 'game_balloon', 'game_shooting', 'game_darts', 'game_basketball',
   'arcade_building', 'vr_experience', 'photo_booth', 'caricature', 'face_paint',
   'restroom', 'first_aid', 'lockers', 'stroller_rental', 'atm',
