@@ -402,7 +402,7 @@ export function CoasterProvider({ children }: { children: React.ReactNode }) {
         const deltaTime = 1; // 1 game minute per tick
         const updatedGuests = prev.guests.map(guest => updateGuest(guest, prev.grid, deltaTime));
         const spawnedGuestsRaw = spawnGuests(prev.grid, updatedGuests, prev.stats.parkRating, hour);
-        const entranceFee = prev.settings.entranceFee;
+        const entranceFee = prev.settings.payPerRide ? 0 : prev.settings.entranceFee;
         const admissionRevenue = spawnedGuestsRaw.reduce((sum, guest) => sum + Math.min(guest.cash, entranceFee), 0);
         const spawnedGuests = spawnedGuestsRaw.map(guest => {
           const fee = Math.min(guest.cash, entranceFee);

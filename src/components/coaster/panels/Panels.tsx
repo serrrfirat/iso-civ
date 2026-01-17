@@ -111,7 +111,11 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
             value={settings.entranceFee}
             onChange={(e) => setParkSettings({ entranceFee: Math.max(0, Number(e.target.value)) })}
             className="mt-1 bg-slate-900 border-slate-700 text-white"
+            disabled={settings.payPerRide}
           />
+          {settings.payPerRide && (
+            <div className="text-xs text-white/40 mt-1">Disabled while pay-per-ride is enabled.</div>
+          )}
         </div>
         <div className="flex items-center justify-between">
           <div>
@@ -120,7 +124,12 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
           </div>
           <Switch
             checked={settings.payPerRide}
-            onCheckedChange={(checked) => setParkSettings({ payPerRide: checked })}
+            onCheckedChange={(checked) =>
+              setParkSettings({
+                payPerRide: checked,
+                entranceFee: checked ? 0 : settings.entranceFee,
+              })
+            }
           />
         </div>
       </div>
