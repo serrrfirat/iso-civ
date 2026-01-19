@@ -153,7 +153,7 @@ export function drawStraightTrack(
   
   // Draw support column if elevated
   if (height > 0) {
-    drawSupport(ctx, center.x, center.y + heightOffset, height);
+    drawSupport(ctx, center.x, center.y + heightOffset, height, { x: perpX, y: perpY });
   }
   
   // Calculate track length for tie spacing
@@ -399,14 +399,6 @@ export function drawSlopeTrack(
   const x2 = toEdge.x;
   const y2 = toEdge.y - toHeightOffset;
   
-  // Draw supports at start and end if elevated
-  if (fromHeight > 0) {
-    drawSupport(ctx, x1, fromEdge.y, fromHeight);
-  }
-  if (toHeight > 0) {
-    drawSupport(ctx, x2, toEdge.y, toHeight);
-  }
-  
   // Calculate actual track direction vector (including slope)
   const trackDirX = x2 - x1;
   const trackDirY = y2 - y1;
@@ -416,6 +408,14 @@ export function drawSlopeTrack(
   // This ensures ties are orthogonal to the track path
   const perpX = -trackDirY / trackLen;
   const perpY = trackDirX / trackLen;
+  
+  // Draw supports at start and end if elevated
+  if (fromHeight > 0) {
+    drawSupport(ctx, x1, fromEdge.y, fromHeight, { x: perpX, y: perpY });
+  }
+  if (toHeight > 0) {
+    drawSupport(ctx, x2, toEdge.y, toHeight, { x: perpX, y: perpY });
+  }
   
   // Draw crossties
   const numTies = Math.max(3, Math.floor(trackLen / TIE_SPACING));
@@ -463,29 +463,38 @@ function drawSupport(
   ctx: CanvasRenderingContext2D,
   x: number,
   groundY: number,
-  height: number
+  height: number,
+  perp?: { x: number; y: number }
 ) {
   if (height <= 0) return;
   
-  const topY = groundY - height * HEIGHT_UNIT;
-  
-  // Two thin vertical columns
+  // Two thin vertical columns, offset perpendicular to track direction
   const columnSpacing = 4; // Distance between the two columns
+  const perpX = perp?.x ?? 1;
+  const perpY = perp?.y ?? 0;
+  const offsetX = perpX * columnSpacing;
+  const offsetY = perpY * columnSpacing;
   
   ctx.strokeStyle = COLORS.support;
   ctx.lineWidth = SUPPORT_WIDTH;
   ctx.lineCap = 'round';
   
   // Left column
+  const leftBaseX = x - offsetX;
+  const leftBaseY = groundY - offsetY;
+  const leftTopY = leftBaseY - height * HEIGHT_UNIT;
   ctx.beginPath();
-  ctx.moveTo(x - columnSpacing, topY);
-  ctx.lineTo(x - columnSpacing, groundY);
+  ctx.moveTo(leftBaseX, leftTopY);
+  ctx.lineTo(leftBaseX, leftBaseY);
   ctx.stroke();
   
   // Right column
+  const rightBaseX = x + offsetX;
+  const rightBaseY = groundY + offsetY;
+  const rightTopY = rightBaseY - height * HEIGHT_UNIT;
   ctx.beginPath();
-  ctx.moveTo(x + columnSpacing, topY);
-  ctx.lineTo(x + columnSpacing, groundY);
+  ctx.moveTo(rightBaseX, rightTopY);
+  ctx.lineTo(rightBaseX, rightBaseY);
   ctx.stroke();
   
   // Horizontal braces connecting the columns
@@ -494,13 +503,15 @@ function drawSupport(
     ctx.lineWidth = 1;
     
     const numBraces = Math.max(1, Math.floor(height / 2));
-    const supportHeight = groundY - topY;
+    const supportHeight = height * HEIGHT_UNIT;
     
     for (let i = 1; i <= numBraces; i++) {
-      const braceY = topY + (supportHeight * i) / (numBraces + 1);
+      const braceYOffset = (supportHeight * i) / (numBraces + 1);
+      const leftBraceY = leftTopY + braceYOffset;
+      const rightBraceY = rightTopY + braceYOffset;
       ctx.beginPath();
-      ctx.moveTo(x - columnSpacing, braceY);
-      ctx.lineTo(x + columnSpacing, braceY);
+      ctx.moveTo(leftBaseX, leftBraceY);
+      ctx.lineTo(rightBaseX, rightBraceY);
       ctx.stroke();
     }
   }

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react';
-import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import {
   GameState,
   Tool,
@@ -15,12 +14,21 @@ import { ParkFinances, ParkStats, ParkSettings, Guest, Staff, DEFAULT_PRICES } f
 import { Coaster, CoasterTrain, CoasterCar, TrackDirection, TrackHeight, TrackPiece, TrackPieceType } from '@/games/coaster/types/tracks';
 import { Building, BuildingType } from '@/games/coaster/types/buildings';
 import { spawnGuests, updateGuest } from '@/components/coaster/guests';
+import {
+  COASTER_AUTOSAVE_KEY,
+  COASTER_SAVED_PARK_PREFIX,
+  buildSavedParkMeta,
+  loadCoasterStateFromStorage,
+  readSavedParksIndex,
+  saveCoasterStateToStorage,
+  upsertSavedParkMeta,
+  writeSavedParksIndex,
+} from '@/games/coaster/saveUtils';
 
 // =============================================================================
 // CONSTANTS
 // =============================================================================
 
-const STORAGE_KEY = 'coaster-tycoon-state';
 const DEFAULT_GRID_SIZE = 60;
 
 // =============================================================================
@@ -450,7 +458,15 @@ function createDefaultCoaster(id: string, startTile: { x: number; y: number }): 
 // PROVIDER COMPONENT
 // =============================================================================
 
-export function CoasterProvider({ children, startFresh = false }: { children: React.ReactNode; startFresh?: boolean }) {
+export function CoasterProvider({
+  children,
+  startFresh = false,
+  loadParkId = null,
+}: {
+  children: React.ReactNode;
+  startFresh?: boolean;
+  loadParkId?: string | null;
+}) {
   const [state, setState] = useState<GameState>(() => createInitialGameState());
   const [isStateReady, setIsStateReady] = useState(false);
   const [hasSavedGame, setHasSavedGame] = useState(false);
@@ -461,6 +477,17 @@ export function CoasterProvider({ children, startFresh = false }: { children: Re
     latestStateRef.current = state;
   }, [state]);
   
+  const persistCoasterSave = useCallback((stateToSave: GameState): boolean => {
+    const autosaveOk = saveCoasterStateToStorage(COASTER_AUTOSAVE_KEY, stateToSave);
+    const parkOk = saveCoasterStateToStorage(`${COASTER_SAVED_PARK_PREFIX}${stateToSave.id}`, stateToSave);
+    if (!autosaveOk && !parkOk) return false;
+
+    const meta = buildSavedParkMeta(stateToSave);
+    const updatedIndex = upsertSavedParkMeta(meta, readSavedParksIndex());
+    writeSavedParksIndex(updatedIndex);
+    return true;
+  }, []);
+
   // Load saved game on mount (unless startFresh is true)
   useEffect(() => {
     const checkSaved = () => {
@@ -473,23 +500,20 @@ export function CoasterProvider({ children, startFresh = false }: { children: Re
       }
       
       try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          let jsonString = decompressFromUTF16(saved);
-          if (!jsonString || !jsonString.startsWith('{')) {
-            if (saved.startsWith('{')) {
-              jsonString = saved;
-            } else {
-              setIsStateReady(true);
-              return;
-            }
-          }
-          
-          const parsed = JSON.parse(jsonString);
-          if (parsed && parsed.grid && parsed.gridSize) {
-            setState(normalizeLoadedState(parsed));
-            setHasSavedGame(true);
-          }
+        const preferredKey = loadParkId
+          ? `${COASTER_SAVED_PARK_PREFIX}${loadParkId}`
+          : COASTER_AUTOSAVE_KEY;
+        let parsed = loadCoasterStateFromStorage(preferredKey);
+
+        if (!parsed && loadParkId) {
+          parsed = loadCoasterStateFromStorage(COASTER_AUTOSAVE_KEY);
+        }
+
+        if (parsed && parsed.grid && parsed.gridSize) {
+          setState(normalizeLoadedState(parsed));
+          setHasSavedGame(true);
+          // Ensure this save appears in the saved parks index
+          persistCoasterSave(parsed);
         }
       } catch (e) {
         console.error('Failed to load coaster game state:', e);
@@ -499,7 +523,7 @@ export function CoasterProvider({ children, startFresh = false }: { children: Re
     };
     
     checkSaved();
-  }, [startFresh]);
+  }, [startFresh, loadParkId, persistCoasterSave]);
   
   // Auto-save periodically
   useEffect(() => {
@@ -507,15 +531,14 @@ export function CoasterProvider({ children, startFresh = false }: { children: Re
     
     const saveInterval = setInterval(() => {
       try {
-        const compressed = compressToUTF16(JSON.stringify(latestStateRef.current));
-        localStorage.setItem(STORAGE_KEY, compressed);
+        persistCoasterSave(latestStateRef.current);
       } catch (e) {
         console.error('Failed to auto-save:', e);
       }
     }, 30000); // Every 30 seconds
     
     return () => clearInterval(saveInterval);
-  }, [isStateReady]);
+  }, [isStateReady, persistCoasterSave]);
   
   // Simulation tick
   useEffect(() => {
@@ -1457,38 +1480,28 @@ export function CoasterProvider({ children, startFresh = false }: { children: Re
   
   const saveGame = useCallback(() => {
     try {
-      const compressed = compressToUTF16(JSON.stringify(latestStateRef.current));
-      localStorage.setItem(STORAGE_KEY, compressed);
-      setHasSavedGame(true);
+      const ok = persistCoasterSave(latestStateRef.current);
+      if (ok) {
+        setHasSavedGame(true);
+      }
     } catch (e) {
       console.error('Failed to save game:', e);
     }
-  }, []);
+  }, [persistCoasterSave]);
   
   const loadGame = useCallback((): boolean => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        let jsonString = decompressFromUTF16(saved);
-        if (!jsonString || !jsonString.startsWith('{')) {
-          if (saved.startsWith('{')) {
-            jsonString = saved;
-          } else {
-            return false;
-          }
-        }
-        
-        const parsed = JSON.parse(jsonString);
-        if (parsed && parsed.grid && parsed.gridSize) {
-          setState(normalizeLoadedState(parsed));
-          return true;
-        }
+      const parsed = loadCoasterStateFromStorage(COASTER_AUTOSAVE_KEY);
+      if (parsed && parsed.grid && parsed.gridSize) {
+        setState(normalizeLoadedState(parsed));
+        persistCoasterSave(parsed);
+        return true;
       }
     } catch (e) {
       console.error('Failed to load game:', e);
     }
     return false;
-  }, []);
+  }, [persistCoasterSave]);
   
   const newGame = useCallback((name?: string) => {
     setState(createInitialGameState(name));
