@@ -269,16 +269,102 @@ function calculateStaffWages(staff: Staff[]): number {
   return staff.reduce((sum, member) => sum + (wageMap[member.type] ?? 0), 0);
 }
 
+/**
+ * Collect all track tiles for a coaster from the grid.
+ * Returns tiles in connected order starting from any tile, following the track.
+ */
+function collectCoasterTrack(grid: Tile[][], coasterId: string): { tiles: { x: number; y: number }[]; pieces: TrackPiece[] } {
+  const gridSize = grid.length;
+  const allTrackTiles: { x: number; y: number; piece: TrackPiece }[] = [];
+  
+  // First, collect all tiles with this coaster's track
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const tile = grid[y][x];
+      if (tile.coasterTrackId === coasterId && tile.trackPiece) {
+        allTrackTiles.push({ x, y, piece: tile.trackPiece });
+      }
+    }
+  }
+  
+  if (allTrackTiles.length === 0) {
+    return { tiles: [], pieces: [] };
+  }
+  
+  // Order the tiles by following connections
+  const visited = new Set<string>();
+  const orderedTiles: { x: number; y: number }[] = [];
+  const orderedPieces: TrackPiece[] = [];
+  
+  // Start from the first tile found
+  let current = allTrackTiles[0];
+  
+  while (current && !visited.has(`${current.x},${current.y}`)) {
+    visited.add(`${current.x},${current.y}`);
+    orderedTiles.push({ x: current.x, y: current.y });
+    orderedPieces.push(current.piece);
+    
+    // Find the next connected tile based on track direction
+    const dir = current.piece.direction;
+    const nextOffsets: Record<string, { dx: number; dy: number }[]> = {
+      north: [{ dx: -1, dy: -1 }, { dx: 0, dy: -1 }, { dx: -1, dy: 0 }],
+      south: [{ dx: 1, dy: 1 }, { dx: 0, dy: 1 }, { dx: 1, dy: 0 }],
+      east: [{ dx: 1, dy: -1 }, { dx: 1, dy: 0 }, { dx: 0, dy: -1 }],
+      west: [{ dx: -1, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }],
+    };
+    
+    const offsets = nextOffsets[dir] || [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: -1 }];
+    
+    let found = false;
+    for (const { dx, dy } of offsets) {
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      const key = `${nx},${ny}`;
+      
+      if (!visited.has(key)) {
+        const next = allTrackTiles.find(t => t.x === nx && t.y === ny);
+        if (next) {
+          current = next;
+          found = true;
+          break;
+        }
+      }
+    }
+    
+    if (!found) {
+      // Try any unvisited adjacent track tile
+      for (const t of allTrackTiles) {
+        const key = `${t.x},${t.y}`;
+        if (!visited.has(key)) {
+          const dx = Math.abs(t.x - current.x);
+          const dy = Math.abs(t.y - current.y);
+          if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+            current = t;
+            found = true;
+            break;
+          }
+        }
+      }
+    }
+    
+    if (!found) break;
+  }
+  
+  return { tiles: orderedTiles, pieces: orderedPieces };
+}
+
 function createDefaultTrain(): CoasterTrain {
   // Create multiple cars for a realistic train
-  const numCars = 8;
-  const carSpacing = 0.35; // Spacing between cars in track progress units (0.35 = ~1/3 tile apart)
-  const baseVelocity = 0.045;
+  const numCars = 6;
+  const carSpacing = 0.18; // Spacing between cars - smaller value keeps cars closer together
+  const baseVelocity = 0.03;
   
   const cars: CoasterCar[] = [];
   for (let i = 0; i < numCars; i++) {
+    // Use positive offset - lead car is ahead, trailing cars follow behind at increasing offsets
+    // On a circular track, a car at offset 0.18 is 0.18 tiles behind the car at offset 0
     cars.push({
-      trackProgress: -i * carSpacing, // Negative so they trail behind the lead car
+      trackProgress: i * carSpacing,
       velocity: baseVelocity,
       rotation: { pitch: 0, yaw: 0, roll: 0 },
       screenX: 0,
@@ -853,24 +939,20 @@ export function CoasterProvider({ children, startFresh = false }: { children: Re
           ? buildPath
           : [...buildPath, { x, y }];
         
-        const trackEntries = updatedPath
-          .map(point => {
-            const piece = newGrid[point.y][point.x].trackPiece;
-            return piece ? { point, piece } : null;
-          })
-          .filter((entry): entry is { point: { x: number; y: number }; piece: TrackPiece } => Boolean(entry));
-        const trackPieces = trackEntries.map(entry => entry.piece);
-        const trackTiles = trackEntries.map(entry => entry.point);
+        // Collect ALL track tiles for this coaster from the grid (not just building path)
+        const { tiles: trackTiles, pieces: trackPieces } = collectCoasterTrack(newGrid, coasterId);
         
         const coasterIndex = prev.coasters.findIndex(coaster => coaster.id === coasterId);
         const existingCoaster = coasterIndex >= 0 ? prev.coasters[coasterIndex] : null;
-        const coasterBase = existingCoaster ?? createDefaultCoaster(coasterId, updatedPath[0]);
+        const coasterBase = existingCoaster ?? createDefaultCoaster(coasterId, trackTiles[0] || { x, y });
+        
+        // Only create fresh train if this is a new coaster or track changed significantly
+        const needsNewTrain = !existingCoaster || existingCoaster.track.length !== trackPieces.length;
         const coaster: Coaster = {
           ...coasterBase,
           track: trackPieces,
           trackTiles,
-          // Always use fresh trains with correct car count
-          trains: [createDefaultTrain()],
+          trains: needsNewTrain ? [createDefaultTrain()] : coasterBase.trains,
         };
         
         const updatedCoasters = [...prev.coasters];
@@ -991,8 +1073,9 @@ export function CoasterProvider({ children, startFresh = false }: { children: Re
       const newGrid = prev.grid.map(row => row.map(tile => ({ ...tile })));
       const tile = newGrid[y][x];
       
-      // Check if we're bulldozing track
+      // Check if we're bulldozing track and get the coaster ID
       const hadTrack = tile.hasCoasterTrack || tile.trackPiece;
+      const coasterId = tile.coasterTrackId;
       
       // Reset tile
       tile.building = createEmptyBuilding();
@@ -1003,12 +1086,30 @@ export function CoasterProvider({ children, startFresh = false }: { children: Re
       tile.coasterTrackId = null;
       tile.trackPiece = null;
       
+      // If track was demolished, update the coaster's track arrays
+      let updatedCoasters = prev.coasters;
+      if (hadTrack && coasterId) {
+        // Recollect all track for this coaster from the updated grid
+        const { tiles: trackTiles, pieces: trackPieces } = collectCoasterTrack(newGrid, coasterId);
+        
+        updatedCoasters = prev.coasters.map(coaster => {
+          if (coaster.id === coasterId) {
+            return {
+              ...coaster,
+              track: trackPieces,
+              trackTiles,
+            };
+          }
+          return coaster;
+        });
+      }
+      
       // If track was demolished, reset the coaster building state
-      // so next placement starts fresh at ground level
       if (hadTrack) {
         return { 
           ...prev, 
           grid: newGrid,
+          coasters: updatedCoasters,
           buildingCoasterHeight: 0,
           buildingCoasterLastDirection: null,
           buildingCoasterPath: [],
@@ -1199,25 +1300,20 @@ export function CoasterProvider({ children, startFresh = false }: { children: Re
         lastDirection = direction;
       }
       
-      // Update coaster in coasters array
-      const trackEntries = updatedPath
-        .map(point => {
-          const piece = newGrid[point.y]?.[point.x]?.trackPiece;
-          return piece ? { point, piece } : null;
-        })
-        .filter((entry): entry is { point: { x: number; y: number }; piece: TrackPiece } => Boolean(entry));
-      const trackPieces = trackEntries.map(entry => entry.piece);
-      const trackTiles = trackEntries.map(entry => entry.point);
+      // Collect ALL track tiles for this coaster from the grid (not just building path)
+      const { tiles: trackTiles, pieces: trackPieces } = collectCoasterTrack(newGrid, coasterId);
       
       const coasterIndex = prev.coasters.findIndex(c => c.id === coasterId);
       const existingCoaster = coasterIndex >= 0 ? prev.coasters[coasterIndex] : null;
-      const coasterBase = existingCoaster ?? createDefaultCoaster(coasterId, updatedPath[0] || tiles[0]);
+      const coasterBase = existingCoaster ?? createDefaultCoaster(coasterId, trackTiles[0] || tiles[0]);
+      
+      // Only create fresh train if this is a new coaster or track changed significantly
+      const needsNewTrain = !existingCoaster || existingCoaster.track.length !== trackPieces.length;
       const coaster: Coaster = {
         ...coasterBase,
         track: trackPieces,
         trackTiles,
-        // Always use fresh trains with correct car count
-        trains: [createDefaultTrain()],
+        trains: needsNewTrain ? [createDefaultTrain()] : coasterBase.trains,
       };
       
       const updatedCoasters = [...prev.coasters];

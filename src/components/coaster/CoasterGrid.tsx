@@ -458,11 +458,19 @@ function drawPathTile(
   if (west) drawPathEdges(westDx, westDy, westEdgeX, westEdgeY);
 }
 
-// Queue colors
+// Queue colors - RCT-style stanchion barriers
 const QUEUE_COLORS = {
-  post: '#374151',      // Dark gray metal posts
-  rail: '#4b5563',      // Gray metal rails
-  rope: '#1f2937',      // Dark rope/chain between posts
+  // Path surface (slightly different from regular path)
+  surface: '#a1a1aa',       // Lighter concrete for queue areas
+  surfaceEdge: '#71717a',   // Edge color
+  // Stanchion posts (chrome/metal look)
+  postBase: '#52525b',      // Dark base
+  postPole: '#a1a1aa',      // Silver pole
+  postTop: '#d4d4d8',       // Bright top cap
+  postShadow: 'rgba(0,0,0,0.3)',
+  // Retractable belt barrier
+  beltColor: '#dc2626',     // Red belt (classic queue color)
+  beltShadow: '#991b1b',    // Darker red for depth
 };
 
 function drawQueueTile(
@@ -474,9 +482,6 @@ function drawQueueTile(
   grid: Tile[][],
   gridSize: number
 ) {
-  // Draw path first (queue is a path with railings)
-  drawPathTile(ctx, x, y, gridX, gridY, grid, gridSize);
-  
   const w = TILE_WIDTH;
   const h = TILE_HEIGHT;
   const cx = x + w / 2;
@@ -493,7 +498,16 @@ function drawQueueTile(
   const south = hasPath(gridX + 1, gridY);
   const west = hasPath(gridX, gridY + 1);
 
-  // Edge midpoints (must match path exactly)
+  // Draw grass base first
+  drawGrassTile(ctx, x, y, 1);
+
+  // Queue path dimensions (same as regular path)
+  const pathWidthRatio = 0.14;
+  const pathW = w * pathWidthRatio;
+  const halfWidth = pathW * 0.5;
+  const edgeStop = 0.98;
+
+  // Edge midpoints
   const northEdgeX = x + w * 0.25;
   const northEdgeY = y + h * 0.25;
   const eastEdgeX = x + w * 0.75;
@@ -515,22 +529,93 @@ function drawQueueTile(
 
   const getPerp = (dx: number, dy: number) => ({ nx: -dy, ny: dx });
 
-  // Path dimensions (must match drawPathTile exactly)
-  const pathWidthRatio = 0.14;
-  const pathW = w * pathWidthRatio;
-  const halfWidth = pathW * 0.5;
-  
-  // Rail offset - position rails AT the path edges, not far outside
-  // This makes the queue corridor narrower and rails closer together
-  const railOffset = halfWidth * 0.85;
-  const edgeStop = 0.98;
+  // Draw queue path surface (slightly different color than regular path)
+  ctx.fillStyle = QUEUE_COLORS.surface;
 
-  // Queue railing styling
-  const postSize = 1.2;
-  const postSpacing = 12; // Distance between posts along the rail
+  if (north) {
+    const stopX = cx + (northEdgeX - cx) * edgeStop;
+    const stopY = cy + (northEdgeY - cy) * edgeStop;
+    const perp = getPerp(northDx, northDy);
+    ctx.beginPath();
+    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
+    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
+    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
+    ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
+    ctx.closePath();
+    ctx.fill();
+  }
+  if (east) {
+    const stopX = cx + (eastEdgeX - cx) * edgeStop;
+    const stopY = cy + (eastEdgeY - cy) * edgeStop;
+    const perp = getPerp(eastDx, eastDy);
+    ctx.beginPath();
+    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
+    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
+    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
+    ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
+    ctx.closePath();
+    ctx.fill();
+  }
+  if (south) {
+    const stopX = cx + (southEdgeX - cx) * edgeStop;
+    const stopY = cy + (southEdgeY - cy) * edgeStop;
+    const perp = getPerp(southDx, southDy);
+    ctx.beginPath();
+    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
+    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
+    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
+    ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
+    ctx.closePath();
+    ctx.fill();
+  }
+  if (west) {
+    const stopX = cx + (westEdgeX - cx) * edgeStop;
+    const stopY = cy + (westEdgeY - cy) * edgeStop;
+    const perp = getPerp(westDx, westDy);
+    ctx.beginPath();
+    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
+    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
+    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
+    ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
+    ctx.closePath();
+    ctx.fill();
+  }
 
-  // Draw queue railings along path edges
-  const drawQueueRailsForSegment = (
+  // Draw path edge lines
+  ctx.strokeStyle = QUEUE_COLORS.surfaceEdge;
+  ctx.lineWidth = 0.8;
+  ctx.lineCap = 'round';
+
+  const drawEdgeLine = (dirDx: number, dirDy: number, edgeX: number, edgeY: number) => {
+    const perp = getPerp(dirDx, dirDy);
+    const stopX = cx + (edgeX - cx) * edgeStop;
+    const stopY = cy + (edgeY - cy) * edgeStop;
+    ctx.beginPath();
+    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
+    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
+    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
+    ctx.stroke();
+  };
+
+  if (north) drawEdgeLine(northDx, northDy, northEdgeX, northEdgeY);
+  if (east) drawEdgeLine(eastDx, eastDy, eastEdgeX, eastEdgeY);
+  if (south) drawEdgeLine(southDx, southDy, southEdgeX, southEdgeY);
+  if (west) drawEdgeLine(westDx, westDy, westEdgeX, westEdgeY);
+
+  // Queue barrier dimensions
+  const barrierOffset = halfWidth + 2; // Position barriers just outside the path
+  const postSpacing = 14; // Distance between stanchion posts
+  const postHeight = 6;   // Visual height of posts (isometric)
+  const postRadius = 1.2; // Radius of the pole
+
+  // Collect all post positions for depth-sorted rendering
+  const posts: { x: number; y: number; depth: number }[] = [];
+
+  // Draw queue barriers (stanchions with belt)
+  const drawQueueBarrierSegment = (
     dirDx: number, 
     dirDy: number, 
     edgeX: number, 
@@ -539,71 +624,102 @@ function drawQueueTile(
     const perp = getPerp(dirDx, dirDy);
     const stopX = cx + (edgeX - cx) * edgeStop;
     const stopY = cy + (edgeY - cy) * edgeStop;
-
-    // Calculate segment length for post placement
     const segLen = Math.hypot(stopX - cx, stopY - cy);
     const numPosts = Math.max(2, Math.floor(segLen / postSpacing) + 1);
 
-    // Two rails - one on each side of the path
+    // Draw belts first (behind posts)
     for (const side of [-1, 1]) {
-      const railOffX = perp.nx * railOffset * side;
-      const railOffY = perp.ny * railOffset * side;
-
+      const railOffX = perp.nx * barrierOffset * side;
+      const railOffY = perp.ny * barrierOffset * side;
       const startX = cx + railOffX;
       const startY = cy + railOffY;
       const endX = stopX + railOffX;
       const endY = stopY + railOffY;
 
-      // Draw the continuous rail bar (solid metal bar)
-      ctx.strokeStyle = QUEUE_COLORS.rail;
-      ctx.lineWidth = 1.5;
+      // Belt shadow (lower)
+      ctx.strokeStyle = QUEUE_COLORS.beltShadow;
+      ctx.lineWidth = 2.5;
       ctx.lineCap = 'round';
       ctx.setLineDash([]);
       ctx.beginPath();
-      ctx.moveTo(startX, startY);
-      ctx.lineTo(endX, endY);
+      ctx.moveTo(startX, startY - postHeight * 0.4);
+      ctx.lineTo(endX, endY - postHeight * 0.4);
       ctx.stroke();
 
-      // Draw posts at regular intervals
-      ctx.fillStyle = QUEUE_COLORS.post;
+      // Main red belt (slightly higher to create 3D effect)
+      ctx.strokeStyle = QUEUE_COLORS.beltColor;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY - postHeight * 0.5);
+      ctx.lineTo(endX, endY - postHeight * 0.5);
+      ctx.stroke();
+
+      // Collect post positions
       for (let i = 0; i < numPosts; i++) {
-        const t = i / (numPosts - 1);
+        const t = numPosts > 1 ? i / (numPosts - 1) : 0.5;
         const postX = startX + (endX - startX) * t;
         const postY = startY + (endY - startY) * t;
-        
-        ctx.beginPath();
-        ctx.arc(postX, postY, postSize, 0, Math.PI * 2);
-        ctx.fill();
+        posts.push({ x: postX, y: postY, depth: postY });
       }
-    }
-
-    // Draw rope/barrier between the two rails (the actual queue rope)
-    // This goes ACROSS the path at regular intervals
-    ctx.strokeStyle = QUEUE_COLORS.rope;
-    ctx.lineWidth = 0.6;
-    ctx.setLineDash([1.5, 2]);
-    
-    const numRopes = Math.max(2, Math.floor(segLen / (postSpacing * 1.5)));
-    for (let i = 1; i < numRopes; i++) {
-      const t = i / numRopes;
-      const baseX = cx + (stopX - cx) * t;
-      const baseY = cy + (stopY - cy) * t;
-      
-      // Draw rope across the path (perpendicular)
-      ctx.beginPath();
-      ctx.moveTo(baseX + perp.nx * railOffset, baseY + perp.ny * railOffset);
-      ctx.lineTo(baseX - perp.nx * railOffset, baseY - perp.ny * railOffset);
-      ctx.stroke();
     }
   };
 
-  // Draw rails for each connected direction
-  if (north) drawQueueRailsForSegment(northDx, northDy, northEdgeX, northEdgeY);
-  if (east) drawQueueRailsForSegment(eastDx, eastDy, eastEdgeX, eastEdgeY);
-  if (south) drawQueueRailsForSegment(southDx, southDy, southEdgeX, southEdgeY);
-  if (west) drawQueueRailsForSegment(westDx, westDy, westEdgeX, westEdgeY);
+  // Draw barriers for each connected direction
+  if (north) drawQueueBarrierSegment(northDx, northDy, northEdgeX, northEdgeY);
+  if (east) drawQueueBarrierSegment(eastDx, eastDy, eastEdgeX, eastEdgeY);
+  if (south) drawQueueBarrierSegment(southDx, southDy, southEdgeX, southEdgeY);
+  if (west) drawQueueBarrierSegment(westDx, westDy, westEdgeX, westEdgeY);
 
-  // Reset dash pattern
+  // Sort posts by depth (back to front) for proper rendering
+  posts.sort((a, b) => a.depth - b.depth);
+
+  // Draw all stanchion posts
+  for (const post of posts) {
+    const px = post.x;
+    const py = post.y;
+
+    // Post shadow on ground
+    ctx.fillStyle = QUEUE_COLORS.postShadow;
+    ctx.beginPath();
+    ctx.ellipse(px + 1, py + 1, postRadius * 1.5, postRadius * 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Base (dark disk at ground level)
+    ctx.fillStyle = QUEUE_COLORS.postBase;
+    ctx.beginPath();
+    ctx.ellipse(px, py, postRadius * 1.8, postRadius * 1, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pole (vertical line going up)
+    ctx.strokeStyle = QUEUE_COLORS.postPole;
+    ctx.lineWidth = postRadius * 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px, py - postHeight);
+    ctx.stroke();
+
+    // Pole highlight (lighter edge for 3D effect)
+    ctx.strokeStyle = QUEUE_COLORS.postTop;
+    ctx.lineWidth = postRadius * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(px - postRadius * 0.3, py - 1);
+    ctx.lineTo(px - postRadius * 0.3, py - postHeight + 1);
+    ctx.stroke();
+
+    // Top cap (bright circle at top of post)
+    ctx.fillStyle = QUEUE_COLORS.postTop;
+    ctx.beginPath();
+    ctx.arc(px, py - postHeight, postRadius * 1.2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Top cap highlight
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(px - postRadius * 0.3, py - postHeight - postRadius * 0.3, postRadius * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   ctx.setLineDash([]);
 }
 
@@ -766,35 +882,38 @@ function getTrackPoint(
   }
   
   // Straight or slope segments - use edge midpoints
-  // MUST match drawStraightTrack and drawSlopeTrack geometry exactly
-  // Edge positions:
-  //   northEdge: (0.25, 0.25) - top left in isometric
-  //   eastEdge:  (0.75, 0.25) - top right in isometric  
-  //   southEdge: (0.75, 0.75) - bottom right in isometric
-  //   westEdge:  (0.25, 0.75) - bottom left in isometric
+  // Direction determines which way the train travels through the tile
+  // North/South tracks go diagonally from top-left to bottom-right
+  // East/West tracks go diagonally from top-right to bottom-left
   
-  if (direction === 'north' || direction === 'south') {
-    // Track runs N-S: from northEdge to southEdge
+  if (direction === 'south') {
+    // South: enter from north edge (top-left), exit to south edge (bottom-right)
     const fromX = startX + w * 0.25;
     const fromY = startY + h * 0.25 - trackPiece.startHeight * HEIGHT_UNIT;
     const toX = startX + w * 0.75;
     const toY = startY + h * 0.75 - trackPiece.endHeight * HEIGHT_UNIT;
-    
-    return {
-      x: fromX + (toX - fromX) * t,
-      y: fromY + (toY - fromY) * t,
-    };
-  } else {
-    // Track runs E-W: from eastEdge to westEdge
+    return { x: fromX + (toX - fromX) * t, y: fromY + (toY - fromY) * t };
+  } else if (direction === 'north') {
+    // North: enter from south edge (bottom-right), exit to north edge (top-left)
+    const fromX = startX + w * 0.75;
+    const fromY = startY + h * 0.75 - trackPiece.startHeight * HEIGHT_UNIT;
+    const toX = startX + w * 0.25;
+    const toY = startY + h * 0.25 - trackPiece.endHeight * HEIGHT_UNIT;
+    return { x: fromX + (toX - fromX) * t, y: fromY + (toY - fromY) * t };
+  } else if (direction === 'west') {
+    // West: enter from east edge (top-right), exit to west edge (bottom-left)
     const fromX = startX + w * 0.75;
     const fromY = startY + h * 0.25 - trackPiece.startHeight * HEIGHT_UNIT;
     const toX = startX + w * 0.25;
     const toY = startY + h * 0.75 - trackPiece.endHeight * HEIGHT_UNIT;
-    
-    return {
-      x: fromX + (toX - fromX) * t,
-      y: fromY + (toY - fromY) * t,
-    };
+    return { x: fromX + (toX - fromX) * t, y: fromY + (toY - fromY) * t };
+  } else {
+    // East: enter from west edge (bottom-left), exit to east edge (top-right)
+    const fromX = startX + w * 0.25;
+    const fromY = startY + h * 0.75 - trackPiece.startHeight * HEIGHT_UNIT;
+    const toX = startX + w * 0.75;
+    const toY = startY + h * 0.25 - trackPiece.endHeight * HEIGHT_UNIT;
+    return { x: fromX + (toX - fromX) * t, y: fromY + (toY - fromY) * t };
   }
 }
 
@@ -809,9 +928,9 @@ const DIRECTION_ANGLES: Record<string, number> = {
 function drawCoasterCar(ctx: CanvasRenderingContext2D, x: number, y: number, direction: string) {
   const angle = DIRECTION_ANGLES[direction] ?? 0;
   
-  // Car dimensions (similar to train cars but slightly smaller)
-  const carLength = 14;
-  const carWidth = 4;
+  // Car dimensions - scaled down by 30%
+  const carLength = 10;
+  const carWidth = 2.8;
   
   ctx.save();
   ctx.translate(x, y);
