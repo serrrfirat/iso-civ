@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCoaster } from '@/context/CoasterContext';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { CoasterGrid } from './CoasterGrid';
@@ -14,7 +14,7 @@ interface GameProps {
 }
 
 export default function CoasterGame({ onExit }: GameProps) {
-  const { state, isStateReady } = useCoaster();
+  const { state, isStateReady, setTool } = useCoaster();
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
   const [viewport, setViewport] = useState<{
     offset: { x: number; y: number };
@@ -22,6 +22,29 @@ export default function CoasterGame({ onExit }: GameProps) {
     canvasSize: { width: number; height: number };
   } | null>(null);
   const [navigationTarget, setNavigationTarget] = useState<{ x: number; y: number } | null>(null);
+  
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if typing in an input
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+      
+      if (e.key === 'b' || e.key === 'B') {
+        e.preventDefault();
+        setTool('bulldoze');
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setTool('select');
+        setSelectedTile(null);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setTool]);
   
   if (!isStateReady) {
     return (

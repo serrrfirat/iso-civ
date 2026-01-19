@@ -46,6 +46,9 @@ interface CoasterContextValue {
   finishCoasterBuild: () => void;
   cancelCoasterBuild: () => void;
   
+  // Track line placement (for drag-to-draw)
+  placeTrackLine: (tiles: { x: number; y: number }[]) => void;
+  
   // Park management
   setParkSettings: (settings: Partial<ParkSettings>) => void;
   addMoney: (amount: number) => void;
@@ -265,7 +268,7 @@ function calculateStaffWages(staff: Staff[]): number {
 function createDefaultTrain(): CoasterTrain {
   const car: CoasterCar = {
     trackProgress: 0,
-    velocity: 0.015,
+    velocity: 0.045, // 3x faster than before (was 0.015)
     rotation: { pitch: 0, yaw: 0, roll: 0 },
     screenX: 0,
     screenY: 0,
@@ -307,7 +310,7 @@ function createDefaultCoaster(id: string, startTile: { x: number; y: number }): 
 // PROVIDER COMPONENT
 // =============================================================================
 
-export function CoasterProvider({ children }: { children: React.ReactNode }) {
+export function CoasterProvider({ children, startFresh = false }: { children: React.ReactNode; startFresh?: boolean }) {
   const [state, setState] = useState<GameState>(() => createInitialGameState());
   const [isStateReady, setIsStateReady] = useState(false);
   const [hasSavedGame, setHasSavedGame] = useState(false);
@@ -318,10 +321,16 @@ export function CoasterProvider({ children }: { children: React.ReactNode }) {
     latestStateRef.current = state;
   }, [state]);
   
-  // Load saved game on mount
+  // Load saved game on mount (unless startFresh is true)
   useEffect(() => {
     const checkSaved = () => {
       if (typeof window === 'undefined') return;
+      
+      // If startFresh, skip loading saved game and just start fresh
+      if (startFresh) {
+        setIsStateReady(true);
+        return;
+      }
       
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -350,7 +359,7 @@ export function CoasterProvider({ children }: { children: React.ReactNode }) {
     };
     
     checkSaved();
-  }, []);
+  }, [startFresh]);
   
   // Auto-save periodically
   useEffect(() => {
@@ -630,13 +639,62 @@ export function CoasterProvider({ children }: { children: React.ReactNode }) {
         // For auto-build mode, require adjacency
         if (tool === 'coaster_build' && lastTile && !deltaDir) return prev;
         
+        // Check for adjacent existing track to inherit direction and height
+        let adjacentDirection: TrackDirection | null = null;
+        let adjacentHeight = prev.buildingCoasterHeight;
+        
+        if (!lastTile) {
+          // No active build path - check adjacent tiles for existing track
+          const adjacentOffsets = [
+            { dx: -1, dy: 0 },
+            { dx: 1, dy: 0 },
+            { dx: 0, dy: -1 },
+            { dx: 0, dy: 1 },
+          ];
+          
+          for (const { dx, dy } of adjacentOffsets) {
+            const adjX = x + dx;
+            const adjY = y + dy;
+            if (adjX >= 0 && adjY >= 0 && adjX < prev.gridSize && adjY < prev.gridSize) {
+              const adjTile = prev.grid[adjY]?.[adjX];
+              if (adjTile?.trackPiece) {
+                adjacentHeight = adjTile.trackPiece.endHeight;
+                
+                // Determine the exit direction of the adjacent track piece
+                const adjPiece = adjTile.trackPiece;
+                let exitDir = adjPiece.direction;
+                
+                // For turns, calculate the actual exit direction
+                if (adjPiece.type === 'turn_left_flat') {
+                  exitDir = rotateDirection(adjPiece.direction, 'left');
+                } else if (adjPiece.type === 'turn_right_flat') {
+                  exitDir = rotateDirection(adjPiece.direction, 'right');
+                }
+                
+                // Check if adjacent track's exit points toward us
+                const exitPointsToUs = (
+                  (exitDir === 'west' && dx === 1) ||
+                  (exitDir === 'east' && dx === -1) ||
+                  (exitDir === 'north' && dy === 1) ||
+                  (exitDir === 'south' && dy === -1)
+                );
+                
+                if (exitPointsToUs) {
+                  adjacentDirection = exitDir;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        
         // Determine track directions
-        const baseDirection = prev.buildingCoasterLastDirection ?? deltaDir ?? 'south';
+        const baseDirection = prev.buildingCoasterLastDirection ?? adjacentDirection ?? deltaDir ?? 'south';
         let startDirection: TrackDirection = baseDirection;
         let endDirection: TrackDirection = baseDirection;
         let pieceType: TrackPieceType = 'straight_flat';
-        let startHeight = prev.buildingCoasterHeight;
-        let endHeight = prev.buildingCoasterHeight;
+        let startHeight = adjacentHeight;
+        let endHeight = adjacentHeight;
         let chainLift = false;
         
         if (tool === 'coaster_turn_left') {
@@ -841,6 +899,9 @@ export function CoasterProvider({ children }: { children: React.ReactNode }) {
       const newGrid = prev.grid.map(row => row.map(tile => ({ ...tile })));
       const tile = newGrid[y][x];
       
+      // Check if we're bulldozing track
+      const hadTrack = tile.hasCoasterTrack || tile.trackPiece;
+      
       // Reset tile
       tile.building = createEmptyBuilding();
       tile.path = false;
@@ -849,6 +910,18 @@ export function CoasterProvider({ children }: { children: React.ReactNode }) {
       tile.hasCoasterTrack = false;
       tile.coasterTrackId = null;
       tile.trackPiece = null;
+      
+      // If track was demolished, reset the coaster building state
+      // so next placement starts fresh at ground level
+      if (hadTrack) {
+        return { 
+          ...prev, 
+          grid: newGrid,
+          buildingCoasterHeight: 0,
+          buildingCoasterLastDirection: null,
+          buildingCoasterPath: [],
+        };
+      }
       
       return { ...prev, grid: newGrid };
     });
@@ -886,6 +959,190 @@ export function CoasterProvider({ children }: { children: React.ReactNode }) {
       buildingCoasterHeight: 0,
       buildingCoasterLastDirection: null,
     }));
+  }, []);
+  
+  // Place a line of track tiles (for drag-to-draw functionality)
+  const placeTrackLine = useCallback((tiles: { x: number; y: number }[]) => {
+    if (tiles.length === 0) return;
+    
+    setState(prev => {
+      const newGrid = prev.grid.map(row => row.map(tile => ({ ...tile })));
+      const coasterId = prev.buildingCoasterId ?? generateUUID();
+      let currentHeight = prev.buildingCoasterHeight;
+      let lastDirection: TrackDirection | null = prev.buildingCoasterLastDirection;
+      const updatedPath = [...prev.buildingCoasterPath];
+      
+      // If continuing from existing path, inherit height from the last track piece
+      if (updatedPath.length > 0) {
+        const lastPathTile = updatedPath[updatedPath.length - 1];
+        const lastTrackPiece = prev.grid[lastPathTile.y]?.[lastPathTile.x]?.trackPiece;
+        if (lastTrackPiece) {
+          currentHeight = lastTrackPiece.endHeight;
+          lastDirection = lastTrackPiece.direction;
+        }
+      }
+      
+      // Also check if first tile we're placing is adjacent to existing track
+      if (tiles.length > 0 && updatedPath.length === 0) {
+        const firstTile = tiles[0];
+        // Check all 4 adjacent tiles for existing track
+        const adjacentOffsets = [
+          { dx: -1, dy: 0, fromDir: 'west' as TrackDirection },
+          { dx: 1, dy: 0, fromDir: 'east' as TrackDirection },
+          { dx: 0, dy: -1, fromDir: 'north' as TrackDirection },
+          { dx: 0, dy: 1, fromDir: 'south' as TrackDirection },
+        ];
+        for (const { dx, dy, fromDir } of adjacentOffsets) {
+          const adjX = firstTile.x + dx;
+          const adjY = firstTile.y + dy;
+          if (adjX >= 0 && adjY >= 0 && adjX < prev.gridSize && adjY < prev.gridSize) {
+            const adjTile = prev.grid[adjY]?.[adjX];
+            if (adjTile?.trackPiece) {
+              currentHeight = adjTile.trackPiece.endHeight;
+              
+              // Determine the exit direction of the adjacent track piece
+              const adjPiece = adjTile.trackPiece;
+              let exitDir = adjPiece.direction;
+              
+              // For turns, calculate the actual exit direction
+              if (adjPiece.type === 'turn_left_flat') {
+                exitDir = rotateDirection(adjPiece.direction, 'left');
+              } else if (adjPiece.type === 'turn_right_flat') {
+                exitDir = rotateDirection(adjPiece.direction, 'right');
+              }
+              
+              // Check if this adjacent track's exit points toward us
+              // Adjacent at dx=1 (east of us) should exit 'west' to point to us
+              // Adjacent at dx=-1 (west of us) should exit 'east' to point to us
+              // Adjacent at dy=1 (south of us) should exit 'north' to point to us
+              // Adjacent at dy=-1 (north of us) should exit 'south' to point to us
+              const exitPointsToUs = (
+                (exitDir === 'west' && dx === 1) ||
+                (exitDir === 'east' && dx === -1) ||
+                (exitDir === 'north' && dy === 1) ||
+                (exitDir === 'south' && dy === -1)
+              );
+              
+              if (exitPointsToUs) {
+                // We should continue in the OPPOSITE direction (away from the adjacent track)
+                // If adjacent exits west toward us, we continue west (same direction)
+                lastDirection = exitDir;
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      for (let i = 0; i < tiles.length; i++) {
+        const { x, y } = tiles[i];
+        
+        // Skip if out of bounds
+        if (x < 0 || y < 0 || x >= prev.gridSize || y >= prev.gridSize) continue;
+        
+        // Skip if already has track
+        const tile = newGrid[y][x];
+        if (tile.hasCoasterTrack) continue;
+        
+        // Determine direction from previous tile
+        let direction: TrackDirection = lastDirection ?? 'south';
+        if (i > 0) {
+          const prev = tiles[i - 1];
+          const dx = x - prev.x;
+          const dy = y - prev.y;
+          if (dx === 1 && dy === 0) direction = 'east';
+          else if (dx === -1 && dy === 0) direction = 'west';
+          else if (dx === 0 && dy === 1) direction = 'south';
+          else if (dx === 0 && dy === -1) direction = 'north';
+        } else if (updatedPath.length > 0) {
+          const prevTile = updatedPath[updatedPath.length - 1];
+          const dx = x - prevTile.x;
+          const dy = y - prevTile.y;
+          if (dx === 1 && dy === 0) direction = 'east';
+          else if (dx === -1 && dy === 0) direction = 'west';
+          else if (dx === 0 && dy === 1) direction = 'south';
+          else if (dx === 0 && dy === -1) direction = 'north';
+        }
+        
+        // Determine track piece type
+        let pieceType: TrackPieceType = 'straight_flat';
+        
+        // Check if we need a turn from the previous direction
+        if (lastDirection && lastDirection !== direction) {
+          // Update the PREVIOUS tile to be a turn
+          const prevTileCoord = i > 0 ? tiles[i - 1] : updatedPath[updatedPath.length - 1];
+          if (prevTileCoord) {
+            const prevTile = newGrid[prevTileCoord.y]?.[prevTileCoord.x];
+            if (prevTile && prevTile.trackPiece) {
+              // Determine turn type based on direction change
+              const turnType: TrackPieceType = 
+                rotateDirection(lastDirection, 'right') === direction
+                  ? 'turn_right_flat'
+                  : 'turn_left_flat';
+              prevTile.trackPiece = {
+                ...prevTile.trackPiece,
+                type: turnType,
+              };
+            }
+          }
+        }
+        
+        // Create track piece for current tile
+        const trackPiece: TrackPiece = {
+          type: pieceType,
+          direction: direction,
+          startHeight: clampHeight(currentHeight),
+          endHeight: clampHeight(currentHeight),
+          bankAngle: 0,
+          chainLift: false,
+          boosted: false,
+        };
+        
+        tile.trackPiece = trackPiece;
+        tile.hasCoasterTrack = true;
+        tile.coasterTrackId = coasterId;
+        
+        updatedPath.push({ x, y });
+        lastDirection = direction;
+      }
+      
+      // Update coaster in coasters array
+      const trackEntries = updatedPath
+        .map(point => {
+          const piece = newGrid[point.y]?.[point.x]?.trackPiece;
+          return piece ? { point, piece } : null;
+        })
+        .filter((entry): entry is { point: { x: number; y: number }; piece: TrackPiece } => Boolean(entry));
+      const trackPieces = trackEntries.map(entry => entry.piece);
+      const trackTiles = trackEntries.map(entry => entry.point);
+      
+      const coasterIndex = prev.coasters.findIndex(c => c.id === coasterId);
+      const existingCoaster = coasterIndex >= 0 ? prev.coasters[coasterIndex] : null;
+      const coasterBase = existingCoaster ?? createDefaultCoaster(coasterId, updatedPath[0] || tiles[0]);
+      const coaster: Coaster = {
+        ...coasterBase,
+        track: trackPieces,
+        trackTiles,
+        trains: coasterBase.trains.length > 0 ? coasterBase.trains : [createDefaultTrain()],
+      };
+      
+      const updatedCoasters = [...prev.coasters];
+      if (coasterIndex >= 0) {
+        updatedCoasters[coasterIndex] = coaster;
+      } else {
+        updatedCoasters.push(coaster);
+      }
+      
+      return {
+        ...prev,
+        grid: newGrid,
+        buildingCoasterId: coasterId,
+        buildingCoasterPath: updatedPath,
+        buildingCoasterHeight: currentHeight,
+        buildingCoasterLastDirection: lastDirection,
+        coasters: updatedCoasters,
+      };
+    });
   }, []);
   
   const setParkSettings = useCallback((settings: Partial<ParkSettings>) => {
@@ -976,7 +1233,8 @@ export function CoasterProvider({ children }: { children: React.ReactNode }) {
     addCoasterTrack,
     finishCoasterBuild,
     cancelCoasterBuild,
-    
+    placeTrackLine,
+
     setParkSettings,
     addMoney,
     addNotification,
