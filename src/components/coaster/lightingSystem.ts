@@ -208,49 +208,49 @@ function drawLightCutouts(
     const tileCenterY = screenY + TILE_HEIGHT / 2;
     
     if (light.type === 'path') {
-      // Path lights - warm street lamps
-      const lightRadius = 30;
+      // Path lights - warm street lamps - strong cutout
+      const lightRadius = 32;
       const gradient = ctx.createRadialGradient(tileCenterX, tileCenterY - 5, 0, tileCenterX, tileCenterY - 5, lightRadius);
-      gradient.addColorStop(0, `rgba(255, 255, 255, ${0.85 * lightIntensity})`);
-      gradient.addColorStop(0.5, `rgba(255, 255, 255, ${0.45 * lightIntensity})`);
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${1.0 * lightIntensity})`);
+      gradient.addColorStop(0.4, `rgba(255, 255, 255, ${0.7 * lightIntensity})`);
       gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(tileCenterX, tileCenterY - 5, lightRadius, 0, Math.PI * 2);
       ctx.fill();
     } else if (light.type === 'track') {
-      // Track lights - lights along the top of EVERY track piece
+      // Track lights - lights along the top of EVERY track piece - strong cutout
       const trackHeight = light.trackHeight || 0;
       const elevationOffset = trackHeight * HEIGHT_UNIT;
       const lightY = tileCenterY - elevationOffset - 10;
       
-      // Main track light
-      const lightRadius = 28;
+      // Main track light - bright
+      const lightRadius = 30;
       const gradient = ctx.createRadialGradient(tileCenterX, lightY, 0, tileCenterX, lightY, lightRadius);
-      gradient.addColorStop(0, `rgba(255, 255, 255, ${0.75 * lightIntensity})`);
-      gradient.addColorStop(0.4, `rgba(255, 255, 255, ${0.4 * lightIntensity})`);
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${1.0 * lightIntensity})`);
+      gradient.addColorStop(0.35, `rgba(255, 255, 255, ${0.6 * lightIntensity})`);
       gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(tileCenterX, lightY, lightRadius, 0, Math.PI * 2);
       ctx.fill();
     } else if (light.type === 'building') {
-      // Building lights - windows and ambient glow
-      const lightRadius = 45;
+      // Building lights - windows and ambient glow - strong cutout
+      const lightRadius = 48;
       const gradient = ctx.createRadialGradient(tileCenterX, tileCenterY - 15, 0, tileCenterX, tileCenterY - 15, lightRadius);
-      gradient.addColorStop(0, `rgba(255, 255, 255, ${0.8 * lightIntensity})`);
-      gradient.addColorStop(0.5, `rgba(255, 255, 255, ${0.4 * lightIntensity})`);
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${1.0 * lightIntensity})`);
+      gradient.addColorStop(0.4, `rgba(255, 255, 255, ${0.6 * lightIntensity})`);
       gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(tileCenterX, tileCenterY - 15, lightRadius, 0, Math.PI * 2);
       ctx.fill();
     } else if (light.type === 'ride') {
-      // Ride lights - bright and colorful
-      const lightRadius = 50;
+      // Ride lights - bright and colorful - strong cutout
+      const lightRadius = 55;
       const gradient = ctx.createRadialGradient(tileCenterX, tileCenterY - 20, 0, tileCenterX, tileCenterY - 20, lightRadius);
-      gradient.addColorStop(0, `rgba(255, 255, 255, ${0.85 * lightIntensity})`);
-      gradient.addColorStop(0.4, `rgba(255, 255, 255, ${0.45 * lightIntensity})`);
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${1.0 * lightIntensity})`);
+      gradient.addColorStop(0.35, `rgba(255, 255, 255, ${0.65 * lightIntensity})`);
       gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
       ctx.fillStyle = gradient;
       ctx.beginPath();
