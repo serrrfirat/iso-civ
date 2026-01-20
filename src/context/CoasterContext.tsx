@@ -21,6 +21,7 @@ import {
   loadCoasterStateFromStorage,
   readSavedParksIndex,
   saveCoasterStateToStorage,
+  saveCoasterStateToStorageAsync,
   upsertSavedParkMeta,
   writeSavedParksIndex,
 } from '@/games/coaster/saveUtils';
@@ -1140,6 +1141,26 @@ export function CoasterProvider({
     latestStateRef.current = state;
   }, [state]);
   
+  // Async version that uses Web Worker for compression (no main thread blocking)
+  const persistCoasterSaveAsync = useCallback(async (stateToSave: GameState): Promise<boolean> => {
+    try {
+      const [autosaveOk, parkOk] = await Promise.all([
+        saveCoasterStateToStorageAsync(COASTER_AUTOSAVE_KEY, stateToSave),
+        saveCoasterStateToStorageAsync(`${COASTER_SAVED_PARK_PREFIX}${stateToSave.id}`, stateToSave),
+      ]);
+      if (!autosaveOk && !parkOk) return false;
+
+      const meta = buildSavedParkMeta(stateToSave);
+      const updatedIndex = upsertSavedParkMeta(meta, readSavedParksIndex());
+      writeSavedParksIndex(updatedIndex);
+      return true;
+    } catch (e) {
+      console.error('Failed to persist coaster save:', e);
+      return false;
+    }
+  }, []);
+
+  // Sync version for immediate saves (fallback, used on initial load)
   const persistCoasterSave = useCallback((stateToSave: GameState): boolean => {
     const autosaveOk = saveCoasterStateToStorage(COASTER_AUTOSAVE_KEY, stateToSave);
     const parkOk = saveCoasterStateToStorage(`${COASTER_SAVED_PARK_PREFIX}${stateToSave.id}`, stateToSave);
@@ -1221,20 +1242,19 @@ export function CoasterProvider({
     });
   }, [isStateReady]);
   
-  // Auto-save periodically
+  // Auto-save periodically using async worker-based save (no stuttering!)
   useEffect(() => {
     if (!isStateReady) return;
     
     const saveInterval = setInterval(() => {
-      try {
-        persistCoasterSave(latestStateRef.current);
-      } catch (e) {
+      // Use async save to avoid blocking main thread during compression
+      persistCoasterSaveAsync(latestStateRef.current).catch((e) => {
         console.error('Failed to auto-save:', e);
-      }
+      });
     }, 30000); // Every 30 seconds
     
     return () => clearInterval(saveInterval);
-  }, [isStateReady, persistCoasterSave]);
+  }, [isStateReady, persistCoasterSaveAsync]);
   
   // Simulation tick
   useEffect(() => {
@@ -3069,15 +3089,17 @@ export function CoasterProvider({
   }, []);
   
   const saveGame = useCallback(() => {
-    try {
-      const ok = persistCoasterSave(latestStateRef.current);
-      if (ok) {
-        setHasSavedGame(true);
-      }
-    } catch (e) {
-      console.error('Failed to save game:', e);
-    }
-  }, [persistCoasterSave]);
+    // Use async worker-based save to avoid blocking main thread
+    persistCoasterSaveAsync(latestStateRef.current)
+      .then((ok) => {
+        if (ok) {
+          setHasSavedGame(true);
+        }
+      })
+      .catch((e) => {
+        console.error('Failed to save game:', e);
+      });
+  }, [persistCoasterSaveAsync]);
   
   const loadGame = useCallback((): boolean => {
     try {

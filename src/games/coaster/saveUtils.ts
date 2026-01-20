@@ -1,5 +1,6 @@
 import { compressToUTF16, decompressFromUTF16 } from 'lz-string';
 import { GameState } from '@/games/coaster/types';
+import { serializeAndCompressAsync } from '@/lib/saveWorkerManager';
 
 export const COASTER_AUTOSAVE_KEY = 'coaster-tycoon-state';
 export const COASTER_SAVED_PARKS_INDEX_KEY = 'coaster-saved-parks-index';
@@ -98,6 +99,21 @@ export function saveCoasterStateToStorage(key: string, state: GameState): boolea
   if (typeof window === 'undefined') return false;
   try {
     const compressed = compressToUTF16(JSON.stringify(state));
+    localStorage.setItem(key, compressed);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Async version of saveCoasterStateToStorage that uses a Web Worker
+ * for serialization and compression to avoid blocking the main thread.
+ */
+export async function saveCoasterStateToStorageAsync(key: string, state: GameState): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  try {
+    const compressed = await serializeAndCompressAsync(state);
     localStorage.setItem(key, compressed);
     return true;
   } catch {
