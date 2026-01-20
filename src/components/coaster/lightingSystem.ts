@@ -357,10 +357,10 @@ export function useCoasterLightingSystem(config: CoasterLightingConfig): void {
     
     const ambient = getAmbientColor(hour);
     
-    // Apply darkness overlay - use lower alpha to avoid the "hazy" look
-    // IsoCity uses 0.6, but we'll use 0.5 for a cleaner night look
-    const alpha = darkness * 0.5;
-    ctx.fillStyle = `rgba(${ambient.r}, ${ambient.g}, ${ambient.b}, ${alpha})`;
+    // Apply darkness overlay - use low alpha to avoid the "washed out" look
+    // Use a very dark blue with low opacity for a cleaner night effect
+    const alpha = darkness * 0.35;
+    ctx.fillStyle = `rgba(5, 10, 30, ${alpha})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Calculate viewport bounds
