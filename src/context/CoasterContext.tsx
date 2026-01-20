@@ -1740,28 +1740,153 @@ export function CoasterProvider({
         'mist_fountain': 'mist_fountain',
         'interactive_fountain': 'interactive_fountain',
         'dancing_fountain': 'dancing_fountain',
-        // Food
+        // Food - American
         'food_hotdog': 'food_hotdog',
         'food_burger': 'food_burger',
+        'food_fries': 'food_fries',
+        'food_corndog': 'food_corndog',
+        'food_pretzel': 'food_pretzel',
+        // Food - Sweet Treats
         'food_icecream': 'food_icecream',
         'food_cotton_candy': 'food_cotton_candy',
-        'food_popcorn': 'snack_popcorn',
-        // Shops
+        'food_candy_apple': 'food_candy_apple',
+        'food_churros': 'food_churros',
+        'food_funnel_cake': 'food_funnel_cake',
+        // Food - Drinks
+        'drink_soda': 'drink_soda',
+        'drink_lemonade': 'drink_lemonade',
+        'drink_smoothie': 'drink_smoothie',
+        'drink_coffee': 'drink_coffee',
+        'drink_slushie': 'drink_slushie',
+        // Food - Snacks
+        'snack_popcorn': 'snack_popcorn',
+        'snack_nachos': 'snack_nachos',
+        'snack_pizza': 'snack_pizza',
+        'snack_cookies': 'snack_cookies',
+        'snack_donuts': 'snack_donuts',
+        // Food - International
+        'food_tacos': 'food_tacos',
+        'food_noodles': 'food_noodles',
+        'food_kebab': 'food_kebab',
+        'food_crepes': 'food_crepes',
+        'food_waffles': 'food_waffles',
+        // Food - Themed Carts
+        'cart_pirate': 'cart_pirate',
+        'cart_space': 'cart_space',
+        'cart_medieval': 'cart_medieval',
+        'cart_western': 'cart_western',
+        'cart_tropical': 'cart_tropical',
+        
+        // Shops - Gift shops
         'shop_souvenir': ['shop_souvenir_1', 'shop_souvenir_2'],
-        'shop_toys': 'shop_toys',
+        'shop_emporium': 'shop_souvenir_2',
         'shop_photo': 'shop_photo',
+        'shop_ticket': 'shop_ticket',
+        'shop_collectibles': 'shop_collectibles',
+        // Shops - Toy shops
+        'shop_toys': 'shop_toys',
+        'shop_plush': 'shop_plush',
+        'shop_apparel': 'shop_apparel',
+        'shop_bricks': 'shop_bricks',
+        'shop_rc': 'shop_rc',
+        // Shops - Candy
+        'shop_candy': 'shop_candy',
+        'shop_fudge': 'shop_fudge',
+        'shop_jewelry': 'shop_jewelry',
+        'shop_popcorn_shop': 'shop_popcorn',
+        'shop_soda_fountain': 'shop_soda_fountain',
+        // Shops - Games
+        'game_ring_toss': 'game_ring_toss',
+        'game_balloon': 'game_balloon',
+        'game_shooting': 'game_shooting',
+        'game_darts': 'game_darts',
+        'game_basketball': 'game_basketball',
+        // Shops - Entertainment
+        'arcade_building': 'arcade_building',
+        'vr_experience': 'vr_experience',
+        'photo_booth': 'photo_booth',
+        'caricature': 'caricature',
+        'face_paint': 'face_paint',
+        // Shops - Services
         'restroom': 'restroom',
         'first_aid': 'first_aid',
-        // Rides
-        'ride_carousel': 'ride_carousel',
+        'lockers': 'lockers',
+        'stroller_rental': 'stroller_rental',
+        'atm': 'atm',
+        
+        // Rides Small - Kiddie
+        'ride_kiddie_coaster': 'ride_kiddie_coaster',
+        'ride_kiddie_train': 'ride_kiddie_train',
+        'ride_kiddie_planes': 'ride_kiddie_planes',
+        'ride_kiddie_boats': 'ride_kiddie_boats',
+        'ride_kiddie_cars': 'ride_kiddie_cars',
+        // Rides Small - Spinning
         'ride_teacups': 'ride_teacups',
-        'ride_ferris_wheel': ['ride_ferris_classic', 'ride_ferris_modern', 'ride_ferris_led'],
-        'ride_drop_tower': 'ride_drop_tower',
-        'ride_swing_ride': 'ride_swing_ride',
+        'ride_scrambler': 'ride_scrambler',
+        'ride_tilt_a_whirl': 'ride_tilt_a_whirl',
+        'ride_spinning_apples': 'ride_spinning_apples',
+        'ride_whirlwind': 'ride_whirlwind',
+        // Rides Small - Classic
+        'ride_carousel': 'ride_carousel',
+        'ride_antique_cars': 'ride_antique_cars',
+        'ride_monorail_car': 'ride_monorail_car',
+        'ride_sky_ride_car': 'ride_sky_ride_car',
+        'ride_train_car': 'ride_train_car',
+        // Rides Small - Driving/Theater
         'ride_bumper_cars': 'ride_bumper_cars',
         'ride_go_karts': 'ride_go_karts',
+        'ride_simulator': 'ride_simulator',
+        'ride_motion_theater': 'ride_motion_theater',
+        'ride_4d_theater': 'ride_4d_theater',
+        // Rides Small - Water
+        'ride_bumper_boats': 'ride_bumper_boats',
+        'ride_paddle_boats': 'ride_paddle_boats',
+        'ride_lazy_river': 'ride_lazy_river',
+        'ride_water_play': 'ride_water_play',
+        'ride_splash_zone': 'ride_splash_zone',
+        // Rides Small - Dark Rides
         'ride_haunted_house': 'ride_haunted_house',
+        'ride_ghost_train': 'ride_ghost_train',
+        'ride_dark_ride': 'ride_dark_ride',
+        'ride_tunnel': 'ride_tunnel',
+        'ride_themed_facade': 'ride_themed_facade',
+        
+        // Rides Large - Ferris Wheels
+        'ride_ferris_classic': 'ride_ferris_classic',
+        'ride_ferris_modern': 'ride_ferris_modern',
+        'ride_ferris_observation': 'ride_ferris_observation',
+        'ride_ferris_double': 'ride_ferris_double',
+        'ride_ferris_led': 'ride_ferris_led',
+        // Rides Large - Drop/Tower
+        'ride_drop_tower': 'ride_drop_tower',
+        'ride_space_shot': 'ride_space_shot',
+        'ride_observation_tower': 'ride_observation_tower',
+        'ride_sky_swing': 'ride_sky_swing',
+        'ride_star_flyer': 'ride_star_flyer',
+        // Rides Large - Swing
+        'ride_swing_ride': 'ride_swing_ride',
+        'ride_wave_swinger': 'ride_wave_swinger',
+        'ride_flying_scooters': 'ride_flying_scooters',
+        'ride_enterprise': 'ride_enterprise',
+        'ride_loop_o_plane': 'ride_loop_o_plane',
+        // Rides Large - Thrill
+        'ride_top_spin': 'ride_top_spin',
+        'ride_frisbee': 'ride_frisbee',
+        'ride_afterburner': 'ride_afterburner',
+        'ride_inversion': 'ride_inversion',
+        'ride_meteorite': 'ride_meteorite',
+        // Rides Large - Transport/Water
         'ride_log_flume': 'ride_log_flume',
+        'ride_rapids': 'ride_rapids',
+        'ride_train_station': 'ride_train_station',
+        'ride_monorail_station': 'ride_monorail_station',
+        'ride_chairlift': 'ride_chairlift',
+        // Rides Large - Shows
+        'show_4d': 'show_4d',
+        'show_stunt': 'show_stunt',
+        'show_dolphin': 'show_dolphin',
+        'show_amphitheater': 'show_amphitheater',
+        'show_parade_float': 'show_parade_float',
         // Coaster stations - handled specially below based on track direction
         // 'coaster_station' is NOT included here - see special handling
         // Infrastructure
