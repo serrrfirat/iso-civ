@@ -39,6 +39,37 @@ const WATER_ASSET_PATH = '/assets/water.png';
 const BACKGROUND_COLOR = { r: 255, g: 0, b: 0 };
 const COLOR_THRESHOLD = 155;
 
+/**
+ * Check if a coaster's station tile has an adjacent queue line
+ * Returns true if guests can board (has adjacent queue), false otherwise
+ */
+function hasAdjacentQueue(
+  grid: Tile[][],
+  stationX: number,
+  stationY: number,
+  gridSize: number
+): boolean {
+  const adjacentOffsets = [
+    { dx: -1, dy: 0 },
+    { dx: 1, dy: 0 },
+    { dx: 0, dy: -1 },
+    { dx: 0, dy: 1 },
+  ];
+  
+  for (const { dx, dy } of adjacentOffsets) {
+    const adjX = stationX + dx;
+    const adjY = stationY + dy;
+    if (adjX >= 0 && adjY >= 0 && adjX < gridSize && adjY < gridSize) {
+      const adjTile = grid[adjY]?.[adjX];
+      if (adjTile?.queue) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
 // =============================================================================
 // SPRITE SHEET LOADING
 // =============================================================================
@@ -1616,12 +1647,21 @@ export function CoasterGrid({
       if (coaster.track.length === 0 || coaster.trackTiles.length === 0) return;
       const trackLen = coaster.track.length;
       
+      // Check if this coaster has an adjacent queue - if not, no guests can ride
+      const coasterHasQueue = hasAdjacentQueue(
+        state.grid,
+        coaster.stationTileX,
+        coaster.stationTileY,
+        state.gridSize
+      );
+      
       coaster.trains.forEach(train => {
         const isLoading = train.state === 'loading' || train.state === 'dispatching';
         
         // Track station loading for boarding animation
         // Use the coaster's designated station tile (which should have an adjacent queue)
-        if (isLoading) {
+        // Only show guests if the coaster has an adjacent queue
+        if (isLoading && coasterHasQueue) {
           const stationX = coaster.stationTileX;
           const stationY = coaster.stationTileY;
           const loadingDuration = 8; // Approximate loading duration
@@ -1656,12 +1696,14 @@ export function CoasterGrid({
 
           const key = `${trackTile.x},${trackTile.y}`;
           const existing = carsByTile.get(key);
+          // Only show guests if the coaster has an adjacent queue
+          const baseGuestCount = car.guests.length > 0 ? car.guests.length : 4;
           const carData: CarRenderData = { 
             ...pos, 
             direction: travelDirection,
             carIndex: carIdx,
             isLoading,
-            guestCount: car.guests.length > 0 ? car.guests.length : 4, // Default 4 riders if not tracked
+            guestCount: coasterHasQueue ? baseGuestCount : 0, // No guests without queue
           };
           if (existing) {
             existing.push(carData);

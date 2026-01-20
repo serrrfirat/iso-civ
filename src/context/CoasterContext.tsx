@@ -579,6 +579,48 @@ interface TrainConfig {
   guestsPerCar?: number;
 }
 
+/**
+ * Normalize train positions when track length changes.
+ * Ensures cars maintain proper spacing and positions are valid for the new track length.
+ * Resets trains to station if track changed significantly.
+ */
+function normalizeTrainsForTrackChange(
+  trains: CoasterTrain[],
+  oldTrackLength: number,
+  newTrackLength: number,
+  stationIndex: number = 0
+): CoasterTrain[] {
+  if (newTrackLength === 0) return trains;
+  
+  const carSpacing = 0.18;
+  
+  return trains.map((train, trainIndex) => {
+    // If track length changed, reset train to station to prevent weird positioning
+    // This keeps behavior predictable when editing tracks
+    const trainOffset = trainIndex * 8; // Space trains apart on the track
+    const baseProgress = (stationIndex + trainOffset) % newTrackLength;
+    
+    const normalizedCars = train.cars.map((car, carIndex) => {
+      // Reset each car to proper spacing from the train's base position
+      let newProgress = (baseProgress + carIndex * carSpacing) % newTrackLength;
+      if (newProgress < 0) newProgress += newTrackLength;
+      
+      return {
+        ...car,
+        trackProgress: newProgress,
+        velocity: 0, // Stop the train when track is edited
+      };
+    });
+    
+    return {
+      ...train,
+      cars: normalizedCars,
+      state: 'loading' as const, // Reset to loading state at station
+      stateTimer: 3 + Math.random() * 2, // Short loading time after reset
+    };
+  });
+}
+
 function createDefaultTrain(config: TrainConfig = {}): CoasterTrain {
   const numCars = config.numCars ?? 6;
   const carSpacing = config.carSpacing ?? 0.18; // Spacing between cars
@@ -637,22 +679,23 @@ function createTrainsForCoaster(trackLength: number, coasterType: string = 'stee
   // Clamp to coaster type limits
   numTrains = Math.max(minTrains, Math.min(maxTrains, numTrains));
   
-  // Ensure minimum spacing between trains (at least 5 tiles per train)
-  const minSpacingPerTrain = 5;
+  // Ensure minimum spacing between trains (at least 12 tiles per train for safety)
+  const minSpacingPerTrain = 12;
   const maxTrainsForSpacing = Math.max(1, Math.floor(trackLength / minSpacingPerTrain));
   numTrains = Math.min(numTrains, maxTrainsForSpacing);
   
   // Calculate cars per train based on track length (longer tracks = longer trains)
+  // Use smaller trains for better visual appearance
   let numCars: number;
-  if (trackLength <= 10) {
-    numCars = minCars;
-  } else if (trackLength >= 40) {
-    numCars = maxCars;
+  if (trackLength <= 15) {
+    numCars = Math.max(2, minCars - 2); // Smaller trains for short tracks
+  } else if (trackLength >= 50) {
+    numCars = Math.min(6, maxCars); // Cap at 6 cars even for long tracks
   } else {
-    const t = (trackLength - 10) / (40 - 10);
-    numCars = Math.round(minCars + t * (maxCars - minCars));
+    const t = (trackLength - 15) / (50 - 15);
+    numCars = Math.round(2 + t * 4); // Scale from 2 to 6 cars
   }
-  numCars = Math.max(minCars, Math.min(maxCars, numCars));
+  numCars = Math.max(2, Math.min(6, numCars));
   
   const trains: CoasterTrain[] = [];
   for (let i = 0; i < numTrains; i++) {
@@ -960,7 +1003,7 @@ export function CoasterProvider({
                   const carTrackIdx = Math.floor(car.trackProgress % trackLength);
                   const trackPiece = coaster.track[carTrackIdx];
                   const isOnLoop = trackPiece?.type === 'loop_vertical';
-                  const velocityMultiplier = isOnLoop ? 0.15 : 1.0;
+                  const velocityMultiplier = isOnLoop ? 0.5 : 1.0;
                   const dispatchVelocity = baseDispatchVelocity * velocityMultiplier;
                   
                   let nextProgress = car.trackProgress + dispatchVelocity * deltaTime;
@@ -986,8 +1029,8 @@ export function CoasterProvider({
                     const carTrackIdx = Math.floor(car.trackProgress % trackLength);
                     const trackPiece = coaster.track[carTrackIdx];
                     const isOnLoop = trackPiece?.type === 'loop_vertical';
-                    // Loops are ~6x longer than straight (2π), so reduce speed
-                    const velocityMultiplier = isOnLoop ? 0.15 : 1.0;
+                    // Loops are ~3x longer than straight, so reduce speed
+                    const velocityMultiplier = isOnLoop ? 0.5 : 1.0;
                     const runVelocity = baseRunVelocity * velocityMultiplier;
                     
                     let nextProgress = car.trackProgress + runVelocity * deltaTime;
@@ -1007,10 +1050,10 @@ export function CoasterProvider({
                 if (atStation && !hasTrainAhead) {
                   state = 'loading';
                   stateTimer = 6 + Math.random() * 4; // 6-10 seconds loading
-                  // Snap to station position
+                  // Snap to station position (use actual station index, not always 0)
                   cars = cars.map((car, idx) => ({
                     ...car,
-                    trackProgress: (idx * 0.18) % trackLength,
+                    trackProgress: (effectiveStationIndex + idx * 0.18) % trackLength,
                     velocity: 0,
                   }));
                 } else if (hasTrainAhead) {
@@ -1022,7 +1065,7 @@ export function CoasterProvider({
                     const carTrackIdx = Math.floor(car.trackProgress % trackLength);
                     const trackPiece = coaster.track[carTrackIdx];
                     const isOnLoop = trackPiece?.type === 'loop_vertical';
-                    const velocityMultiplier = isOnLoop ? 0.15 : 1.0;
+                    const velocityMultiplier = isOnLoop ? 0.5 : 1.0;
                     const brakeVelocity = baseBrakeVelocity * velocityMultiplier;
                     
                     let nextProgress = car.trackProgress + brakeVelocity * deltaTime;
@@ -1400,21 +1443,26 @@ export function CoasterProvider({
           chainLift = true;
         } else if (tool === 'coaster_slope_down') {
           pieceType = 'slope_down_small';
-          // Same direction logic as slope_up - flip for exit connections
+          // For slope_down, direction logic is OPPOSITE of slope_up
+          // When receiving from adjacent exit, DON'T flip - we continue in same direction but descend
+          // When feeding into adjacent entry, we flip so our exit faces their entry
           if (adjacentDirection) {
             if (connectingToEntry) {
-              startDirection = adjacentDirection;
-            } else {
+              // We're feeding into their entry - flip so our exit (endHeight, lower) faces them
               const oppDir: Record<TrackDirection, TrackDirection> = {
                 north: 'south', south: 'north', east: 'west', west: 'east'
               };
               startDirection = oppDir[adjacentDirection];
+            } else {
+              // Receiving from their exit - continue in the same flow direction
+              startDirection = adjacentDirection;
             }
           }
           if (connectingToEntry && targetEntryHeight < 10) {
             endHeight = targetEntryHeight;
             startHeight = clampHeight(targetEntryHeight + 1);
           } else {
+            // Going down: start high, end low
             endHeight = clampHeight(startHeight - 1);
           }
           chainLift = false;
@@ -1522,8 +1570,30 @@ export function CoasterProvider({
         const existingCoaster = coasterIndex >= 0 ? prev.coasters[coasterIndex] : null;
         const coasterBase = existingCoaster ?? createDefaultCoaster(coasterId, stationTile, trackPieces.length);
         
-        // Only create fresh trains if this is a new coaster or track changed significantly
-        const needsNewTrains = !existingCoaster || Math.abs(existingCoaster.track.length - trackPieces.length) > 5;
+        // Find station index for train positioning
+        const stationIdx = trackTiles.findIndex(t => t.x === stationTile.x && t.y === stationTile.y);
+        const effectiveStationIdx = stationIdx >= 0 ? stationIdx : 0;
+        
+        // Determine if we need new trains or just normalize existing ones
+        const oldTrackLength = existingCoaster?.track.length ?? 0;
+        const needsNewTrains = !existingCoaster || Math.abs(oldTrackLength - trackPieces.length) > 5;
+        
+        // Always normalize train positions when track changes to prevent cars from separating
+        let trains: CoasterTrain[];
+        if (needsNewTrains) {
+          trains = createTrainsForCoaster(trackPieces.length, coasterBase.type);
+        } else if (oldTrackLength !== trackPieces.length) {
+          // Track changed but not enough for new trains - normalize positions
+          trains = normalizeTrainsForTrackChange(
+            coasterBase.trains,
+            oldTrackLength,
+            trackPieces.length,
+            effectiveStationIdx
+          );
+        } else {
+          trains = coasterBase.trains;
+        }
+        
         const coaster: Coaster = {
           ...coasterBase,
           track: trackPieces,
@@ -1531,7 +1601,7 @@ export function CoasterProvider({
           // Update station tile in case a queue was added adjacent to track
           stationTileX: stationTile.x,
           stationTileY: stationTile.y,
-          trains: needsNewTrains ? createTrainsForCoaster(trackPieces.length, coasterBase.type) : coasterBase.trains,
+          trains,
         };
         
         const updatedCoasters = [...prev.coasters];
@@ -1650,12 +1720,57 @@ export function CoasterProvider({
         'ride_go_karts': 'ride_go_karts',
         'ride_haunted_house': 'ride_haunted_house',
         'ride_log_flume': 'ride_log_flume',
-        // Coaster stations
-        'coaster_station': ['station_wooden_1', 'station_steel_1', 'station_inverted_1', 'station_water_1'],
+        // Coaster stations - handled specially below based on track direction
+        // 'coaster_station' is NOT included here - see special handling
         // Infrastructure
         'park_entrance': 'infra_main_entrance',
         'staff_building': 'infra_office',
       };
+      
+      // Special handling for coaster_station - select correct rotation based on adjacent track
+      if (tool === 'coaster_station') {
+        // Check adjacent tiles for track to determine station orientation
+        const adjacentOffsets = [
+          { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
+          { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
+        ];
+        
+        let trackDirection: TrackDirection | null = null;
+        for (const { dx, dy } of adjacentOffsets) {
+          const adjX = x + dx;
+          const adjY = y + dy;
+          if (adjX >= 0 && adjY >= 0 && adjX < prev.gridSize && adjY < prev.gridSize) {
+            const adjTile = prev.grid[adjY]?.[adjX];
+            if (adjTile?.trackPiece) {
+              trackDirection = adjTile.trackPiece.direction;
+              break;
+            }
+          }
+        }
+        
+        // Select station type randomly
+        const stationTypes = ['wooden', 'steel', 'inverted', 'water'];
+        const stationType = stationTypes[Math.floor(Math.random() * stationTypes.length)];
+        
+        // Select rotation based on track direction:
+        // - _1, _2: For north/south track direction (NE-SW orientation on screen)
+        // - _3, _4: For east/west track direction (NW-SE orientation on screen)
+        let rotationSuffix: string;
+        if (trackDirection === 'east' || trackDirection === 'west') {
+          rotationSuffix = Math.random() > 0.5 ? '_3' : '_4';
+        } else {
+          // Default to north/south orientation (or if no adjacent track)
+          rotationSuffix = Math.random() > 0.5 ? '_1' : '_2';
+        }
+        
+        const stationBuildingType = `station_${stationType}${rotationSuffix}`;
+        tile.building = { 
+          ...createEmptyBuilding(), 
+          type: stationBuildingType as BuildingType,
+          constructionProgress: 100,
+        };
+        return { ...prev, grid: newGrid, finances: { ...prev.finances, cash: prev.finances.cash - toolInfo.cost } };
+      }
       
       const buildingEntry = toolToBuildingType[tool];
       const buildingType = Array.isArray(buildingEntry)
@@ -1693,7 +1808,7 @@ export function CoasterProvider({
       tile.coasterTrackId = null;
       tile.trackPiece = null;
       
-      // If track was demolished, update the coaster's track arrays
+      // If track was demolished, update the coaster's track arrays and normalize trains
       let updatedCoasters = prev.coasters;
       if (hadTrack && coasterId) {
         // Recollect all track for this coaster from the updated grid
@@ -1701,10 +1816,34 @@ export function CoasterProvider({
         
         updatedCoasters = prev.coasters.map(coaster => {
           if (coaster.id === coasterId) {
+            const oldTrackLength = coaster.track.length;
+            const newTrackLength = trackPieces.length;
+            
+            // Find the best station tile for the updated track
+            const stationTile = findStationTile(newGrid, trackTiles, prev.gridSize) || trackTiles[0];
+            const stationIdx = stationTile 
+              ? trackTiles.findIndex(t => t.x === stationTile.x && t.y === stationTile.y)
+              : 0;
+            const effectiveStationIdx = stationIdx >= 0 ? stationIdx : 0;
+            
+            // Normalize trains to prevent cars from separating after track edit
+            let trains = coaster.trains;
+            if (newTrackLength > 0 && oldTrackLength !== newTrackLength) {
+              trains = normalizeTrainsForTrackChange(
+                coaster.trains,
+                oldTrackLength,
+                newTrackLength,
+                effectiveStationIdx
+              );
+            }
+            
             return {
               ...coaster,
               track: trackPieces,
               trackTiles,
+              stationTileX: stationTile?.x ?? coaster.stationTileX,
+              stationTileY: stationTile?.y ?? coaster.stationTileY,
+              trains,
             };
           }
           return coaster;
@@ -1961,8 +2100,30 @@ export function CoasterProvider({
       const existingCoaster = coasterIndex >= 0 ? prev.coasters[coasterIndex] : null;
       const coasterBase = existingCoaster ?? createDefaultCoaster(coasterId, stationTile, trackPieces.length);
       
-      // Only create fresh trains if this is a new coaster or track changed significantly
-      const needsNewTrains = !existingCoaster || Math.abs(existingCoaster.track.length - trackPieces.length) > 5;
+      // Find station index for train positioning
+      const stationIdx = trackTiles.findIndex(t => t.x === stationTile.x && t.y === stationTile.y);
+      const effectiveStationIdx = stationIdx >= 0 ? stationIdx : 0;
+      
+      // Determine if we need new trains or just normalize existing ones
+      const oldTrackLength = existingCoaster?.track.length ?? 0;
+      const needsNewTrains = !existingCoaster || Math.abs(oldTrackLength - trackPieces.length) > 5;
+      
+      // Always normalize train positions when track changes to prevent cars from separating
+      let trains: CoasterTrain[];
+      if (needsNewTrains) {
+        trains = createTrainsForCoaster(trackPieces.length, coasterBase.type);
+      } else if (oldTrackLength !== trackPieces.length) {
+        // Track changed but not enough for new trains - normalize positions
+        trains = normalizeTrainsForTrackChange(
+          coasterBase.trains,
+          oldTrackLength,
+          trackPieces.length,
+          effectiveStationIdx
+        );
+      } else {
+        trains = coasterBase.trains;
+      }
+      
       const coaster: Coaster = {
         ...coasterBase,
         track: trackPieces,
@@ -1970,7 +2131,7 @@ export function CoasterProvider({
         // Update station tile in case a queue was added adjacent to track
         stationTileX: stationTile.x,
         stationTileY: stationTile.y,
-        trains: needsNewTrains ? createTrainsForCoaster(trackPieces.length, coasterBase.type) : coasterBase.trains,
+        trains,
       };
       
       const updatedCoasters = [...prev.coasters];
