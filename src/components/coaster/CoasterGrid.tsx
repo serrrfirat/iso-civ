@@ -13,6 +13,8 @@ function getToolBuildingSize(tool: Tool): { width: number; height: number } {
 import { drawStraightTrack, drawCurvedTrack, drawSlopeTrack, drawLoopTrack, drawChainLift } from '@/components/coaster/tracks';
 import { drawGuest } from '@/components/coaster/guests';
 import { useCoasterLightingSystem } from '@/components/coaster/lightingSystem';
+import { useCoasterCloudSystem, Cloud } from '@/components/coaster/cloudSystem';
+import { drawBeachOnWater } from '@/components/game/drawing';
 
 // Track tools that support drag-to-draw
 const TRACK_DRAG_TOOLS: Tool[] = [
@@ -355,6 +357,311 @@ const PATH_COLORS = {
   edge: '#6b7280',          // Edge/border lines  
   centerLine: '#d1d5db',    // Light center line for decoration
 };
+
+// Entrance gate colors
+const ENTRANCE_COLORS = {
+  archStone: '#78716c',       // Stone gray for arch
+  archHighlight: '#a8a29e',   // Lighter stone highlight
+  archShadow: '#57534e',      // Darker shadow
+  postBase: '#44403c',        // Dark base
+  gate: '#b91c1c',            // Red gate color (classic theme park)
+  gateHighlight: '#dc2626',   // Lighter red
+  sign: '#fef3c7',            // Cream/ivory sign background
+  signText: '#1c1917',        // Dark text
+  flagPole: '#d6d3d1',        // Light gray pole
+  flagRed: '#dc2626',         // Red flag
+  flagYellow: '#fbbf24',      // Yellow flag accent
+};
+
+/**
+ * Check if a tile is at the edge of the map
+ * Returns which edge(s) the tile is at
+ */
+function getTileEdgeInfo(gridX: number, gridY: number, gridSize: number): {
+  isEdge: boolean;
+  atNorth: boolean;  // x === 0 (top-left edge in isometric)
+  atEast: boolean;   // y === 0 (top-right edge in isometric)
+  atSouth: boolean;  // x === gridSize-1 (bottom-right edge in isometric)
+  atWest: boolean;   // y === gridSize-1 (bottom-left edge in isometric)
+} {
+  const atNorth = gridX === 0;
+  const atEast = gridY === 0;
+  const atSouth = gridX === gridSize - 1;
+  const atWest = gridY === gridSize - 1;
+  return {
+    isEdge: atNorth || atEast || atSouth || atWest,
+    atNorth,
+    atEast,
+    atSouth,
+    atWest,
+  };
+}
+
+/**
+ * Draw an entrance gate at the edge of the map
+ * This creates a decorative archway/gate structure that marks the park entrance
+ * The gate is oriented based on which edge of the map it's at, facing inward
+ */
+function drawEntranceGate(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  edgeInfo: ReturnType<typeof getTileEdgeInfo>,
+  gridX: number,
+  gridY: number
+) {
+  const w = TILE_WIDTH;
+  const h = TILE_HEIGHT;
+  
+  // Determine gate orientation based on which edge we're at
+  // In isometric view:
+  // - North edge (x=0): gate at top-left, path goes toward bottom-right
+  // - East edge (y=0): gate at top-right, path goes toward bottom-left
+  // - South edge (x=max): gate at bottom-right, path goes toward top-left
+  // - West edge (y=max): gate at bottom-left, path goes toward top-right
+  
+  // For corner tiles (at 2 edges), only draw one gate to avoid clutter
+  // Priority: North > East > South > West
+  
+  ctx.save();
+  
+  // Gate dimensions (scaled for isometric view)
+  const postHeight = 32;
+  const postWidth = 3;
+  const archThickness = 4;
+  
+  // Pick the primary edge for gate placement (only one gate per tile)
+  let primaryEdge: 'north' | 'east' | 'south' | 'west' | null = null;
+  if (edgeInfo.atNorth) {
+    primaryEdge = 'north';
+  } else if (edgeInfo.atEast) {
+    primaryEdge = 'east';
+  } else if (edgeInfo.atSouth) {
+    primaryEdge = 'south';
+  } else if (edgeInfo.atWest) {
+    primaryEdge = 'west';
+  }
+  
+  if (!primaryEdge) {
+    ctx.restore();
+    return;
+  }
+  
+  // Draw gate closer to tile center (30% from edge toward center)
+  // This makes the gate more prominent and guests visually pass through it
+  const edgeToCenterRatio = 0.35; // 0 = at edge, 1 = at center
+  const tileCenterX = x + w * 0.5;
+  const tileCenterY = y + h * 0.5;
+  
+  let edgeMidX: number, edgeMidY: number;
+  
+  switch (primaryEdge) {
+    case 'north':
+      // North edge midpoint, moved toward center
+      edgeMidX = x + w * 0.25;
+      edgeMidY = y + h * 0.25;
+      break;
+    case 'east':
+      // East edge midpoint, moved toward center
+      edgeMidX = x + w * 0.75;
+      edgeMidY = y + h * 0.25;
+      break;
+    case 'south':
+      // South edge midpoint, moved toward center
+      edgeMidX = x + w * 0.75;
+      edgeMidY = y + h * 0.75;
+      break;
+    case 'west':
+      // West edge midpoint, moved toward center
+      edgeMidX = x + w * 0.25;
+      edgeMidY = y + h * 0.75;
+      break;
+  }
+  
+  // Interpolate between edge and center
+  const edgeX = edgeMidX + (tileCenterX - edgeMidX) * edgeToCenterRatio;
+  const edgeY = edgeMidY + (tileCenterY - edgeMidY) * edgeToCenterRatio;
+  
+  drawEntranceGateStructure(ctx, edgeX, edgeY, primaryEdge, postHeight, postWidth, archThickness);
+  
+  ctx.restore();
+}
+
+/**
+ * Draw the actual gate structure at a given position and orientation
+ */
+function drawEntranceGateStructure(
+  ctx: CanvasRenderingContext2D,
+  centerX: number,
+  centerY: number,
+  edge: 'north' | 'east' | 'south' | 'west',
+  postHeight: number,
+  postWidth: number,
+  archThickness: number
+) {
+  // Gate width (distance between posts)
+  const gateSpan = 18;
+  
+  // In isometric view, tile edges run diagonally:
+  // - A tile's "north" edge (toward x-1) runs from top point to left point: direction (-1, +0.6) normalized
+  // - A tile's "east" edge (toward y-1) runs from top point to right point: direction (+1, +0.6) normalized
+  // - A tile's "south" edge (toward x+1) runs from right point to bottom point: direction (-1, +0.6) 
+  // - A tile's "west" edge (toward y+1) runs from left point to bottom point: direction (+1, +0.6)
+  //
+  // The gate should span ALONG the tile edge (perpendicular to path direction)
+  // So posts are placed along the edge direction
+  
+  let leftPostX: number, leftPostY: number;
+  let rightPostX: number, rightPostY: number;
+  
+  const postOffset = gateSpan / 2;
+  
+  // Direction vectors along each tile edge (in screen coordinates)
+  // North/South edges run along the "Y grid axis" which is (-1, +0.6) in screen
+  // East/West edges run along the "X grid axis" which is (+1, +0.6) in screen
+  
+  switch (edge) {
+    case 'north':
+      // North edge: tile edge runs from top-point toward left-point
+      // Direction along edge: roughly (-0.85, +0.5) - toward bottom-left
+      // Posts placed along this direction from the edge center
+      leftPostX = centerX + postOffset * 0.85;
+      leftPostY = centerY - postOffset * 0.5;
+      rightPostX = centerX - postOffset * 0.85;
+      rightPostY = centerY + postOffset * 0.5;
+      break;
+    case 'east':
+      // East edge: tile edge runs from top-point toward right-point
+      // Direction along edge: roughly (+0.85, +0.5) - toward bottom-right
+      leftPostX = centerX - postOffset * 0.85;
+      leftPostY = centerY - postOffset * 0.5;
+      rightPostX = centerX + postOffset * 0.85;
+      rightPostY = centerY + postOffset * 0.5;
+      break;
+    case 'south':
+      // South edge: tile edge runs from right-point toward bottom-point
+      // Same direction as north edge (parallel)
+      leftPostX = centerX + postOffset * 0.85;
+      leftPostY = centerY - postOffset * 0.5;
+      rightPostX = centerX - postOffset * 0.85;
+      rightPostY = centerY + postOffset * 0.5;
+      break;
+    case 'west':
+      // West edge: tile edge runs from left-point toward bottom-point
+      // Same direction as east edge (parallel)
+      leftPostX = centerX - postOffset * 0.85;
+      leftPostY = centerY - postOffset * 0.5;
+      rightPostX = centerX + postOffset * 0.85;
+      rightPostY = centerY + postOffset * 0.5;
+      break;
+  }
+  
+  // Draw shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY + 4, gateSpan * 0.4, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Draw left post (pillar)
+  drawGatePost(ctx, leftPostX, leftPostY, postHeight, postWidth);
+  
+  // Draw right post (pillar)
+  drawGatePost(ctx, rightPostX, rightPostY, postHeight, postWidth);
+  
+  // Draw arch connecting posts
+  const archTopY = Math.min(leftPostY, rightPostY) - postHeight;
+  const archCenterX = (leftPostX + rightPostX) / 2;
+  const archCenterY = (leftPostY + rightPostY) / 2;
+  
+  // Arch body
+  ctx.fillStyle = ENTRANCE_COLORS.archStone;
+  ctx.beginPath();
+  ctx.moveTo(leftPostX - postWidth / 2, leftPostY - postHeight + 2);
+  ctx.lineTo(leftPostX - postWidth / 2, leftPostY - postHeight - 2);
+  ctx.quadraticCurveTo(archCenterX, archCenterY - postHeight - 10, rightPostX + postWidth / 2, rightPostY - postHeight - 2);
+  ctx.lineTo(rightPostX + postWidth / 2, rightPostY - postHeight + 2);
+  ctx.quadraticCurveTo(archCenterX, archCenterY - postHeight - 6, leftPostX - postWidth / 2, leftPostY - postHeight + 2);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Arch highlight
+  ctx.strokeStyle = ENTRANCE_COLORS.archHighlight;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(leftPostX - postWidth / 2, leftPostY - postHeight - 2);
+  ctx.quadraticCurveTo(archCenterX, archCenterY - postHeight - 10, rightPostX + postWidth / 2, rightPostY - postHeight - 2);
+  ctx.stroke();
+  
+  // Sign on arch
+  const signWidth = gateSpan * 0.6;
+  const signHeight = 5;
+  ctx.fillStyle = ENTRANCE_COLORS.sign;
+  ctx.beginPath();
+  ctx.roundRect(archCenterX - signWidth / 2, archCenterY - postHeight - 7, signWidth, signHeight, 1.5);
+  ctx.fill();
+  
+  // Sign border
+  ctx.strokeStyle = ENTRANCE_COLORS.gate;
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+  
+  // Decorative banner/flag at the top center
+  const bannerHeight = 8;
+  ctx.fillStyle = ENTRANCE_COLORS.flagRed;
+  ctx.beginPath();
+  ctx.moveTo(archCenterX, archCenterY - postHeight - 8);
+  ctx.lineTo(archCenterX + 5, archCenterY - postHeight - 4);
+  ctx.lineTo(archCenterX, archCenterY - postHeight);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Small finial on top
+  ctx.fillStyle = ENTRANCE_COLORS.archHighlight;
+  ctx.beginPath();
+  ctx.arc(archCenterX, archCenterY - postHeight - 9, 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * Draw a single gate post/pillar
+ */
+function drawGatePost(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  height: number,
+  width: number
+) {
+  // Post shadow side
+  ctx.fillStyle = ENTRANCE_COLORS.archShadow;
+  ctx.fillRect(x - width / 2, y - height, width, height);
+  
+  // Post main face
+  ctx.fillStyle = ENTRANCE_COLORS.archStone;
+  ctx.fillRect(x - width / 2 + 0.5, y - height, width - 1, height);
+  
+  // Post highlight edge
+  ctx.fillStyle = ENTRANCE_COLORS.archHighlight;
+  ctx.fillRect(x - width / 2, y - height, 1, height);
+  
+  // Post cap (decorative top)
+  ctx.fillStyle = ENTRANCE_COLORS.archHighlight;
+  ctx.fillRect(x - width / 2 - 1, y - height - 2, width + 2, 3);
+  
+  // Post base (wider at bottom)
+  ctx.fillStyle = ENTRANCE_COLORS.postBase;
+  ctx.fillRect(x - width / 2 - 1, y - 2, width + 2, 3);
+  
+  // Ball finial on top
+  ctx.fillStyle = ENTRANCE_COLORS.archStone;
+  ctx.beginPath();
+  ctx.arc(x, y - height - 3, 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = ENTRANCE_COLORS.archHighlight;
+  ctx.beginPath();
+  ctx.arc(x - 0.5, y - height - 3.5, 0.8, 0, Math.PI * 2);
+  ctx.fill();
+}
 
 function drawPathTile(
   ctx: CanvasRenderingContext2D,
@@ -942,6 +1249,13 @@ function drawSprite(
   const rect = getSpriteRect(sheet, sprite, sheetCanvas.width, sheetCanvas.height);
   const baseScale = sprite.scale || 1.0;
   
+  // Get building size from TOOL_INFO for multi-tile scaling
+  const toolInfo = TOOL_INFO[buildingType as Tool];
+  const buildingSize = toolInfo?.size ?? { width: 1, height: 1 };
+  // For multi-tile buildings, scale up by the larger dimension
+  // This makes 2x2 buildings roughly 2x as large, 3x3 roughly 3x, etc.
+  const sizeMultiplier = Math.max(buildingSize.width, buildingSize.height);
+  
   // Check if this is a tree - if so, draw multiple trees
   if (isTreeType(buildingType) && gridX !== undefined && gridY !== undefined) {
     const numTrees = 3 + Math.floor(seededRandom(gridX * 1000 + gridY)() * 3); // 3-5 trees
@@ -999,8 +1313,8 @@ function drawSprite(
     return true;
   }
   
-  // Standard single sprite rendering
-  const scale = baseScale;
+  // Standard single sprite rendering with multi-tile size scaling
+  const scale = baseScale * sizeMultiplier;
   const baseWidth = TILE_WIDTH * 1.2;
   const destWidth = baseWidth * scale;
   
@@ -1501,7 +1815,13 @@ export function CoasterGrid({
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lightingCanvasRef = useRef<HTMLCanvasElement>(null);
+  const cloudCanvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Cloud system refs
+  const cloudsRef = useRef<Cloud[]>([]);
+  const cloudIdRef = useRef(0);
+  const cloudSpawnTimerRef = useRef(0);
   
   const [offset, setOffset] = useState({ x: 620, y: 160 });
   const [zoom, setZoom] = useState(1);
@@ -1557,6 +1877,23 @@ export function CoasterGrid({
     img.onerror = () => console.error('Failed to load water texture');
     img.src = WATER_ASSET_PATH;
   }, []);
+  
+  // Cloud system
+  const { updateClouds, drawClouds } = useCoasterCloudSystem(
+    {
+      canvasWidth: canvasSize.width,
+      canvasHeight: canvasSize.height,
+      offset,
+      zoom,
+      hour: state.hour,
+      isMobile: false,
+    },
+    {
+      cloudsRef,
+      cloudIdRef,
+      cloudSpawnTimerRef,
+    }
+  );
   
   // Handle resize
   useEffect(() => {
@@ -1724,6 +2061,11 @@ export function CoasterGrid({
           const trackTile = coaster.trackTiles[trackIndex];
           const trackPiece = coaster.track[trackIndex];
           if (!trackTile || !trackPiece) return;
+          
+          // Verify the grid tile still has a track piece with the correct coaster ID
+          // This catches cases where the track was deleted but coaster state is stale
+          const gridTile = state.grid[trackTile.y]?.[trackTile.x];
+          if (!gridTile?.trackPiece || gridTile.coasterTrackId !== coaster.id) return;
 
           const { screenX, screenY } = gridToScreen(trackTile.x, trackTile.y, 0, 0);
           const centerX = screenX + TILE_WIDTH / 2;
@@ -1759,6 +2101,9 @@ export function CoasterGrid({
       stationLoadingByTile.set(`${data.x},${data.y}`, data);
     });
     
+    // Collect deferred multi-tile building sprites to draw after base tiles
+    const deferredSprites: { type: string; screenX: number; screenY: number; x: number; y: number; drawOrder: number }[] = [];
+    
     // Draw tiles (back to front for proper depth)
     for (let sum = 0; sum < gridSize * 2 - 1; sum++) {
       for (let x = 0; x <= sum; x++) {
@@ -1776,12 +2121,34 @@ const tile = grid[y][x];
         // Draw based on tile type
         if (tile.terrain === 'water') {
           drawWaterTile(ctx, screenX, screenY, x, y, grid, gridSize, waterImage, zoom);
+          
+          // Draw beach on water tiles at edges facing land (just like iso city)
+          if (zoom >= 0.4) {
+            // Check adjacent tiles for land (not water)
+            const adjacentLand = {
+              north: x > 0 && grid[y]?.[x - 1]?.terrain !== 'water',
+              east: y > 0 && grid[y - 1]?.[x]?.terrain !== 'water',
+              south: x < gridSize - 1 && grid[y]?.[x + 1]?.terrain !== 'water',
+              west: y < gridSize - 1 && grid[y + 1]?.[x]?.terrain !== 'water',
+            };
+            
+            // Only draw beach if there's at least one adjacent land tile
+            if (adjacentLand.north || adjacentLand.east || adjacentLand.south || adjacentLand.west) {
+              drawBeachOnWater(ctx, screenX, screenY, adjacentLand);
+            }
+          }
         } else if (tile.queue) {
           // Count guests in 'queuing' state on this tile
           const queueGuests = guestsByTile.get(`${x},${y}`)?.filter(g => g.state === 'queuing') || [];
           drawQueueTile(ctx, screenX, screenY, x, y, grid, gridSize, queueGuests.length, tick);
         } else if (tile.path) {
           drawPathTile(ctx, screenX, screenY, x, y, grid, gridSize);
+          
+          // Check if this path tile is at the edge of the map - if so, draw entrance gate
+          const edgeInfo = getTileEdgeInfo(x, y, gridSize);
+          if (edgeInfo.isEdge) {
+            drawEntranceGate(ctx, screenX, screenY, edgeInfo, x, y);
+          }
         } else {
           drawGrassTile(ctx, screenX, screenY, zoom);
         }
@@ -1791,11 +2158,27 @@ const tile = grid[y][x];
           drawTrackSegment(ctx, tile.trackPiece, screenX, screenY, tick);
         }
         
-        // Draw building sprite if present
-        const buildingType = tile.building?.type;
-        if (buildingType && buildingType !== 'empty' && buildingType !== 'grass' &&
-            buildingType !== 'water' && buildingType !== 'path' && buildingType !== 'queue') {
-          drawSprite(ctx, spriteSheets, buildingType, screenX, screenY, x, y);
+        // Draw building sprite if present (skip footprint tiles - they're part of multi-tile buildings)
+        const spriteBuildingType = tile.building?.type;
+        if (spriteBuildingType && spriteBuildingType !== 'empty' && spriteBuildingType !== 'grass' &&
+            spriteBuildingType !== 'water' && spriteBuildingType !== 'path' && spriteBuildingType !== 'queue' &&
+            !spriteBuildingType.endsWith('_footprint')) {
+          // Check if this is a multi-tile building that needs deferred rendering
+          const toolInfo = TOOL_INFO[spriteBuildingType as Tool];
+          const buildingSize = toolInfo?.size ?? { width: 1, height: 1 };
+          const isMultiTile = buildingSize.width > 1 || buildingSize.height > 1;
+          
+          if (isMultiTile) {
+            // Defer drawing until after all footprint tiles are rendered
+            // Calculate draw order based on the "front" corner of the building (x + width - 1, y + height - 1)
+            const frontX = x + buildingSize.width - 1;
+            const frontY = y + buildingSize.height - 1;
+            const drawOrder = frontX + frontY;
+            deferredSprites.push({ type: spriteBuildingType, screenX, screenY, x, y, drawOrder });
+          } else {
+            // Single tile buildings can be drawn immediately
+            drawSprite(ctx, spriteSheets, spriteBuildingType, screenX, screenY, x, y);
+          }
         }
         
         // Draw guests on this tile
@@ -1855,6 +2238,12 @@ const tile = grid[y][x];
         }
         
       }
+    }
+    
+    // Draw deferred multi-tile building sprites (sorted by draw order so front buildings draw last)
+    deferredSprites.sort((a, b) => a.drawOrder - b.drawOrder);
+    for (const sprite of deferredSprites) {
+      drawSprite(ctx, spriteSheets, sprite.type, sprite.screenX, sprite.screenY, sprite.x, sprite.y);
     }
     
     // Draw hover highlights AFTER all tiles (so they appear on top)
@@ -1924,6 +2313,44 @@ const tile = grid[y][x];
     canvasWidth: canvasSize.width,
     canvasHeight: canvasSize.height,
   });
+  
+  // Cloud animation loop - runs independently for smooth cloud movement
+  useEffect(() => {
+    const cloudCanvas = cloudCanvasRef.current;
+    if (!cloudCanvas) return;
+    
+    const ctx = cloudCanvas.getContext('2d');
+    if (!ctx) return;
+    
+    const dpr = window.devicePixelRatio || 1;
+    cloudCanvas.width = canvasSize.width * dpr;
+    cloudCanvas.height = canvasSize.height * dpr;
+    cloudCanvas.style.width = `${canvasSize.width}px`;
+    cloudCanvas.style.height = `${canvasSize.height}px`;
+    
+    let lastTime = performance.now();
+    let animationId: number;
+    
+    const animate = (currentTime: number) => {
+      const delta = (currentTime - lastTime) / 1000; // Convert to seconds
+      lastTime = currentTime;
+      
+      // Update clouds
+      updateClouds(delta, state.speed);
+      
+      // Clear and draw clouds
+      ctx.clearRect(0, 0, cloudCanvas.width, cloudCanvas.height);
+      drawClouds(ctx);
+      
+      animationId = requestAnimationFrame(animate);
+    };
+    
+    animationId = requestAnimationFrame(animate);
+    
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
+  }, [canvasSize, updateClouds, drawClouds, state.speed]);
   
   // Helper to calculate tiles in a line from start to end (with direction locking)
   const calculateLineTiles = useCallback((
@@ -2138,6 +2565,11 @@ const tile = grid[y][x];
           setHoveredTile(null);
         }}
         onWheel={handleWheel}
+      />
+      {/* Cloud overlay canvas - renders atmospheric clouds */}
+      <canvas
+        ref={cloudCanvasRef}
+        className="block absolute inset-0 pointer-events-none"
       />
       {/* Lighting overlay canvas - renders day/night effects */}
       <canvas

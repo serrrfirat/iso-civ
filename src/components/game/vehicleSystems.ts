@@ -302,9 +302,22 @@ export function useVehicleSystems(
       
       let dest = destinations[Math.floor(Math.random() * destinations.length)];
       
-      // 40% chance to re-roll and specifically pick a sports/active facility if available
-      // These are rarer in most cities so we boost their selection probability
-      if (Math.random() < 0.4 && dest.type === 'park') {
+      // 35% chance to pick a commercial destination (shop) - boost shopping activity
+      const commercialDests = destinations.filter(d => d.type === 'commercial');
+      if (Math.random() < 0.35 && commercialDests.length > 0) {
+        // Prefer shops over offices for visible shopping
+        const { grid: currentGrid } = worldStateRef.current;
+        const shopDests = commercialDests.filter(d => {
+          const tile = currentGrid[d.y]?.[d.x];
+          const buildingType = tile?.building.type;
+          return buildingType === 'shop_small' || buildingType === 'shop_medium' || buildingType === 'mall';
+        });
+        dest = shopDests.length > 0 
+          ? shopDests[Math.floor(Math.random() * shopDests.length)]
+          : commercialDests[Math.floor(Math.random() * commercialDests.length)];
+      }
+      // 25% chance to re-roll and specifically pick a sports/active facility if available
+      else if (Math.random() < 0.25 && dest.type === 'park') {
         const { grid: currentGrid } = worldStateRef.current;
         const boostedDests = destinations.filter(d => {
           if (d.type !== 'park') return false;
@@ -322,7 +335,15 @@ export function useVehicleSystems(
         return false;
       }
       
-      const startIndex = Math.floor(Math.random() * path.length);
+      // For shop destinations, start closer to destination so we see arrivals more often
+      let startIndex: number;
+      if (dest.type === 'commercial' && path.length > 3) {
+        // Start in the second half of the path (closer to shop)
+        const minStart = Math.floor(path.length * 0.5);
+        startIndex = minStart + Math.floor(Math.random() * (path.length - minStart));
+      } else {
+        startIndex = Math.floor(Math.random() * path.length);
+      }
       const startTile = path[startIndex];
       
       let direction: CarDirection = 'south';
@@ -352,8 +373,8 @@ export function useVehicleSystems(
       return true;
     }
     
-    // 20% - Pedestrian already at a recreation area
-    if (spawnType < 0.85) {
+    // 18% - Pedestrian already at a recreation area
+    if (spawnType < 0.83) {
       const recreationAreas = findRecreationAreasCallback();
       if (recreationAreas.length === 0) return false;
       
@@ -388,7 +409,7 @@ export function useVehicleSystems(
     }
     
     // 5% - Pedestrian already inside a shop/building (shopping, working, etc.)
-    if (spawnType < 0.90) {
+    if (spawnType < 0.88) {
       const enterableBuildings = findEnterableBuildingsCallback();
       if (enterableBuildings.length === 0) return false;
       
@@ -418,7 +439,7 @@ export function useVehicleSystems(
       return false;
     }
     
-    // 5% - Pedestrian approaching a shop (visible at entrance)
+    // 7% - Pedestrian approaching a shop (visible at entrance)
     if (spawnType < 0.95) {
       const enterableBuildings = findEnterableBuildingsCallback();
       const shopBuildings = enterableBuildings.filter(b => 

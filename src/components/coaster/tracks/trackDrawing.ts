@@ -15,9 +15,9 @@ const HEIGHT_RATIO = 0.60;
 const TILE_HEIGHT = TILE_WIDTH * HEIGHT_RATIO;
 
 // Track visual parameters
-const TRACK_WIDTH = 8; // Width of the track rails
+const TRACK_WIDTH = 5; // Width of the track rails
 const RAIL_WIDTH = 2; // Width of individual rails
-const TIE_LENGTH = 12; // Length of crossties
+const TIE_LENGTH = 8; // Length of crossties
 const TIE_SPACING = 8; // Space between crossties
 const SUPPORT_WIDTH = 2; // Width of support columns (thinner)
 
@@ -28,7 +28,7 @@ const HEIGHT_UNIT = 20;
 const COLORS = {
   rail: '#4b5563', // Gray steel
   railHighlight: '#6b7280',
-  tie: '#78350f', // Brown wood
+  tie: '#2d3748', // Dark steel gray
   support: '#374151', // Dark gray
   supportHighlight: '#4b5563',
   // Wood strut colors (warm brown tones)
@@ -41,6 +41,11 @@ const COLORS = {
   metalDark: '#2D3748', // Dark steel
   metalLight: '#718096', // Light steel highlight
   metalRivet: '#1A202C', // Near black for rivets/details
+  // Concrete foundation colors (matching path style)
+  concreteTop: '#9ca3af',    // Light gray top face
+  concreteLeft: '#6b7280',   // Medium gray left face (shadow)
+  concreteRight: '#78838f',  // Slightly lighter right face
+  concreteEdge: '#52525b',   // Dark edge/outline
 };
 
 // =============================================================================
@@ -175,7 +180,7 @@ export function drawStraightTrack(
   
   // Draw crossties
   ctx.strokeStyle = COLORS.tie;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 1.5;
   ctx.lineCap = 'butt';
   
   for (let i = 0; i <= numTies; i++) {
@@ -267,7 +272,7 @@ export function drawCurvedTrack(
   // Draw crossties along the quadratic curve (fewer ties - 4 is enough)
   const numTies = 4;
   ctx.strokeStyle = COLORS.tie;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 1.5;
   
   for (let i = 0; i <= numTies; i++) {
     const t = i / numTies;
@@ -436,7 +441,7 @@ export function drawSlopeTrack(
   const numTies = Math.max(3, Math.floor(trackLen / TIE_SPACING));
   
   ctx.strokeStyle = COLORS.tie;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 1.5;
   ctx.lineCap = 'butt';
   
   for (let i = 0; i <= numTies; i++) {
@@ -472,6 +477,94 @@ export function drawSlopeTrack(
 }
 
 /**
+ * Draw an isometric concrete foundation block
+ * Creates a 3D block with top, left, and right faces for a solid foundation look
+ */
+function drawConcreteFoundation(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  blockWidth: number = 8,
+  blockDepth: number = 6,
+  blockHeight: number = 3
+) {
+  // Isometric projection - use standard isometric angles
+  // Width goes along NE-SW axis, depth goes along NW-SE axis
+  const halfW = blockWidth * 0.5;
+  const halfD = blockDepth * 0.5;
+  
+  // Isometric projection: x offset = (w - d) * 0.5, y offset = (w + d) * 0.25
+  // The block sits ABOVE ground level (column lands on top of it)
+  // z=0 is ground level, z=blockHeight is top of foundation
+  const toIso = (localX: number, localY: number, localZ: number) => ({
+    x: x + (localX - localY) * 0.5,
+    y: y + (localX + localY) * 0.25 - localZ  // - localZ so block rises above ground
+  });
+  
+  // Define the 8 corners of the box in local coordinates
+  // Bottom face (z = 0, at ground level)
+  const b_nw = toIso(-halfW, -halfD, 0);  // back-left
+  const b_ne = toIso(halfW, -halfD, 0);   // back-right  
+  const b_se = toIso(halfW, halfD, 0);    // front-right
+  const b_sw = toIso(-halfW, halfD, 0);   // front-left
+  
+  // Top face (z = blockHeight, where column lands)
+  const t_nw = toIso(-halfW, -halfD, blockHeight);
+  const t_ne = toIso(halfW, -halfD, blockHeight);
+  const t_se = toIso(halfW, halfD, blockHeight);
+  const t_sw = toIso(-halfW, halfD, blockHeight);
+  
+  // Draw left face (SW side - darker shadow)
+  ctx.fillStyle = COLORS.concreteLeft;
+  ctx.beginPath();
+  ctx.moveTo(t_sw.x, t_sw.y);
+  ctx.lineTo(t_nw.x, t_nw.y);
+  ctx.lineTo(b_nw.x, b_nw.y);
+  ctx.lineTo(b_sw.x, b_sw.y);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Draw right face (SE side - medium gray)
+  ctx.fillStyle = COLORS.concreteRight;
+  ctx.beginPath();
+  ctx.moveTo(t_se.x, t_se.y);
+  ctx.lineTo(t_sw.x, t_sw.y);
+  ctx.lineTo(b_sw.x, b_sw.y);
+  ctx.lineTo(b_se.x, b_se.y);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Draw top face (lightest)
+  ctx.fillStyle = COLORS.concreteTop;
+  ctx.beginPath();
+  ctx.moveTo(t_nw.x, t_nw.y);
+  ctx.lineTo(t_ne.x, t_ne.y);
+  ctx.lineTo(t_se.x, t_se.y);
+  ctx.lineTo(t_sw.x, t_sw.y);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Draw edges for definition
+  ctx.strokeStyle = COLORS.concreteEdge;
+  ctx.lineWidth = 0.5;
+  
+  // Top face outline
+  ctx.beginPath();
+  ctx.moveTo(t_nw.x, t_nw.y);
+  ctx.lineTo(t_ne.x, t_ne.y);
+  ctx.lineTo(t_se.x, t_se.y);
+  ctx.lineTo(t_sw.x, t_sw.y);
+  ctx.closePath();
+  ctx.stroke();
+  
+  // Visible vertical edges (front corner)
+  ctx.beginPath();
+  ctx.moveTo(t_sw.x, t_sw.y);
+  ctx.lineTo(b_sw.x, b_sw.y);
+  ctx.stroke();
+}
+
+/**
  * Draw a wooden support structure - dense timber frame with X-cross bracing
  * Classic wooden coaster aesthetic with lots of beams and crosses
  */
@@ -503,6 +596,13 @@ function drawWoodSupport(
   const rightBaseY = groundY + offsetY;
   const rightTopY = rightBaseY - supportHeight;
   
+  // Draw concrete foundations FIRST (behind the columns)
+  const foundationWidth = 10;
+  const foundationDepth = 8;
+  const foundationHeight = 4;
+  drawConcreteFoundation(ctx, leftBaseX, leftBaseY, foundationWidth, foundationDepth, foundationHeight);
+  drawConcreteFoundation(ctx, rightBaseX, rightBaseY, foundationWidth, foundationDepth, foundationHeight);
+  
   // Draw main vertical beams (with slight inward lean for stability look)
   const leanFactor = 0.15; // Beams lean inward slightly at top
   const leftTopX = leftBaseX + offsetX * leanFactor;
@@ -510,26 +610,10 @@ function drawWoodSupport(
   const leftTopYOffset = leftTopY + offsetY * leanFactor;
   const rightTopYOffset = rightTopY - offsetY * leanFactor;
   
-  // Draw shadow/outline first for depth
-  ctx.strokeStyle = COLORS.woodDark;
-  ctx.lineWidth = woodWidth + 1.5;
-  ctx.lineCap = 'square';
-  
-  // Left main beam shadow
-  ctx.beginPath();
-  ctx.moveTo(leftBaseX + 0.5, leftBaseY + 0.5);
-  ctx.lineTo(leftTopX + 0.5, leftTopYOffset + 0.5);
-  ctx.stroke();
-  
-  // Right main beam shadow
-  ctx.beginPath();
-  ctx.moveTo(rightBaseX + 0.5, rightBaseY + 0.5);
-  ctx.lineTo(rightTopX + 0.5, rightTopYOffset + 0.5);
-  ctx.stroke();
-  
   // Main vertical beams
   ctx.strokeStyle = COLORS.woodMain;
   ctx.lineWidth = woodWidth;
+  ctx.lineCap = 'square';
   
   // Left main beam
   ctx.beginPath();
@@ -541,18 +625,6 @@ function drawWoodSupport(
   ctx.beginPath();
   ctx.moveTo(rightBaseX, rightBaseY);
   ctx.lineTo(rightTopX, rightTopYOffset);
-  ctx.stroke();
-  
-  // Highlight on beams (light edge)
-  ctx.strokeStyle = COLORS.woodLight;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(leftBaseX - 0.5, leftBaseY);
-  ctx.lineTo(leftTopX - 0.5, leftTopYOffset);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(rightBaseX - 0.5, rightBaseY);
-  ctx.lineTo(rightTopX - 0.5, rightTopYOffset);
   ctx.stroke();
   
   // Calculate number of cross-brace sections (dense for wood)
@@ -604,25 +676,12 @@ function drawWoodSupport(
   }
   
   // Draw top horizontal beam (connects both columns at track level)
-  ctx.strokeStyle = COLORS.woodDark;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(leftTopX, leftTopYOffset);
-  ctx.lineTo(rightTopX, rightTopYOffset);
-  ctx.stroke();
-  
   ctx.strokeStyle = COLORS.woodMain;
   ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.moveTo(leftTopX, leftTopYOffset);
   ctx.lineTo(rightTopX, rightTopYOffset);
   ctx.stroke();
-  
-  // Draw foundation blocks at ground level
-  ctx.fillStyle = COLORS.woodDark;
-  const blockSize = 3;
-  ctx.fillRect(leftBaseX - blockSize / 2, leftBaseY - 1, blockSize, 3);
-  ctx.fillRect(rightBaseX - blockSize / 2, rightBaseY - 1, blockSize, 3);
 }
 
 /**
@@ -657,24 +716,17 @@ function drawMetalSupport(
   const rightBaseY = groundY + offsetY;
   const rightTopY = rightBaseY - supportHeight;
   
-  // Draw shadow first
-  ctx.strokeStyle = COLORS.metalDark;
-  ctx.lineWidth = beamWidth + 1;
-  ctx.lineCap = 'butt';
-  
-  ctx.beginPath();
-  ctx.moveTo(leftBaseX + 0.5, leftBaseY + 0.5);
-  ctx.lineTo(leftBaseX + 0.5, leftTopY + 0.5);
-  ctx.stroke();
-  
-  ctx.beginPath();
-  ctx.moveTo(rightBaseX + 0.5, rightBaseY + 0.5);
-  ctx.lineTo(rightBaseX + 0.5, rightTopY + 0.5);
-  ctx.stroke();
+  // Draw concrete foundations FIRST (behind the columns)
+  const foundationWidth = 9;
+  const foundationDepth = 7;
+  const foundationHeight = 4;
+  drawConcreteFoundation(ctx, leftBaseX, leftBaseY, foundationWidth, foundationDepth, foundationHeight);
+  drawConcreteFoundation(ctx, rightBaseX, rightBaseY, foundationWidth, foundationDepth, foundationHeight);
   
   // Main vertical I-beam columns
   ctx.strokeStyle = COLORS.metalMain;
   ctx.lineWidth = beamWidth;
+  ctx.lineCap = 'butt';
   
   // Left column
   ctx.beginPath();
@@ -688,18 +740,6 @@ function drawMetalSupport(
   ctx.lineTo(rightBaseX, rightTopY);
   ctx.stroke();
   
-  // Highlight edge on columns
-  ctx.strokeStyle = COLORS.metalLight;
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  ctx.moveTo(leftBaseX - 0.8, leftBaseY);
-  ctx.lineTo(leftBaseX - 0.8, leftTopY);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(rightBaseX - 0.8, rightBaseY);
-  ctx.lineTo(rightBaseX - 0.8, rightTopY);
-  ctx.stroke();
-  
   // Horizontal braces - fewer than wood, cleaner look
   const numBraces = Math.max(1, Math.floor(height / 1.5));
   
@@ -709,13 +749,6 @@ function drawMetalSupport(
     const rightBraceY = rightTopY + (rightBaseY - rightTopY) * t;
     
     // Draw horizontal brace
-    ctx.strokeStyle = COLORS.metalDark;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(leftBaseX, leftBraceY);
-    ctx.lineTo(rightBaseX, rightBraceY);
-    ctx.stroke();
-    
     ctx.strokeStyle = COLORS.metalMain;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -751,42 +784,12 @@ function drawMetalSupport(
   }
   
   // Top beam connecting columns
-  ctx.strokeStyle = COLORS.metalDark;
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(leftBaseX, leftTopY);
-  ctx.lineTo(rightBaseX, rightTopY);
-  ctx.stroke();
-  
   ctx.strokeStyle = COLORS.metalMain;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(leftBaseX, leftTopY);
   ctx.lineTo(rightBaseX, rightTopY);
   ctx.stroke();
-  
-  // Draw base plates
-  ctx.fillStyle = COLORS.metalDark;
-  const plateSize = 4;
-  const plateHeight = 2;
-  
-  // Left base plate (isometric rectangle)
-  ctx.beginPath();
-  ctx.moveTo(leftBaseX, leftBaseY);
-  ctx.lineTo(leftBaseX - plateSize * 0.5, leftBaseY + plateSize * 0.3);
-  ctx.lineTo(leftBaseX, leftBaseY + plateHeight);
-  ctx.lineTo(leftBaseX + plateSize * 0.5, leftBaseY + plateSize * 0.3);
-  ctx.closePath();
-  ctx.fill();
-  
-  // Right base plate
-  ctx.beginPath();
-  ctx.moveTo(rightBaseX, rightBaseY);
-  ctx.lineTo(rightBaseX - plateSize * 0.5, rightBaseY + plateSize * 0.3);
-  ctx.lineTo(rightBaseX, rightBaseY + plateHeight);
-  ctx.lineTo(rightBaseX + plateSize * 0.5, rightBaseY + plateSize * 0.3);
-  ctx.closePath();
-  ctx.fill();
   
   // Draw rivets/bolts at connection points
   ctx.fillStyle = COLORS.metalRivet;
@@ -918,16 +921,13 @@ export function drawLoopTrack(
   const supportHeight = groundY - supportTopY;
   const supportWidth = isWood ? 5 : 4;
   
-  // Draw main support column at tile center
-  ctx.fillStyle = darkColor;
-  ctx.beginPath();
-  ctx.moveTo(tileCenter.x - supportWidth / 2 + 0.5, groundY + 0.5);
-  ctx.lineTo(tileCenter.x - supportWidth / 2 + 0.5, supportTopY + 0.5);
-  ctx.lineTo(tileCenter.x + supportWidth / 2 + 0.5, supportTopY + 0.5);
-  ctx.lineTo(tileCenter.x + supportWidth / 2 + 0.5, groundY + 0.5);
-  ctx.closePath();
-  ctx.fill();
+  // Draw concrete foundation FIRST (behind the support column)
+  const loopFoundationWidth = 12;
+  const loopFoundationDepth = 10;
+  const loopFoundationHeight = 5;
+  drawConcreteFoundation(ctx, tileCenter.x, groundY, loopFoundationWidth, loopFoundationDepth, loopFoundationHeight);
   
+  // Draw main support column at tile center
   ctx.fillStyle = mainColor;
   ctx.beginPath();
   ctx.moveTo(tileCenter.x - supportWidth / 2, groundY);
@@ -936,9 +936,6 @@ export function drawLoopTrack(
   ctx.lineTo(tileCenter.x + supportWidth / 2, groundY);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = lightColor;
-  ctx.lineWidth = 0.5;
-  ctx.stroke();
   
   // Horizontal braces
   const numBraces = isWood ? 5 : 3;
@@ -974,7 +971,7 @@ export function drawLoopTrack(
   
   // Draw crossties around the loop
   ctx.strokeStyle = COLORS.tie;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 1;
   
   for (let i = 0; i < numSegments; i += 2) {
     const t = i / numSegments;

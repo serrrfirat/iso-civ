@@ -37,7 +37,35 @@ function randomFromArray<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-export function createGuest(entranceX: number, entranceY: number): Guest {
+export function createGuest(entranceX: number, entranceY: number, gridSize: number = 64): Guest {
+  // Determine which edge the guest is entering from and set target direction
+  // The guest should walk INTO the park (away from the edge)
+  let targetX = entranceX;
+  let targetY = entranceY;
+  let direction: 'north' | 'south' | 'east' | 'west' = 'south';
+  
+  if (entranceX === 0) {
+    // North edge (x=0) - walk toward south (x+1)
+    targetX = entranceX + 1;
+    direction = 'south';
+  } else if (entranceX === gridSize - 1) {
+    // South edge (x=max) - walk toward north (x-1)
+    targetX = entranceX - 1;
+    direction = 'north';
+  } else if (entranceY === 0) {
+    // East edge (y=0) - walk toward west (y+1)
+    targetY = entranceY + 1;
+    direction = 'west';
+  } else if (entranceY === gridSize - 1) {
+    // West edge (y=max) - walk toward east (y-1)
+    targetY = entranceY - 1;
+    direction = 'east';
+  } else {
+    // Fallback for non-edge spawns (shouldn't happen with new spawn logic)
+    targetY = entranceY + 1;
+    direction = 'south';
+  }
+  
   return {
     id: generateUUID(),
     name: generateGuestName(),
@@ -46,15 +74,15 @@ export function createGuest(entranceX: number, entranceY: number): Guest {
     tileX: entranceX,
     tileY: entranceY,
     progress: 0,
-    direction: 'south' as const,
+    direction,
     
     // State
     state: 'entering' as GuestState,
     lastState: 'entering' as GuestState,
     targetBuildingId: null,
     targetBuildingKind: null,
-    targetTileX: entranceX,
-    targetTileY: entranceY + 1,
+    targetTileX: targetX,
+    targetTileY: targetY,
     path: [],
     pathIndex: 0,
     
@@ -112,8 +140,27 @@ export function drawGuest(
   tick: number
 ) {
   // Calculate interpolated position
-  const { x: startX, y: startY } = gridToScreen(guest.tileX, guest.tileY);
+  let { x: startX, y: startY } = gridToScreen(guest.tileX, guest.tileY);
   const { x: endX, y: endY } = gridToScreen(guest.targetTileX, guest.targetTileY);
+  
+  // For entering guests, offset start position toward outside the map (through the gate)
+  // This makes them visually appear to walk in from outside
+  if (guest.state === 'entering' && guest.progress < 0.5) {
+    // Determine which edge they're entering from based on tile position
+    // Offset toward the edge by extending the start position outward
+    const offsetAmount = TILE_WIDTH * 0.6;
+    
+    // Calculate direction from target back to start (the direction they're coming from)
+    const dx = startX - endX;
+    const dy = startY - endY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    
+    if (dist > 0) {
+      // Extend start position outward (beyond the tile edge)
+      startX += (dx / dist) * offsetAmount;
+      startY += (dy / dist) * offsetAmount;
+    }
+  }
   
   const x = startX + (endX - startX) * guest.progress + TILE_WIDTH / 2;
   const y = startY + (endY - startY) * guest.progress + TILE_HEIGHT / 2;
@@ -543,30 +590,31 @@ export function spawnGuests(
   const newGuests: Guest[] = [];
   
   if (Math.random() < spawnChance) {
-    // Find entrance tiles (look for path tiles at grid edges)
+    // Find entrance tiles (look for path tiles at grid edges - these have entrance gates)
     const entranceTiles: { x: number; y: number }[] = [];
     const gridSize = grid.length;
     
-    // Check edges for path tiles
+    // Check all four edges for path tiles - these are the entrance gate locations
     for (let i = 0; i < gridSize; i++) {
-      if (grid[0][i]?.path) entranceTiles.push({ x: i, y: 0 });
-      if (grid[gridSize - 1][i]?.path) entranceTiles.push({ x: i, y: gridSize - 1 });
-      if (grid[i][0]?.path) entranceTiles.push({ x: 0, y: i });
-      if (grid[i][gridSize - 1]?.path) entranceTiles.push({ x: gridSize - 1, y: i });
+      // North edge (x=0) - check grid[y][0] for all y
+      if (grid[i]?.[0]?.path) entranceTiles.push({ x: 0, y: i });
+      // South edge (x=gridSize-1) - check grid[y][gridSize-1] for all y
+      if (grid[i]?.[gridSize - 1]?.path) entranceTiles.push({ x: gridSize - 1, y: i });
+      // East edge (y=0) - check grid[0][x] for all x
+      if (grid[0]?.[i]?.path) entranceTiles.push({ x: i, y: 0 });
+      // West edge (y=gridSize-1) - check grid[gridSize-1][x] for all x
+      if (grid[gridSize - 1]?.[i]?.path) entranceTiles.push({ x: i, y: gridSize - 1 });
     }
     
-    // Also check first few rows for any path (simpler entrance detection)
-    for (let y = 0; y < 5; y++) {
-      for (let x = 0; x < gridSize; x++) {
-        if (grid[y] && grid[y][x]?.path) {
-          entranceTiles.push({ x, y });
-        }
-      }
-    }
+    // Only spawn at edge entrance tiles (with gates)
+    // Remove duplicates (corner tiles appear twice)
+    const uniqueEntrances = entranceTiles.filter((tile, index, self) =>
+      index === self.findIndex(t => t.x === tile.x && t.y === tile.y)
+    );
     
-    if (entranceTiles.length > 0) {
-      const entrance = entranceTiles[Math.floor(Math.random() * entranceTiles.length)];
-      newGuests.push(createGuest(entrance.x, entrance.y));
+    if (uniqueEntrances.length > 0) {
+      const entrance = uniqueEntrances[Math.floor(Math.random() * uniqueEntrances.length)];
+      newGuests.push(createGuest(entrance.x, entrance.y, gridSize));
     }
   }
   

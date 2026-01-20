@@ -466,20 +466,20 @@ function updateWalkingState(
 }
 
 /**
- * Update approaching shop state - pedestrian waits at shop entrance
+ * Update approaching shop state - pedestrian walks from road to shop entrance
  */
 function updateApproachingShopState(
   ped: Pedestrian,
   delta: number,
   speedMultiplier: number
 ): boolean {
-  // Animate the pedestrian looking around / waiting
-  ped.walkOffset += delta * 2; // Slow idle animation
+  // Animate walking motion
+  ped.walkOffset += delta * 6; // Walking animation speed
   
   ped.buildingEntryProgress += delta * speedMultiplier / PEDESTRIAN_APPROACH_TIME;
   
   if (ped.buildingEntryProgress >= 1) {
-    // Done waiting, now enter the building
+    // Arrived at shop entrance, now enter the building
     ped.state = 'entering_building';
     ped.buildingEntryProgress = 0;
   }
@@ -906,9 +906,9 @@ export function spawnPedestrianApproachingShop(
   ped.activityOffsetX = offset.x * 0.5;
   ped.activityOffsetY = offset.y * 0.3;
   
-  // Position at the shop
-  ped.tileX = shopX;
-  ped.tileY = shopY;
+  // Position at the ROAD near the shop (for walking animation from road to shop)
+  ped.tileX = roadTile.x;
+  ped.tileY = roadTile.y;
   
   return ped;
 }

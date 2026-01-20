@@ -83,7 +83,7 @@ function gridToScreen(gridX: number, gridY: number): { screenX: number; screenY:
 interface LightSource {
   x: number;
   y: number;
-  type: 'path' | 'building' | 'ride' | 'track';
+  type: 'path' | 'building' | 'ride' | 'track' | 'lamp' | 'shop';
   buildingType?: string;
   seed?: number;
   trackHeight?: number;
@@ -115,7 +115,9 @@ const LIT_BUILDING_TYPES = new Set([
   'station_water_1', 'station_water_2', 'station_water_3', 'station_water_4', 'station_water_5',
   'station_mine_1', 'station_mine_2', 'station_mine_3', 'station_mine_4', 'station_mine_5',
   'station_futuristic_1', 'station_futuristic_2', 'station_futuristic_3', 'station_futuristic_4', 'station_futuristic_5',
-  // Food & shops
+  // Lamps - emit bright light at night
+  'lamp_victorian', 'lamp_modern', 'lamp_themed', 'lamp_double', 'lamp_pathway',
+  // Food & shops - illuminate brightly at night
   'food_hotdog', 'food_burger', 'food_icecream', 'food_cotton_candy', 'snack_popcorn',
   'shop_souvenir_1', 'shop_souvenir_2', 'shop_toys', 'shop_photo', 'restroom', 'first_aid',
   // Rides
@@ -173,8 +175,16 @@ function collectLightSources(
         });
       }
       
-      // Buildings emit light
-      if (buildingType && LIT_BUILDING_TYPES.has(buildingType)) {
+      // Lamps emit bright focused light
+      if (buildingType?.startsWith('lamp_')) {
+        lights.push({ x, y, type: 'lamp', buildingType, seed: x * 1000 + y });
+      }
+      // Shops emit bright warm light
+      else if (buildingType?.startsWith('shop_') || buildingType?.startsWith('food_') || buildingType?.startsWith('snack_')) {
+        lights.push({ x, y, type: 'shop', buildingType, seed: x * 1000 + y });
+      }
+      // Other buildings emit light
+      else if (buildingType && LIT_BUILDING_TYPES.has(buildingType)) {
         lights.push({ x, y, type: 'building', buildingType, seed: x * 1000 + y });
       }
       
@@ -233,6 +243,30 @@ function drawLightCutouts(
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(tileCenterX, lightY, lightRadius, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (light.type === 'lamp') {
+      // Lamp lights - bright focused light from street lamps - very strong cutout
+      const lightRadius = 55;
+      const gradient = ctx.createRadialGradient(tileCenterX, tileCenterY - 20, 0, tileCenterX, tileCenterY - 20, lightRadius);
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${1.0 * lightIntensity})`);
+      gradient.addColorStop(0.3, `rgba(255, 255, 255, ${0.85 * lightIntensity})`);
+      gradient.addColorStop(0.6, `rgba(255, 255, 255, ${0.5 * lightIntensity})`);
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(tileCenterX, tileCenterY - 20, lightRadius, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (light.type === 'shop') {
+      // Shop lights - bright warm storefront lighting - strong cutout
+      const lightRadius = 60;
+      const gradient = ctx.createRadialGradient(tileCenterX, tileCenterY - 18, 0, tileCenterX, tileCenterY - 18, lightRadius);
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${1.0 * lightIntensity})`);
+      gradient.addColorStop(0.35, `rgba(255, 255, 255, ${0.8 * lightIntensity})`);
+      gradient.addColorStop(0.65, `rgba(255, 255, 255, ${0.45 * lightIntensity})`);
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(tileCenterX, tileCenterY - 18, lightRadius, 0, Math.PI * 2);
       ctx.fill();
     } else if (light.type === 'building') {
       // Building lights - windows and ambient glow - strong cutout
@@ -295,6 +329,26 @@ function drawColoredGlows(
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(tileCenterX, lightY, 12, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (light.type === 'lamp') {
+      // Warm golden glow from street lamps - bright and inviting
+      const gradient = ctx.createRadialGradient(tileCenterX, tileCenterY - 20, 0, tileCenterX, tileCenterY - 20, 30);
+      gradient.addColorStop(0, `rgba(255, 230, 150, ${0.35 * lightIntensity})`);
+      gradient.addColorStop(0.5, `rgba(255, 210, 120, ${0.2 * lightIntensity})`);
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(tileCenterX, tileCenterY - 20, 30, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (light.type === 'shop') {
+      // Warm inviting storefront glow - bright and welcoming
+      const gradient = ctx.createRadialGradient(tileCenterX, tileCenterY - 18, 0, tileCenterX, tileCenterY - 18, 35);
+      gradient.addColorStop(0, `rgba(255, 240, 180, ${0.35 * lightIntensity})`);
+      gradient.addColorStop(0.5, `rgba(255, 220, 140, ${0.2 * lightIntensity})`);
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(tileCenterX, tileCenterY - 18, 35, 0, Math.PI * 2);
       ctx.fill();
     } else if (light.type === 'ride' && light.seed !== undefined) {
       // Subtle colorful ride lights

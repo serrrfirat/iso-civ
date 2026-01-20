@@ -28,6 +28,10 @@ export interface SpriteMapping {
   offsetX?: number; // Pixel offset for alignment
   offsetY?: number;
   scale?: number; // Scale multiplier (default 1.0)
+  cropTop?: number; // Pixels to crop from top of sprite cell
+  cropBottom?: number; // Pixels to crop from bottom of sprite cell
+  cropLeft?: number; // Pixels to crop from left of sprite cell
+  cropRight?: number; // Pixels to crop from right of sprite cell
 }
 
 // =============================================================================
@@ -147,7 +151,7 @@ const FURNITURE_SHEET: SpriteSheet = {
     { name: 'lamp_modern', row: 1, col: 1, offsetY: -12, scale: 0.5 },
     { name: 'lamp_themed', row: 1, col: 2, offsetY: -12, scale: 0.5 },
     { name: 'lamp_double', row: 1, col: 3, offsetY: -12, scale: 0.52 },
-    { name: 'lamp_pathway', row: 1, col: 4, offsetY: -8, scale: 0.45 },
+    { name: 'lamp_pathway', row: 1, col: 4, offsetY: -8, scale: 0.45, cropTop: 40, cropBottom: 30, cropLeft: 25 },
     // Row 2: Trash Cans (small decorative)
     { name: 'trash_can_basic', row: 2, col: 0, offsetY: -6, scale: 0.42 },
     { name: 'trash_can_fancy', row: 2, col: 1, offsetY: -6, scale: 0.42 },
@@ -239,15 +243,15 @@ const FOUNTAINS_SHEET: SpriteSheet = {
     { name: 'fountain_medium_4', row: 1, col: 3, offsetY: -15, scale: 0.7 },
     { name: 'fountain_medium_5', row: 1, col: 4, offsetY: -15, scale: 0.7 },
     // Row 2: Large fountains (2x2)
-    { name: 'fountain_large_1', row: 2, col: 0, offsetY: -35, scale: 0.55 },
-    { name: 'fountain_large_2', row: 2, col: 1, offsetY: -35, scale: 0.55 },
-    { name: 'fountain_large_3', row: 2, col: 2, offsetY: -35, scale: 0.55 },
-    { name: 'fountain_large_4', row: 2, col: 3, offsetX: -2, offsetY: -35, scale: 0.52 },
-    { name: 'fountain_large_5', row: 2, col: 4, offsetY: -35, scale: 0.55 },
+    { name: 'fountain_large_1', row: 2, col: 0, offsetY: 12, scale: 0.55 },
+    { name: 'fountain_large_2', row: 2, col: 1, offsetY: 12, scale: 0.55 },
+    { name: 'fountain_large_3', row: 2, col: 2, offsetY: 12, scale: 0.55 },
+    { name: 'fountain_large_4', row: 2, col: 3, offsetX: -2, offsetY: 12, scale: 0.52 },
+    { name: 'fountain_large_5', row: 2, col: 4, offsetY: 12, scale: 0.55 },
     // Row 3: Ponds
     { name: 'pond_small', row: 3, col: 0, offsetY: -5, scale: 0.55 },
     { name: 'pond_medium', row: 3, col: 1, offsetY: -5, scale: 0.65 },
-    { name: 'pond_large', row: 3, col: 2, offsetY: -20, scale: 0.5 },
+    { name: 'pond_large', row: 3, col: 2, offsetY: 20, scale: 0.5 },
     { name: 'pond_koi', row: 3, col: 3, offsetY: -5, scale: 0.65 },
     { name: 'pond_lily', row: 3, col: 4, offsetY: -5, scale: 0.6 },
     // Row 4: Waterfalls & streams
@@ -261,7 +265,7 @@ const FOUNTAINS_SHEET: SpriteSheet = {
     { name: 'water_jets', row: 5, col: 1, offsetY: -8, scale: 0.6 },
     { name: 'mist_fountain', row: 5, col: 2, offsetY: -8, scale: 0.6 },
     { name: 'interactive_fountain', row: 5, col: 3, offsetY: -10, scale: 0.65 },
-    { name: 'dancing_fountain', row: 5, col: 4, offsetY: -28, scale: 0.5 },
+    { name: 'dancing_fountain', row: 5, col: 4, offsetY: 16, scale: 0.5 },
   ],
 };
 
@@ -317,41 +321,41 @@ const RIDES_SMALL_SHEET: SpriteSheet = {
   rows: 6,
   sprites: [
     // Row 0: Kiddie rides (2x2 buildings)
-    { name: 'ride_kiddie_coaster', row: 0, col: 0, offsetY: -30, scale: 0.55 },
-    { name: 'ride_kiddie_train', row: 0, col: 1, offsetY: -28, scale: 0.52 },
-    { name: 'ride_kiddie_planes', row: 0, col: 2, offsetY: -30, scale: 0.55 },
-    { name: 'ride_kiddie_boats', row: 0, col: 3, offsetY: -28, scale: 0.52 },
-    { name: 'ride_kiddie_cars', row: 0, col: 4, offsetY: -28, scale: 0.52 },
+    { name: 'ride_kiddie_coaster', row: 0, col: 0, offsetY: 15, scale: 0.55 },
+    { name: 'ride_kiddie_train', row: 0, col: 1, offsetY: 16, scale: 0.52 },
+    { name: 'ride_kiddie_planes', row: 0, col: 2, offsetY: 15, scale: 0.55 },
+    { name: 'ride_kiddie_boats', row: 0, col: 3, offsetY: 16, scale: 0.52 },
+    { name: 'ride_kiddie_cars', row: 0, col: 4, offsetY: 16, scale: 0.52 },
     // Row 1: Spinning rides (2x2 buildings)
-    { name: 'ride_teacups', row: 1, col: 0, offsetY: -35, scale: 0.6 },
-    { name: 'ride_scrambler', row: 1, col: 1, offsetY: -35, scale: 0.6 },
-    { name: 'ride_tilt_a_whirl', row: 1, col: 2, offsetY: -35, scale: 0.6 },
-    { name: 'ride_spinning_apples', row: 1, col: 3, offsetY: -35, scale: 0.6 },
-    { name: 'ride_whirlwind', row: 1, col: 4, offsetY: -35, scale: 0.6 },
+    { name: 'ride_teacups', row: 1, col: 0, offsetY: 12, scale: 0.6 },
+    { name: 'ride_scrambler', row: 1, col: 1, offsetY: 12, scale: 0.6 },
+    { name: 'ride_tilt_a_whirl', row: 1, col: 2, offsetY: 12, scale: 0.6 },
+    { name: 'ride_spinning_apples', row: 1, col: 3, offsetY: 12, scale: 0.6 },
+    { name: 'ride_whirlwind', row: 1, col: 4, offsetY: 12, scale: 0.6 },
     // Row 2: Classic rides (2x2 buildings)
-    { name: 'ride_carousel', row: 2, col: 0, offsetY: -35, scale: 0.6 },
-    { name: 'ride_antique_cars', row: 2, col: 1, offsetY: -28, scale: 0.52 },
-    { name: 'ride_monorail_car', row: 2, col: 2, offsetY: -28, scale: 0.5 },
-    { name: 'ride_sky_ride_car', row: 2, col: 3, offsetY: -28, scale: 0.5 },
-    { name: 'ride_train_car', row: 2, col: 4, offsetY: -28, scale: 0.5 },
-    // Row 3: Driving rides (2x2 buildings)
-    { name: 'ride_bumper_cars', row: 3, col: 0, offsetY: -35, scale: 0.6 },
-    { name: 'ride_go_karts', row: 3, col: 1, offsetY: -35, scale: 0.6 },
-    { name: 'ride_simulator', row: 3, col: 2, offsetY: -32, scale: 0.55 },
-    { name: 'ride_motion_theater', row: 3, col: 3, offsetY: -32, scale: 0.55 },
-    { name: 'ride_4d_theater', row: 3, col: 4, offsetY: -32, scale: 0.55 },
+    { name: 'ride_carousel', row: 2, col: 0, offsetY: 12, scale: 0.6 },
+    { name: 'ride_antique_cars', row: 2, col: 1, offsetY: 16, scale: 0.52 },
+    { name: 'ride_monorail_car', row: 2, col: 2, offsetY: 16, scale: 0.5 },
+    { name: 'ride_sky_ride_car', row: 2, col: 3, offsetY: 16, scale: 0.5 },
+    { name: 'ride_train_car', row: 2, col: 4, offsetY: 16, scale: 0.5 },
+    // Row 3: Driving rides (2x2 and 3x2 buildings)
+    { name: 'ride_bumper_cars', row: 3, col: 0, offsetY: 12, scale: 0.6 },
+    { name: 'ride_go_karts', row: 3, col: 1, offsetY: 12, scale: 0.6 },
+    { name: 'ride_simulator', row: 3, col: 2, offsetY: 14, scale: 0.55 },
+    { name: 'ride_motion_theater', row: 3, col: 3, offsetY: 14, scale: 0.55 },
+    { name: 'ride_4d_theater', row: 3, col: 4, offsetY: 14, scale: 0.55 },
     // Row 4: Water rides (2x2 and 3x3)
-    { name: 'ride_bumper_boats', row: 4, col: 0, offsetY: -28, scale: 0.52 },
-    { name: 'ride_paddle_boats', row: 4, col: 1, offsetY: -28, scale: 0.5 },
-    { name: 'ride_lazy_river', row: 4, col: 2, offsetY: -30, scale: 0.55 },
-    { name: 'ride_water_play', row: 4, col: 3, offsetY: -35, scale: 0.65 },
-    { name: 'ride_splash_zone', row: 4, col: 4, offsetY: -32, scale: 0.55 },
+    { name: 'ride_bumper_boats', row: 4, col: 0, offsetY: 16, scale: 0.52 },
+    { name: 'ride_paddle_boats', row: 4, col: 1, offsetY: 16, scale: 0.5 },
+    { name: 'ride_lazy_river', row: 4, col: 2, offsetY: 15, scale: 0.55 },
+    { name: 'ride_water_play', row: 4, col: 3, offsetY: 12, scale: 0.65 },
+    { name: 'ride_splash_zone', row: 4, col: 4, offsetY: 14, scale: 0.55 },
     // Row 5: Dark rides (3x3 buildings - large dark ride buildings)
-    { name: 'ride_haunted_house', row: 5, col: 0, offsetY: -55, scale: 0.85 },
-    { name: 'ride_ghost_train', row: 5, col: 1, offsetY: -55, scale: 0.85 },
-    { name: 'ride_dark_ride', row: 5, col: 2, offsetY: -55, scale: 0.85 },
-    { name: 'ride_tunnel', row: 5, col: 3, offsetY: -35, scale: 0.6 },
-    { name: 'ride_themed_facade', row: 5, col: 4, offsetY: -55, scale: 0.85 },
+    { name: 'ride_haunted_house', row: 5, col: 0, offsetY: 5, scale: 0.85 },
+    { name: 'ride_ghost_train', row: 5, col: 1, offsetY: 5, scale: 0.85 },
+    { name: 'ride_dark_ride', row: 5, col: 2, offsetY: 5, scale: 0.85 },
+    { name: 'ride_tunnel', row: 5, col: 3, offsetY: 12, scale: 0.6 },
+    { name: 'ride_themed_facade', row: 5, col: 4, offsetY: 5, scale: 0.85 },
   ],
 };
 
@@ -362,41 +366,41 @@ const RIDES_LARGE_SHEET: SpriteSheet = {
   rows: 6,
   sprites: [
     // Row 0: Ferris wheels (3x3 very large)
-    { name: 'ride_ferris_classic', row: 0, col: 0, offsetY: -60, scale: 0.7 },
-    { name: 'ride_ferris_modern', row: 0, col: 1, offsetY: -60, scale: 0.7 },
-    { name: 'ride_ferris_observation', row: 0, col: 2, offsetY: -65, scale: 0.75 },
-    { name: 'ride_ferris_double', row: 0, col: 3, offsetY: -62, scale: 0.72 },
-    { name: 'ride_ferris_led', row: 0, col: 4, offsetY: -65, scale: 0.75 },
+    { name: 'ride_ferris_classic', row: 0, col: 0, offsetY: 0, scale: 0.7 },
+    { name: 'ride_ferris_modern', row: 0, col: 1, offsetY: 0, scale: 0.7 },
+    { name: 'ride_ferris_observation', row: 0, col: 2, offsetY: -5, scale: 0.75 },
+    { name: 'ride_ferris_double', row: 0, col: 3, offsetY: -2, scale: 0.72 },
+    { name: 'ride_ferris_led', row: 0, col: 4, offsetY: -5, scale: 0.75 },
     // Row 1: Drop rides (2x2 very tall)
-    { name: 'ride_drop_tower', row: 1, col: 0, offsetY: -70, scale: 0.65 },
-    { name: 'ride_space_shot', row: 1, col: 1, offsetY: -72, scale: 0.67 },
-    { name: 'ride_observation_tower', row: 1, col: 2, offsetY: -72, scale: 0.67 },
-    { name: 'ride_sky_swing', row: 1, col: 3, offsetY: -58, scale: 0.62 },
-    { name: 'ride_star_flyer', row: 1, col: 4, offsetY: -65, scale: 0.65 },
+    { name: 'ride_drop_tower', row: 1, col: 0, offsetY: -10, scale: 0.65 },
+    { name: 'ride_space_shot', row: 1, col: 1, offsetY: -12, scale: 0.67 },
+    { name: 'ride_observation_tower', row: 1, col: 2, offsetY: -12, scale: 0.67 },
+    { name: 'ride_sky_swing', row: 1, col: 3, offsetY: 2, scale: 0.62 },
+    { name: 'ride_star_flyer', row: 1, col: 4, offsetY: -5, scale: 0.65 },
     // Row 2: Swing rides (3x3 large)
-    { name: 'ride_swing_ride', row: 2, col: 0, offsetY: -45, scale: 0.65 },
-    { name: 'ride_wave_swinger', row: 2, col: 1, offsetY: -48, scale: 0.68 },
-    { name: 'ride_flying_scooters', row: 2, col: 2, offsetY: -45, scale: 0.58 },
-    { name: 'ride_enterprise', row: 2, col: 3, offsetY: -48, scale: 0.68 },
-    { name: 'ride_loop_o_plane', row: 2, col: 4, offsetY: -48, scale: 0.6 },
+    { name: 'ride_swing_ride', row: 2, col: 0, offsetY: 10, scale: 0.65 },
+    { name: 'ride_wave_swinger', row: 2, col: 1, offsetY: 8, scale: 0.68 },
+    { name: 'ride_flying_scooters', row: 2, col: 2, offsetY: 10, scale: 0.58 },
+    { name: 'ride_enterprise', row: 2, col: 3, offsetY: 8, scale: 0.68 },
+    { name: 'ride_loop_o_plane', row: 2, col: 4, offsetY: 8, scale: 0.6 },
     // Row 3: Thrill rides (2x2 large)
-    { name: 'ride_top_spin', row: 3, col: 0, offsetY: -48, scale: 0.6 },
-    { name: 'ride_frisbee', row: 3, col: 1, offsetY: -50, scale: 0.62 },
-    { name: 'ride_afterburner', row: 3, col: 2, offsetY: -48, scale: 0.6 },
-    { name: 'ride_inversion', row: 3, col: 3, offsetY: -50, scale: 0.62 },
-    { name: 'ride_meteorite', row: 3, col: 4, offsetY: -48, scale: 0.6 },
+    { name: 'ride_top_spin', row: 3, col: 0, offsetY: 8, scale: 0.6 },
+    { name: 'ride_frisbee', row: 3, col: 1, offsetY: 5, scale: 0.62 },
+    { name: 'ride_afterburner', row: 3, col: 2, offsetY: 8, scale: 0.6 },
+    { name: 'ride_inversion', row: 3, col: 3, offsetY: 5, scale: 0.62 },
+    { name: 'ride_meteorite', row: 3, col: 4, offsetY: 8, scale: 0.6 },
     // Row 4: Transport rides (3x3 large structures)
-    { name: 'ride_log_flume', row: 4, col: 0, offsetY: -60, scale: 0.85 },
-    { name: 'ride_rapids', row: 4, col: 1, offsetY: -60, scale: 0.85 },
-    { name: 'ride_train_station', row: 4, col: 2, offsetY: -40, scale: 0.6 },
-    { name: 'ride_monorail_station', row: 4, col: 3, offsetY: -40, scale: 0.6 },
-    { name: 'ride_chairlift', row: 4, col: 4, offsetY: -38, scale: 0.55 },
+    { name: 'ride_log_flume', row: 4, col: 0, offsetY: 0, scale: 0.85 },
+    { name: 'ride_rapids', row: 4, col: 1, offsetY: 0, scale: 0.85 },
+    { name: 'ride_train_station', row: 4, col: 2, offsetY: 10, scale: 0.6 },
+    { name: 'ride_monorail_station', row: 4, col: 3, offsetY: 10, scale: 0.6 },
+    { name: 'ride_chairlift', row: 4, col: 4, offsetY: 12, scale: 0.55 },
     // Row 5: Shows (3x3 large structures)
-    { name: 'show_4d', row: 5, col: 0, offsetY: -42, scale: 0.65 },
-    { name: 'show_stunt', row: 5, col: 1, offsetY: -45, scale: 0.68 },
-    { name: 'show_dolphin', row: 5, col: 2, offsetY: -45, scale: 0.68 },
-    { name: 'show_amphitheater', row: 5, col: 3, offsetY: -48, scale: 0.7 },
-    { name: 'show_parade_float', row: 5, col: 4, offsetY: -35, scale: 0.55 },
+    { name: 'show_4d', row: 5, col: 0, offsetY: 8, scale: 0.65 },
+    { name: 'show_stunt', row: 5, col: 1, offsetY: 5, scale: 0.68 },
+    { name: 'show_dolphin', row: 5, col: 2, offsetY: 5, scale: 0.68 },
+    { name: 'show_amphitheater', row: 5, col: 3, offsetY: 2, scale: 0.7 },
+    { name: 'show_parade_float', row: 5, col: 4, offsetY: 12, scale: 0.55 },
   ],
 };
 
@@ -631,12 +635,18 @@ export function getSpriteRect(
 ): { sx: number; sy: number; sw: number; sh: number } {
   const cellWidth = sheetWidth / sheet.cols;
   const cellHeight = sheetHeight / sheet.rows;
-  
+
+  // Apply cropping if specified
+  const cropTop = sprite.cropTop || 0;
+  const cropBottom = sprite.cropBottom || 0;
+  const cropLeft = sprite.cropLeft || 0;
+  const cropRight = sprite.cropRight || 0;
+
   return {
-    sx: sprite.col * cellWidth,
-    sy: sprite.row * cellHeight,
-    sw: cellWidth,
-    sh: cellHeight,
+    sx: sprite.col * cellWidth + cropLeft,
+    sy: sprite.row * cellHeight + cropTop,
+    sw: cellWidth - cropLeft - cropRight,
+    sh: cellHeight - cropTop - cropBottom,
   };
 }
 

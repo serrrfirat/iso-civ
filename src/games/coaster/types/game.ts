@@ -4,7 +4,7 @@
 
 import { Building, BuildingType } from './buildings';
 import { Coaster, TrackPiece, TrackDirection } from './tracks';
-import { Guest, ParkFinances, ParkStats, ParkSettings, Staff } from './economy';
+import { Guest, ParkFinances, ParkStats, ParkSettings, Staff, WeatherState } from './economy';
 
 // =============================================================================
 // TOOL TYPES
@@ -16,6 +16,10 @@ export type Tool =
   | 'bulldoze'
   | 'path'
   | 'queue'
+  
+  // Terrain/Zoning
+  | 'zone_water'
+  | 'zone_land'
   
   // Coaster building
   | 'coaster_build'
@@ -117,6 +121,7 @@ export interface ToolInfo {
 export type ToolCategory =
   | 'tools'
   | 'paths'
+  | 'terrain'
   | 'coasters'
   | 'trees'
   | 'flowers'
@@ -134,6 +139,10 @@ export const TOOL_INFO: Record<Tool, ToolInfo> = {
   bulldoze: { name: 'Bulldoze', cost: 10, description: 'Remove objects', category: 'tools' },
   path: { name: 'Path', cost: 10, description: 'Build guest walkways', category: 'paths' },
   queue: { name: 'Queue Line', cost: 15, description: 'Build ride queues', category: 'paths' },
+  
+  // Terrain/Zoning
+  zone_water: { name: 'Water Terraform', cost: 500, description: 'Terraform land into water', category: 'terrain' },
+  zone_land: { name: 'Land Terraform', cost: 500, description: 'Terraform water into land', category: 'terrain' },
   
   coaster_build: { name: 'Coaster Build Mode', cost: 0, description: 'Start building a coaster', category: 'coasters' },
   coaster_track: { name: 'Track: Straight', cost: 20, description: 'Place straight track segments', category: 'coasters' },
@@ -430,6 +439,9 @@ export interface GameState {
   minute: number;
   tick: number;
   speed: 0 | 1 | 2 | 3;
+  
+  // Weather
+  weather: WeatherState;
   
   // Park
   settings: ParkSettings;

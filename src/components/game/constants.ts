@@ -25,8 +25,8 @@ export const PEDESTRIAN_PANTS_COLORS = ['#1f2937', '#374151', '#4b5563', '#1e3a8
 export const PEDESTRIAN_HAT_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f97316', '#8b5cf6', '#1f2937', '#ffffff'];
 
 // Pedestrian behavior constants
-export const PEDESTRIAN_BUILDING_ENTER_TIME = 2.5;  // Time to enter/exit building (seconds) - slow enough to see
-export const PEDESTRIAN_APPROACH_TIME = 2.0;        // Time spent approaching/queuing at shop entrance
+export const PEDESTRIAN_BUILDING_ENTER_TIME = 2.0;  // Time to enter/exit building (seconds) - slow enough to see
+export const PEDESTRIAN_APPROACH_TIME = 3.0;        // Time spent walking from road to shop entrance
 export const PEDESTRIAN_MIN_ACTIVITY_TIME = 20.0;   // Minimum time at an activity
 export const PEDESTRIAN_MAX_ACTIVITY_TIME = 120.0;  // Maximum time at an activity
 export const PEDESTRIAN_BUILDING_MIN_TIME = 15.0;   // Minimum time inside buildings (reduced for more flow)

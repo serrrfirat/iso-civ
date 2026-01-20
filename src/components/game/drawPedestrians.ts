@@ -59,8 +59,8 @@ function drawHair(ctx: CanvasRenderingContext2D, headX: number, headY: number, h
 /**
  * Filter mode for drawing pedestrians
  * - 'all': Draw all visible pedestrians
- * - 'recreation': Only draw pedestrians at recreation areas (for drawing on top of parks)
- * - 'non-recreation': Only draw pedestrians NOT at recreation areas (for drawing below buildings)
+ * - 'recreation': Pedestrians at recreation, beach, or shops (drawn on top of buildings)
+ * - 'non-recreation': Walking pedestrians not at destinations (drawn below buildings)
  */
 export type PedestrianFilterMode = 'all' | 'recreation' | 'non-recreation';
 
@@ -70,8 +70,8 @@ export type PedestrianFilterMode = 'all' | 'recreation' | 'non-recreation';
  * 
  * @param filterMode - Controls which pedestrians to draw:
  *   - 'all': All visible pedestrians (default)
- *   - 'recreation': Only pedestrians at recreation areas (draw on buildings canvas)
- *   - 'non-recreation': Only walking/other pedestrians (draw on cars canvas)
+ *   - 'recreation': Pedestrians at activities (recreation, beach, shops) - draw on buildings canvas
+ *   - 'non-recreation': Walking pedestrians not at destinations - draw on cars canvas
  */
 export function drawPedestrians(
   ctx: CanvasRenderingContext2D,
@@ -85,13 +85,20 @@ export function drawPedestrians(
   
   // Apply filter mode
   if (filterMode === 'recreation') {
-    // Include both recreation and beach activities
+    // Include recreation, beach, AND shop activities (drawn on top of buildings)
     visiblePedestrians = visiblePedestrians.filter(ped => 
-      ped.state === 'at_recreation' || ped.state === 'at_beach'
+      ped.state === 'at_recreation' || 
+      ped.state === 'at_beach' ||
+      ped.state === 'approaching_shop' ||
+      (ped.activity === 'shopping' && (ped.state === 'entering_building' || ped.state === 'exiting_building'))
     );
   } else if (filterMode === 'non-recreation') {
+    // Walking pedestrians (drawn below buildings)
     visiblePedestrians = visiblePedestrians.filter(ped => 
-      ped.state !== 'at_recreation' && ped.state !== 'at_beach'
+      ped.state !== 'at_recreation' && 
+      ped.state !== 'at_beach' &&
+      ped.state !== 'approaching_shop' &&
+      !(ped.activity === 'shopping' && (ped.state === 'entering_building' || ped.state === 'exiting_building'))
     );
   }
   
@@ -129,22 +136,43 @@ export function drawPedestrians(
         pedY = screenY + TILE_HEIGHT / 2 + ped.activityOffsetY * 0.3;
       }
     } else if (ped.state === 'approaching_shop') {
-      // Approaching shop - stand at the entrance with offset
-      const { screenX, screenY } = gridToScreen(ped.destX, ped.destY, 0, 0);
-      // Position at the front of the shop with slight offset to show queuing
-      pedX = screenX + TILE_WIDTH / 2 + ped.activityOffsetX;
-      pedY = screenY + TILE_HEIGHT / 2 + 8 + ped.activityOffsetY; // Offset down to be at "entrance"
+      // Approaching shop - walk FROM sidewalk position TO shop entrance
+      // Start from the pedestrian's actual sidewalk position (where they were walking)
+      const { screenX: roadX, screenY: roadY } = gridToScreen(ped.tileX, ped.tileY, 0, 0);
+      const { screenX: shopX, screenY: shopY } = gridToScreen(ped.destX, ped.destY, 0, 0);
+      
+      // Calculate the starting position on the sidewalk (same as walking calculation)
+      const roadCenterX = roadX + TILE_WIDTH / 2;
+      const roadCenterY = roadY + TILE_HEIGHT / 2;
+      const meta = DIRECTION_META[ped.direction];
+      const sidewalkOffset = ped.sidewalkSide === 'left' ? -10 : 10;
+      const yOffset = getSidewalkYOffset(ped.direction, ped.sidewalkSide);
+      
+      // Starting position is at the edge of the road tile (progress=1) on the sidewalk
+      const startX = roadCenterX + meta.vec.dx + meta.normal.nx * sidewalkOffset;
+      const startY = roadCenterY + meta.vec.dy + meta.normal.ny * sidewalkOffset + yOffset;
+      
+      // Shop entrance is at the center-front of the shop tile
+      const shopEntranceX = shopX + TILE_WIDTH / 2;
+      const shopEntranceY = shopY + TILE_HEIGHT / 2 + 8; // Slightly in front of shop
+      
+      // Progress 0 = at sidewalk, progress 1 = at shop entrance
+      const progress = ped.buildingEntryProgress;
+      
+      pedX = startX + (shopEntranceX - startX) * progress + ped.activityOffsetX * progress;
+      pedY = startY + (shopEntranceY - startY) * progress + ped.activityOffsetY * progress;
     } else if (ped.state === 'entering_building' || ped.state === 'exiting_building') {
       // At building entrance - position depends on if shopping
       const { screenX, screenY } = gridToScreen(ped.destX, ped.destY, 0, 0);
       if (ped.activity === 'shopping') {
-        // Shoppers walk towards the door (animate position based on progress)
+        // Shoppers walk into/out of the door
         const doorProgress = ped.state === 'entering_building' 
           ? ped.buildingEntryProgress 
           : 1 - ped.buildingEntryProgress;
+        // At entrance (progress 0) to inside building (progress 1)
         pedX = screenX + TILE_WIDTH / 2 + ped.activityOffsetX * (1 - doorProgress);
-        // Move up towards the building as they enter
-        pedY = screenY + TILE_HEIGHT / 2 + 8 * (1 - doorProgress) + ped.activityOffsetY * (1 - doorProgress);
+        // Move up into the building as they enter
+        pedY = screenY + TILE_HEIGHT / 2 + 8 * (1 - doorProgress) - doorProgress * 5;
       } else {
         pedX = screenX + TILE_WIDTH / 2;
         pedY = screenY + TILE_HEIGHT / 2;
@@ -1279,17 +1307,18 @@ function drawIdlePerson(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
 // ============================================================================
 
 /**
- * Draw a shopper queuing/waiting at a shop entrance
+ * Draw a shopper walking from road to shop entrance
  */
 function drawShopperQueuing(ctx: CanvasRenderingContext2D, ped: Pedestrian): void {
   const scale = 0.28;
-  const sway = Math.sin(ped.walkOffset * 0.3) * 0.5;
-  const lookAround = Math.sin(ped.activityAnimTimer * 0.5) * 2;
+  const walkBob = Math.sin(ped.walkOffset) * 0.6;
+  const walkSway = Math.sin(ped.walkOffset * 0.5) * 0.4;
+  const legSwing = Math.sin(ped.walkOffset) * 2.5;
 
-  // Head - looking around
+  // Head
   ctx.fillStyle = ped.skinColor;
   ctx.beginPath();
-  ctx.arc(lookAround * scale, -12 * scale, 3 * scale, 0, Math.PI * 2);
+  ctx.arc(walkSway * scale, (-12 + walkBob) * scale, 3 * scale, 0, Math.PI * 2);
   ctx.fill();
 
   // Hair for variety
@@ -1297,46 +1326,40 @@ function drawShopperQueuing(ctx: CanvasRenderingContext2D, ped: Pedestrian): voi
     const hairColor = ['#2c1810', '#4a3728', '#8b4513', '#d4a574', '#f5deb3', '#1a1a1a'][ped.id % 6];
     ctx.fillStyle = hairColor;
     ctx.beginPath();
-    ctx.arc(lookAround * scale, -13 * scale, 3 * scale, Math.PI, 0);
+    ctx.arc(walkSway * scale, (-13 + walkBob) * scale, 3 * scale, Math.PI, 0);
     ctx.fill();
   }
 
   // Body
   ctx.fillStyle = ped.shirtColor;
   ctx.beginPath();
-  ctx.ellipse(sway * scale, -5 * scale, 2.5 * scale, 4 * scale, 0, 0, Math.PI * 2);
+  ctx.ellipse(walkSway * scale, (-5 + walkBob) * scale, 2.5 * scale, 4 * scale, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Legs - standing
+  // Legs - walking
   ctx.strokeStyle = ped.pantsColor;
   ctx.lineWidth = 1.5 * scale;
   ctx.beginPath();
-  ctx.moveTo((-1 + sway) * scale, -1 * scale);
-  ctx.lineTo((-1.2 + sway) * scale, 5 * scale);
+  ctx.moveTo(walkSway * scale, (-1 + walkBob) * scale);
+  ctx.lineTo((walkSway - 1 + legSwing) * scale, (5 + walkBob) * scale);
   ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo((1 + sway) * scale, -1 * scale);
-  ctx.lineTo((1.2 + sway) * scale, 5 * scale);
+  ctx.moveTo(walkSway * scale, (-1 + walkBob) * scale);
+  ctx.lineTo((walkSway + 1 - legSwing) * scale, (5 + walkBob) * scale);
   ctx.stroke();
 
-  // Arms - one arm checking phone/wallet
+  // Arms - swinging while walking
   ctx.strokeStyle = ped.skinColor;
   ctx.lineWidth = 1.2 * scale;
+  const armSwing = legSwing * 0.6;
   ctx.beginPath();
-  ctx.moveTo((-2 + sway) * scale, -6 * scale);
-  ctx.lineTo((-3 + sway) * scale, -2 * scale);
+  ctx.moveTo((walkSway - 2) * scale, (-6 + walkBob) * scale);
+  ctx.lineTo((walkSway - 3 - armSwing) * scale, (-2 + walkBob) * scale);
   ctx.stroke();
-  // Other arm holding phone/wallet
   ctx.beginPath();
-  ctx.moveTo((2 + sway) * scale, -6 * scale);
-  ctx.lineTo((2 + sway) * scale, -3 * scale);
+  ctx.moveTo((walkSway + 2) * scale, (-6 + walkBob) * scale);
+  ctx.lineTo((walkSway + 3 + armSwing) * scale, (-2 + walkBob) * scale);
   ctx.stroke();
-  
-  // Phone in hand
-  ctx.fillStyle = '#333333';
-  ctx.fillRect((1.5 + sway) * scale, -4 * scale, 1.5 * scale, 2.5 * scale);
-  ctx.fillStyle = '#4488ff';
-  ctx.fillRect((1.6 + sway) * scale, -3.8 * scale, 1.2 * scale, 2 * scale);
 }
 
 /**

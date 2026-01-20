@@ -10,7 +10,7 @@ import {
   createEmptyBuilding,
   TOOL_INFO,
 } from '@/games/coaster/types';
-import { ParkFinances, ParkStats, ParkSettings, Guest, Staff, DEFAULT_PRICES } from '@/games/coaster/types/economy';
+import { ParkFinances, ParkStats, ParkSettings, Guest, Staff, DEFAULT_PRICES, WeatherState, WeatherType, WEATHER_EFFECTS, WEATHER_TRANSITIONS, getSeasonalWeatherBias, GuestThought } from '@/games/coaster/types/economy';
 import { Coaster, CoasterTrain, CoasterCar, TrackDirection, TrackHeight, TrackPiece, TrackPieceType, CoasterType, COASTER_TYPE_STATS, getStrutStyleForCoasterType } from '@/games/coaster/types/tracks';
 import { Building, BuildingType } from '@/games/coaster/types/buildings';
 import { spawnGuests, updateGuest } from '@/components/coaster/guests';
@@ -30,6 +30,186 @@ import {
 // =============================================================================
 
 const DEFAULT_GRID_SIZE = 60;
+
+// Weather change interval in ticks (roughly every 2-4 in-game hours)
+const WEATHER_CHANGE_MIN_TICKS = 120; // ~2 hours at normal speed
+const WEATHER_CHANGE_MAX_TICKS = 240; // ~4 hours at normal speed
+
+// =============================================================================
+// WEATHER SIMULATION
+// =============================================================================
+
+function createInitialWeather(month: number): WeatherState {
+  const initialWeather = pickNextWeather('sunny', month);
+  return {
+    current: initialWeather,
+    temperature: getTemperatureForWeather(initialWeather, month),
+    nextChange: Math.floor(Math.random() * (WEATHER_CHANGE_MAX_TICKS - WEATHER_CHANGE_MIN_TICKS)) + WEATHER_CHANGE_MIN_TICKS,
+    forecast: [
+      pickNextWeather(initialWeather, month),
+      pickNextWeather(initialWeather, month),
+      pickNextWeather(initialWeather, month),
+    ],
+  };
+}
+
+function pickNextWeather(current: WeatherType, month: number): WeatherType {
+  const transitions = WEATHER_TRANSITIONS[current];
+  const seasonBias = getSeasonalWeatherBias(month);
+  
+  // Build weighted probability list
+  const options: { weather: WeatherType; weight: number }[] = [];
+  for (const [weather, baseWeight] of Object.entries(transitions)) {
+    const bias = seasonBias[weather as WeatherType] ?? 1.0;
+    options.push({ weather: weather as WeatherType, weight: (baseWeight ?? 0) * bias });
+  }
+  
+  // Normalize weights
+  const totalWeight = options.reduce((sum, o) => sum + o.weight, 0);
+  const random = Math.random() * totalWeight;
+  
+  let cumulative = 0;
+  for (const option of options) {
+    cumulative += option.weight;
+    if (random <= cumulative) {
+      return option.weather;
+    }
+  }
+  
+  return options[options.length - 1]?.weather ?? 'sunny';
+}
+
+function getTemperatureForWeather(weather: WeatherType, month: number): number {
+  // Base temperature by season (Celsius)
+  let baseTemp: number;
+  if (month >= 6 && month <= 8) baseTemp = 28; // Summer
+  else if (month >= 3 && month <= 5) baseTemp = 18; // Spring
+  else if (month >= 9 && month <= 11) baseTemp = 14; // Fall
+  else baseTemp = 5; // Winter
+  
+  // Adjust by weather type
+  switch (weather) {
+    case 'hot': return baseTemp + 8 + Math.random() * 5;
+    case 'sunny': return baseTemp + 3 + Math.random() * 3;
+    case 'partly_cloudy': return baseTemp + Math.random() * 2;
+    case 'cloudy': return baseTemp - 2 + Math.random() * 2;
+    case 'rain': return baseTemp - 4 + Math.random() * 2;
+    case 'storm': return baseTemp - 5 + Math.random() * 3;
+    case 'cold': return baseTemp - 10 + Math.random() * 3;
+    default: return baseTemp;
+  }
+}
+
+function simulateWeather(weather: WeatherState, tick: number, month: number): WeatherState {
+  if (tick < weather.nextChange) {
+    return weather;
+  }
+  
+  // Time for weather change!
+  const newWeather = weather.forecast[0];
+  const nextChangeIn = Math.floor(Math.random() * (WEATHER_CHANGE_MAX_TICKS - WEATHER_CHANGE_MIN_TICKS)) + WEATHER_CHANGE_MIN_TICKS;
+  
+  // Shift forecast and add new prediction
+  const newForecast = [
+    weather.forecast[1],
+    weather.forecast[2],
+    pickNextWeather(weather.forecast[2], month),
+  ];
+  
+  return {
+    current: newWeather,
+    temperature: getTemperatureForWeather(newWeather, month),
+    nextChange: tick + nextChangeIn,
+    forecast: newForecast,
+  };
+}
+
+// Apply weather effects to a guest
+function applyWeatherEffectsToGuest(guest: Guest, weather: WeatherType): Guest {
+  const effects = WEATHER_EFFECTS[weather];
+  
+  // Clone guest to avoid mutation
+  const updatedGuest = { ...guest };
+  
+  // Apply thirst modifier
+  updatedGuest.thirst = Math.min(100, Math.max(0, updatedGuest.thirst + effects.thirstModifier));
+  
+  // Apply energy modifier (weather affects tiredness)
+  updatedGuest.energy = Math.max(0, updatedGuest.energy - effects.energyModifier);
+  
+  // Apply happiness modifier
+  updatedGuest.happiness = Math.min(100, Math.max(0, updatedGuest.happiness + effects.happinessModifier));
+  
+  // Add weather-related thoughts occasionally
+  if (Math.random() < 0.01) { // 1% chance per tick
+    const newThoughts = [...updatedGuest.thoughts];
+    let weatherThought: GuestThought | null = null;
+    
+    switch (weather) {
+      case 'sunny':
+      case 'partly_cloudy':
+        if (Math.random() < 0.5) weatherThought = 'weather_great';
+        else weatherThought = 'perfect_day';
+        break;
+      case 'rain':
+        weatherThought = 'getting_wet';
+        break;
+      case 'storm':
+        weatherThought = 'need_shelter';
+        break;
+      case 'hot':
+        weatherThought = 'too_hot';
+        break;
+      case 'cold':
+        weatherThought = 'too_cold';
+        break;
+    }
+    
+    if (weatherThought && !newThoughts.includes(weatherThought)) {
+      newThoughts.push(weatherThought);
+      // Keep only last 5 thoughts
+      if (newThoughts.length > 5) {
+        newThoughts.shift();
+      }
+      updatedGuest.thoughts = newThoughts;
+    }
+  }
+  
+  return updatedGuest;
+}
+
+// Check if a guest decides to leave due to weather
+// This is called every tick, so the chance must be VERY low
+function shouldGuestLeaveForWeather(guest: Guest, weather: WeatherType): boolean {
+  const effects = WEATHER_EFFECTS[weather];
+
+  // Base leave chance (extremely low - this is per tick!)
+  // With 100ms ticks at normal speed, this runs ~10 times per second
+  const baseChance = 0.0001;
+
+  // Only check in bad weather (storms)
+  if (weather !== 'storm' && weather !== 'rain') {
+    return false;
+  }
+
+  // Apply weather multiplier
+  let leaveChance = baseChance * effects.leaveChanceMultiplier;
+
+  // Only very unhappy guests consider leaving due to weather
+  if (guest.happiness >= 40) {
+    return false;
+  }
+  
+  // Even then, give them a further reduction
+  leaveChance *= 0.5;
+
+  // Guests who just arrived are much less likely to leave
+  if (guest.timeInPark < 600) { // Less than 10 minutes
+    leaveChance *= 0.1;
+  }
+  
+  return Math.random() < leaveChance;
+}
 
 // =============================================================================
 // CONTEXT TYPE
@@ -248,6 +428,9 @@ function createInitialGameState(parkName: string = 'My Theme Park', gridSize: nu
     staff: [],
     coasters: [],
     
+    // Weather
+    weather: createInitialWeather(3), // March - spring opening
+    
     selectedTool: 'select',
     activePanel: 'none',
     notifications: [],
@@ -309,6 +492,9 @@ function normalizeLoadedState(state: GameState): GameState {
     };
   }).filter((coaster): coaster is NonNullable<typeof coaster> => coaster !== null);
 
+  // Ensure weather state exists (backward compatibility)
+  const normalizedWeather = state.weather ?? createInitialWeather(state.month ?? 3);
+
   return {
     ...state,
     grid: normalizedGrid,
@@ -321,6 +507,7 @@ function normalizeLoadedState(state: GameState): GameState {
       targetBuildingId: guest.targetBuildingId ?? null,
       targetBuildingKind: guest.targetBuildingKind ?? null,
     })),
+    weather: normalizedWeather,
     buildingCoasterId: state.buildingCoasterId ?? null,
     buildingCoasterPath: state.buildingCoasterPath ?? [],
     buildingCoasterHeight: state.buildingCoasterHeight ?? 0,
@@ -901,7 +1088,7 @@ function createTrainsForCoaster(trackLength: number, coasterType: string = 'stee
     });
     // First train starts loading, others running
     train.state = i === 0 ? 'loading' : 'running';
-    train.stateTimer = i === 0 ? (5 + Math.random() * 3) : 0;
+    train.stateTimer = i === 0 ? (5 + Math.random() * 3) : 0; // 5-8 second stop at station for loading
     trains.push(train);
   }
   
@@ -1060,11 +1247,11 @@ export function CoasterProvider({
         const newTick = prev.tick + 1;
         let { minute, hour, day, month, year } = prev;
         
-        // Time progression - slower at night to make days feel longer
-        // During day (7-18): advance 1 minute per tick
-        // During night/dawn/dusk: advance 2 minutes per tick (faster to get through night)
+        // Time progression - slower during day to make daytime last longer
+        // During day (7-18): advance 0.25 minutes per tick (longer days)
+        // During night/dawn/dusk: advance 3 minutes per tick (faster to get through night)
         const isDaytime = hour >= 7 && hour < 18;
-        const minuteIncrement = isDaytime ? 0.5 : 2; // Slower during day, faster at night
+        const minuteIncrement = isDaytime ? 0.25 : 3; // Much slower during day, faster at night
         
         minute += minuteIncrement;
         if (minute >= 60) {
@@ -1084,10 +1271,40 @@ export function CoasterProvider({
           }
         }
         
-        // Update guests
+        // Update weather
+        const newWeather = simulateWeather(prev.weather, newTick, month);
+        const weatherEffects = WEATHER_EFFECTS[newWeather.current];
+        
+        // Update guests with weather effects
         const deltaTime = 1; // 1 game minute per tick
-        const updatedGuests = prev.guests.map(guest => updateGuest(guest, prev.grid, deltaTime));
-        const spawnedGuestsRaw = spawnGuests(prev.grid, updatedGuests, prev.stats.parkRating, hour);
+        const updatedGuestsBase = prev.guests.map(guest => updateGuest(guest, prev.grid, deltaTime));
+        
+        // Apply weather effects to guests and check if they want to leave
+        const updatedGuests = updatedGuestsBase.map(guest => {
+          const weatheredGuest = applyWeatherEffectsToGuest(guest, newWeather.current);
+          
+          // Check if guest decides to leave due to weather (rare)
+          // Only affects walking guests who are already unhappy
+          if (weatheredGuest.state === 'walking' && shouldGuestLeaveForWeather(weatheredGuest, newWeather.current)) {
+            return {
+              ...weatheredGuest,
+              state: 'leaving' as const,
+              thoughts: [...weatheredGuest.thoughts.slice(-4), 'want_to_go_home' as const],
+            };
+          }
+          
+          return weatheredGuest;
+        }); // Don't filter out guests here - let them leave naturally through the exit
+        
+        // Spawn guests (affected by weather)
+        const baseSpawnedGuests = spawnGuests(prev.grid, updatedGuests, prev.stats.parkRating, hour);
+
+        // Apply weather spawn multiplier probabilistically
+        // Since spawns are typically 0-1 guests, we need to treat the multiplier as a probability
+        // e.g., multiplier of 0.85 means 85% chance to keep each spawned guest
+        const spawnedGuestsRaw = baseSpawnedGuests.filter(() => 
+          Math.random() < weatherEffects.guestSpawnMultiplier
+        );
         const entranceFee = prev.settings.payPerRide ? 0 : prev.settings.entranceFee;
         const admissionRevenue = spawnedGuestsRaw.reduce((sum, guest) => sum + Math.min(guest.cash, entranceFee), 0);
         const spawnedGuests = spawnedGuestsRaw.map(guest => {
@@ -1150,35 +1367,53 @@ export function CoasterProvider({
         const parkRating = Math.min(1000, Math.round(avgHappiness * 10));
 
         // Update coaster trains with state machine and station logic
-        // First, filter out coasters whose track no longer exists in the grid
-        const validCoasters = prev.coasters.filter(coaster => {
-          if (coaster.track.length === 0) return false;
-          // Check if at least one track tile exists in grid with this coaster ID
-          const hasValidTrack = coaster.trackTiles.some(tile => {
-            const gridTile = prev.grid[tile.y]?.[tile.x];
-            return gridTile?.coasterTrackId === coaster.id && gridTile?.trackPiece;
-          });
-          return hasValidTrack;
-        });
+        // First, aggressively clean up coasters - recollect track from grid to get current state
+        const cleanedCoasters: Coaster[] = [];
+        for (const coaster of prev.coasters) {
+          // Always recollect from grid to ensure we have current data
+          const { tiles: currentTiles, pieces: currentPieces } = collectCoasterTrack(prev.grid, coaster.id);
+          
+          // If no valid track exists, skip this coaster entirely
+          if (currentTiles.length === 0) continue;
+          
+          // Check if track changed - if so, regenerate trains
+          const trackChanged = currentTiles.length !== coaster.trackTiles.length ||
+            currentTiles.some((t, i) => t.x !== coaster.trackTiles[i]?.x || t.y !== coaster.trackTiles[i]?.y);
+          
+          if (trackChanged) {
+            // Track changed - regenerate everything
+            const stationTile = findStationTile(prev.grid, currentTiles, prev.gridSize) || currentTiles[0];
+            const stationIdx = currentTiles.findIndex(t => t.x === stationTile.x && t.y === stationTile.y);
+            const effectiveStationIdx = stationIdx >= 0 ? stationIdx : 0;
+            
+            const newTrains = createTrainsForCoaster(currentPieces.length, coaster.type).map((train, trainIndex) => {
+              const trainOffset = (trainIndex * currentPieces.length) / Math.max(1, createTrainsForCoaster(currentPieces.length, coaster.type).length);
+              const baseProgress = (effectiveStationIdx + trainOffset) % currentPieces.length;
+              return {
+                ...train,
+                cars: train.cars.map((car, carIndex) => ({
+                  ...car,
+                  trackProgress: (baseProgress + carIndex * 0.18) % currentPieces.length,
+                })),
+              };
+            });
+            
+            cleanedCoasters.push({
+              ...coaster,
+              track: currentPieces,
+              trackTiles: currentTiles,
+              stationTileX: stationTile.x,
+              stationTileY: stationTile.y,
+              trains: newTrains,
+            });
+          } else {
+            cleanedCoasters.push(coaster);
+          }
+        }
         
-        const updatedCoasters = validCoasters.map(coaster => {
+        const updatedCoasters = cleanedCoasters.map(coaster => {
           if (coaster.track.length === 0 || coaster.trains.length === 0) return coaster;
           const trackLength = coaster.track.length;
-          
-          // Validate that trackTiles and track are synchronized
-          if (coaster.trackTiles.length !== trackLength) {
-            // Mismatch - recollect the track to fix
-            const { tiles: fixedTiles, pieces: fixedPieces } = collectCoasterTrack(prev.grid, coaster.id);
-            if (fixedTiles.length > 0) {
-              return {
-                ...coaster,
-                track: fixedPieces,
-                trackTiles: fixedTiles,
-                trains: createTrainsForCoaster(fixedPieces.length, coaster.type),
-              };
-            }
-            return coaster;
-          }
           
           // Only run trains if the track forms a complete loop
           const trackComplete = isTrackComplete(coaster.trackTiles, coaster.track);
@@ -1209,6 +1444,24 @@ export function CoasterProvider({
           const effectiveStationIndex = stationIndex >= 0 ? stationIndex : 0;
           const stationRange = { min: effectiveStationIndex, max: effectiveStationIndex + 1.5 }; // Train is "at station" if lead car is in this range
           
+          // Helper function to check if a position is within the station range (handles wrap-around)
+          const isPositionAtStation = (progress: number): boolean => {
+            const normalizedProgress = ((progress % trackLength) + trackLength) % trackLength;
+            // Check if within range directly
+            if (normalizedProgress >= stationRange.min && normalizedProgress <= stationRange.max) {
+              return true;
+            }
+            // Handle wrap-around case: station spans across track boundary (e.g., station at index 0)
+            if (stationRange.min < 2) {
+              // Check if we're at the end of the track, close enough to wrap to station
+              const distanceToStationViaWrap = trackLength - normalizedProgress + stationRange.min;
+              if (distanceToStationViaWrap <= 0.5 && distanceToStationViaWrap >= 0) {
+                return true;
+              }
+            }
+            return false;
+          };
+          
           const updatedTrains = coaster.trains.map((train, trainIndex) => {
             let { state, stateTimer, cars } = train;
             stateTimer -= deltaTime;
@@ -1232,13 +1485,13 @@ export function CoasterProvider({
                 velocity: 0,
               }));
               state = 'loading';
-              stateTimer = 8;
+              stateTimer = 5 + Math.random() * 3; // 5-8 second stop at station
             }
             
             // Get lead car's position
             const leadCar = cars[0];
             const leadProgress = leadCar.trackProgress % trackLength;
-            const isAtStation = leadProgress >= stationRange.min && leadProgress <= stationRange.max;
+            const isAtStation = isPositionAtStation(leadProgress);
             
             // Check for other trains ahead (collision avoidance)
             const hasTrainAhead = coaster.trains.some((otherTrain, idx) => {
@@ -1296,8 +1549,9 @@ export function CoasterProvider({
                   state = 'running';
                   stateTimer = 0;
                 }
-                // Slow acceleration
-                const baseDispatchVelocity = 0.02 + (1 - stateTimer / 2) * 0.04;
+                // Slow acceleration - boost velocity at higher game speeds for visual feedback
+                const speedBoostDispatch = [1, 1, 1.5, 2.0][prev.speed];
+                const baseDispatchVelocity = (0.02 + (1 - stateTimer / 2) * 0.04) * speedBoostDispatch;
                 cars = cars.map(car => {
                   // Check if car is on a loop - slow down on loops
                   const carTrackIdx = Math.floor(car.trackProgress % trackLength);
@@ -1322,8 +1576,9 @@ export function CoasterProvider({
                   state = 'braking';
                   stateTimer = 0;
                 } else {
-                  // Normal running speed
-                  const baseRunVelocity = hasTrainAhead ? 0.02 : 0.06;
+                  // Normal running speed - boost velocity at higher game speeds for visual feedback
+                  const speedBoostRun = [1, 1, 1.5, 2.0][prev.speed];
+                  const baseRunVelocity = (hasTrainAhead ? 0.02 : 0.06) * speedBoostRun;
                   cars = cars.map(car => {
                     // Check if car is on a loop - loops are much longer so slow down
                     const carTrackIdx = Math.floor(car.trackProgress % trackLength);
@@ -1342,14 +1597,15 @@ export function CoasterProvider({
                 break;
                 
               case 'braking':
-                // Slow down approaching station
-                const baseBrakeVelocity = hasTrainAhead ? 0.01 : 0.03;
+                // Slow down approaching station - boost velocity at higher game speeds for visual feedback
+                const speedBoostBrake = [1, 1, 1.5, 2.0][prev.speed];
+                const baseBrakeVelocity = (hasTrainAhead ? 0.01 : 0.03) * speedBoostBrake;
                 const leadProgressNow = cars[0].trackProgress % trackLength;
-                const atStation = leadProgressNow >= stationRange.min && leadProgressNow <= stationRange.max;
+                const atStation = isPositionAtStation(leadProgressNow);
                 
                 if (atStation && !hasTrainAhead) {
                   state = 'loading';
-                  stateTimer = 6 + Math.random() * 4; // 6-10 seconds loading
+                  stateTimer = 5 + Math.random() * 3; // 5-8 seconds stop at station for loading
                   // Snap to station position (use actual station index, not always 0)
                   cars = cars.map((car, idx) => ({
                     ...car,
@@ -1452,6 +1708,7 @@ export function CoasterProvider({
           day,
           month,
           year,
+          weather: newWeather,
           guests,
           coasters: updatedCoasters,
           stats: {
@@ -1497,15 +1754,38 @@ export function CoasterProvider({
       const newGrid = prev.grid.map(row => row.map(tile => ({ ...tile })));
       const tile = newGrid[y][x];
       
-      // Don't build on water (except for some specific things)
-      if (tile.terrain === 'water') return prev;
-      
       // Get tool info for cost
       const toolInfo = TOOL_INFO[tool];
       if (!toolInfo) return prev;
       
       // Check if we can afford it
       if (prev.finances.cash < toolInfo.cost) return prev;
+      
+      // Handle water terraform - turn land into water
+      if (tool === 'zone_water') {
+        // Already water - do nothing
+        if (tile.terrain === 'water') return prev;
+        // Don't terraform if there's a building/path/track
+        if (tile.building.type !== 'empty' && tile.building.type !== 'grass') return prev;
+        if (tile.path || tile.queue || tile.hasCoasterTrack) return prev;
+        
+        tile.terrain = 'water';
+        tile.building = { ...createEmptyBuilding(), type: 'water' };
+        return { ...prev, grid: newGrid, finances: { ...prev.finances, cash: prev.finances.cash - toolInfo.cost } };
+      }
+      
+      // Handle land terraform - turn water into land
+      if (tool === 'zone_land') {
+        // Only works on water
+        if (tile.terrain !== 'water') return prev;
+        
+        tile.terrain = 'grass';
+        tile.building = { ...createEmptyBuilding(), type: 'grass' };
+        return { ...prev, grid: newGrid, finances: { ...prev.finances, cash: prev.finances.cash - toolInfo.cost } };
+      }
+      
+      // Don't build on water (except for some specific things)
+      if (tile.terrain === 'water') return prev;
       
       // Handle path placement
       if (tool === 'path') {
@@ -1862,6 +2142,20 @@ export function CoasterProvider({
         // Collect ALL track tiles for this coaster from the grid (not just building path)
         const { tiles: trackTiles, pieces: trackPieces } = collectCoasterTrack(newGrid, coasterId);
         
+        // IMPORTANT: Unify coaster IDs when connecting separate tracks
+        // collectConnectedTrack follows physical connections regardless of coasterTrackId,
+        // so the collected tiles may have different IDs. We need to:
+        // 1. Unify all tiles in the connected component to use our coasterId
+        // 2. Track which other coaster IDs were absorbed so we can remove their coasters
+        const absorbedCoasterIds = new Set<string>();
+        for (const { x: tx, y: ty } of trackTiles) {
+          const gridTile = newGrid[ty][tx];
+          if (gridTile.coasterTrackId && gridTile.coasterTrackId !== coasterId) {
+            absorbedCoasterIds.add(gridTile.coasterTrackId);
+            gridTile.coasterTrackId = coasterId;
+          }
+        }
+        
         // Find the best station tile (one with adjacent queue or station building)
         const stationTile = findStationTile(newGrid, trackTiles, prev.gridSize) || trackTiles[0] || { x, y };
         
@@ -1903,9 +2197,12 @@ export function CoasterProvider({
           trains,
         };
         
-        const updatedCoasters = [...prev.coasters];
-        if (coasterIndex >= 0) {
-          updatedCoasters[coasterIndex] = coaster;
+        // Remove absorbed coasters (those whose tracks were merged into this one)
+        // and add/update our coaster
+        let updatedCoasters = prev.coasters.filter(c => !absorbedCoasterIds.has(c.id));
+        const existingIdx = updatedCoasters.findIndex(c => c.id === coasterId);
+        if (existingIdx >= 0) {
+          updatedCoasters[existingIdx] = coaster;
         } else {
           updatedCoasters.push(coaster);
         }
@@ -2227,11 +2524,55 @@ export function CoasterProvider({
         : buildingEntry;
       
       if (buildingType) {
-        tile.building = { 
-          ...createEmptyBuilding(), 
-          type: buildingType,
-          constructionProgress: 100,
-        };
+        // Check if this is a multi-tile building
+        const buildingSize = toolInfo.size ?? { width: 1, height: 1 };
+        
+        // Validate all tiles in the footprint
+        for (let dy = 0; dy < buildingSize.height; dy++) {
+          for (let dx = 0; dx < buildingSize.width; dx++) {
+            const checkX = x + dx;
+            const checkY = y + dy;
+            
+            // Check bounds
+            if (checkX >= prev.gridSize || checkY >= prev.gridSize) {
+              return prev; // Can't place here
+            }
+            
+            const checkTile = newGrid[checkY][checkX];
+            
+            // Check if tile is buildable (not water, not already built on)
+            if (checkTile.terrain === 'water') return prev;
+            if (checkTile.building.type !== 'empty' && checkTile.building.type !== 'grass') return prev;
+            if (checkTile.path || checkTile.queue || checkTile.hasCoasterTrack) return prev;
+          }
+        }
+        
+        // Place the building on all footprint tiles
+        for (let dy = 0; dy < buildingSize.height; dy++) {
+          for (let dx = 0; dx < buildingSize.width; dx++) {
+            const placeX = x + dx;
+            const placeY = y + dy;
+            const placeTile = newGrid[placeY][placeX];
+            
+            if (dx === 0 && dy === 0) {
+              // Origin tile - full building
+              placeTile.building = { 
+                ...createEmptyBuilding(), 
+                type: buildingType,
+                constructionProgress: 100,
+              };
+            } else {
+              // Non-origin tile - mark as part of building footprint
+              // Use 'empty' type but set a special marker in the building
+              placeTile.building = { 
+                ...createEmptyBuilding(), 
+                type: `${buildingType}_footprint` as BuildingType,
+                constructionProgress: 100,
+              };
+            }
+          }
+        }
+        
         return { ...prev, grid: newGrid, finances: { ...prev.finances, cash: prev.finances.cash - toolInfo.cost } };
       }
       
@@ -2243,6 +2584,38 @@ export function CoasterProvider({
     setState(prev => {
       const newGrid = prev.grid.map(row => row.map(tile => ({ ...tile })));
       const tile = newGrid[y][x];
+      
+      // Check if we're bulldozing a multi-tile building (origin or footprint tile)
+      const buildingType = tile.building?.type;
+      if (buildingType && (buildingType.endsWith('_footprint') || TOOL_INFO[buildingType as Tool]?.size)) {
+        // Find the origin tile and clear all footprint tiles
+        const originType = buildingType.endsWith('_footprint') 
+          ? buildingType.replace('_footprint', '') 
+          : buildingType;
+        const toolInfo = TOOL_INFO[originType as Tool];
+        const buildingSize = toolInfo?.size ?? { width: 1, height: 1 };
+        
+        // Find the origin by searching nearby tiles
+        for (let searchY = Math.max(0, y - buildingSize.height + 1); searchY <= y; searchY++) {
+          for (let searchX = Math.max(0, x - buildingSize.width + 1); searchX <= x; searchX++) {
+            const searchTile = newGrid[searchY]?.[searchX];
+            if (searchTile?.building?.type === originType) {
+              // Found the origin - clear all footprint tiles
+              for (let dy = 0; dy < buildingSize.height; dy++) {
+                for (let dx = 0; dx < buildingSize.width; dx++) {
+                  const clearX = searchX + dx;
+                  const clearY = searchY + dy;
+                  if (clearX < prev.gridSize && clearY < prev.gridSize) {
+                    const clearTile = newGrid[clearY][clearX];
+                    clearTile.building = createEmptyBuilding();
+                  }
+                }
+              }
+              return { ...prev, grid: newGrid };
+            }
+          }
+        }
+      }
       
       // Check if we're bulldozing track and get the coaster ID
       const hadTrack = tile.hasCoasterTrack || tile.trackPiece;
@@ -2262,41 +2635,48 @@ export function CoasterProvider({
       if (hadTrack && coasterId) {
         // Recollect all track for this coaster from the updated grid
         const { tiles: trackTiles, pieces: trackPieces } = collectCoasterTrack(newGrid, coasterId);
-        
-        updatedCoasters = prev.coasters.map(coaster => {
-          if (coaster.id === coasterId) {
-            const oldTrackLength = coaster.track.length;
-            const newTrackLength = trackPieces.length;
-            
-            // Find the best station tile for the updated track
-            const stationTile = findStationTile(newGrid, trackTiles, prev.gridSize) || trackTiles[0];
-            const stationIdx = stationTile 
-              ? trackTiles.findIndex(t => t.x === stationTile.x && t.y === stationTile.y)
-              : 0;
-            const effectiveStationIdx = stationIdx >= 0 ? stationIdx : 0;
-            
-            // Normalize trains to prevent cars from separating after track edit
-            let trains = coaster.trains;
-            if (newTrackLength > 0 && oldTrackLength !== newTrackLength) {
-              trains = normalizeTrainsForTrackChange(
-                coaster.trains,
-                oldTrackLength,
-                newTrackLength,
-                effectiveStationIdx
-              );
+
+        // If no track tiles remain, remove the coaster entirely
+        if (trackTiles.length === 0) {
+          updatedCoasters = prev.coasters.filter(c => c.id !== coasterId);
+        } else {
+          updatedCoasters = prev.coasters.map(coaster => {
+            if (coaster.id === coasterId) {
+              const oldTrackLength = coaster.track.length;
+              const newTrackLength = trackPieces.length;
+
+              // Find the best station tile for the updated track
+              const stationTile = findStationTile(newGrid, trackTiles, prev.gridSize) || trackTiles[0];
+              const stationIdx = stationTile
+                ? trackTiles.findIndex(t => t.x === stationTile.x && t.y === stationTile.y)
+                : 0;
+              const effectiveStationIdx = stationIdx >= 0 ? stationIdx : 0;
+
+              // Always regenerate trains when track changes to prevent orphaned cars
+              const trains = createTrainsForCoaster(newTrackLength, coaster.type).map((train, trainIndex) => {
+                const trainOffset = (trainIndex * newTrackLength) / Math.max(1, createTrainsForCoaster(newTrackLength, coaster.type).length);
+                const baseProgress = (effectiveStationIdx + trainOffset) % newTrackLength;
+                return {
+                  ...train,
+                  cars: train.cars.map((car, carIndex) => ({
+                    ...car,
+                    trackProgress: (baseProgress + carIndex * 0.18) % newTrackLength,
+                  })),
+                };
+              });
+
+              return {
+                ...coaster,
+                track: trackPieces,
+                trackTiles,
+                stationTileX: stationTile?.x ?? coaster.stationTileX,
+                stationTileY: stationTile?.y ?? coaster.stationTileY,
+                trains,
+              };
             }
-            
-            return {
-              ...coaster,
-              track: trackPieces,
-              trackTiles,
-              stationTileX: stationTile?.x ?? coaster.stationTileX,
-              stationTileY: stationTile?.y ?? coaster.stationTileY,
-              trains,
-            };
-          }
-          return coaster;
-        });
+            return coaster;
+          });
+        }
       }
       
       // If track was demolished, reset the coaster building state
@@ -2542,6 +2922,35 @@ export function CoasterProvider({
       // Collect ALL track tiles for this coaster from the grid (not just building path)
       const { tiles: trackTiles, pieces: trackPieces } = collectCoasterTrack(newGrid, coasterId);
       
+      // IMPORTANT: Unify coaster IDs when connecting separate tracks
+      // collectConnectedTrack follows physical connections regardless of coasterTrackId,
+      // so the collected tiles may have different IDs. We need to:
+      // 1. Unify all tiles in the connected component to use our coasterId
+      // 2. Track which other coaster IDs were absorbed so we can remove their coasters
+      const absorbedCoasterIds = new Set<string>();
+      for (const { x: tx, y: ty } of trackTiles) {
+        const tile = newGrid[ty][tx];
+        if (tile.coasterTrackId && tile.coasterTrackId !== coasterId) {
+          absorbedCoasterIds.add(tile.coasterTrackId);
+          tile.coasterTrackId = coasterId;
+        }
+      }
+      
+      // Clean up any disconnected fragments that have this coasterTrackId but aren't
+      // part of the connected component - these would otherwise render as orphan tracks
+      const connectedTileSet = new Set(trackTiles.map(t => `${t.x},${t.y}`));
+      for (let y = 0; y < prev.gridSize; y++) {
+        for (let x = 0; x < prev.gridSize; x++) {
+          const tile = newGrid[y][x];
+          if (tile.coasterTrackId === coasterId && !connectedTileSet.has(`${x},${y}`)) {
+            // This tile has the coaster ID but isn't connected - clean it up
+            tile.trackPiece = null;
+            tile.hasCoasterTrack = false;
+            tile.coasterTrackId = null;
+          }
+        }
+      }
+      
       // Find the best station tile (one with adjacent queue or station building)
       const stationTile = findStationTile(newGrid, trackTiles, prev.gridSize) || trackTiles[0] || tiles[0];
       
@@ -2583,9 +2992,12 @@ export function CoasterProvider({
         trains,
       };
       
-      const updatedCoasters = [...prev.coasters];
-      if (coasterIndex >= 0) {
-        updatedCoasters[coasterIndex] = coaster;
+      // Remove absorbed coasters (those whose tracks were merged into this one)
+      // and add/update our coaster
+      let updatedCoasters = prev.coasters.filter(c => !absorbedCoasterIds.has(c.id));
+      const existingIdx = updatedCoasters.findIndex(c => c.id === coasterId);
+      if (existingIdx >= 0) {
+        updatedCoasters[existingIdx] = coaster;
       } else {
         updatedCoasters.push(coaster);
       }
