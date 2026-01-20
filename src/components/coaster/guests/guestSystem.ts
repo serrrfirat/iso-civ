@@ -95,6 +95,7 @@ export function createGuest(entranceX: number, entranceY: number, gridSize: numb
     // Approach state
     approachProgress: 0,
     initialActivityTime: 0,
+    activityStartTime: 0,
     
     // Needs (0-100)
     hunger: 20 + Math.random() * 30,
@@ -170,23 +171,61 @@ export function drawGuest(
   let y = startY + (endY - startY) * guest.progress + TILE_HEIGHT / 2;
   
   // When eating or shopping, interpolate from path tile toward the building
+  // Use real time for smooth animation independent of game tick rate
   if ((guest.state === 'eating' || guest.state === 'shopping') && guest.targetBuildingId) {
-    const [buildingX, buildingY] = guest.targetBuildingId.split(',').map(Number);
-    const { x: pathX, y: pathY } = gridToScreen(guest.tileX, guest.tileY);
-    const { x: buildingScreenX, y: buildingScreenY } = gridToScreen(buildingX, buildingY);
-    
-    // Use the tracked approachProgress (0 = on path, 1 = at building center)
-    const maxApproachDistance = 1.0; // Walk fully into the building
-    const approachAmount = guest.approachProgress * maxApproachDistance;
-    
-    // Interpolate from path center toward building center
-    const pathCenterX = pathX + TILE_WIDTH / 2;
-    const pathCenterY = pathY + TILE_HEIGHT / 2;
-    const buildingCenterX = buildingScreenX + TILE_WIDTH / 2;
-    const buildingCenterY = buildingScreenY + TILE_HEIGHT / 2;
-    
-    x = pathCenterX + (buildingCenterX - pathCenterX) * approachAmount;
-    y = pathCenterY + (buildingCenterY - pathCenterY) * approachAmount;
+    const parts = guest.targetBuildingId.split(',');
+    if (parts.length === 2) {
+      const buildingX = parseInt(parts[0], 10);
+      const buildingY = parseInt(parts[1], 10);
+      
+      if (!isNaN(buildingX) && !isNaN(buildingY)) {
+        const { x: pathX, y: pathY } = gridToScreen(guest.tileX, guest.tileY);
+        const { x: buildingScreenX, y: buildingScreenY } = gridToScreen(buildingX, buildingY);
+        
+        // Path center and building center
+        const pathCenterX = pathX + TILE_WIDTH / 2;
+        const pathCenterY = pathY + TILE_HEIGHT / 2;
+        const buildingCenterX = buildingScreenX + TILE_WIDTH / 2;
+        const buildingCenterY = buildingScreenY + TILE_HEIGHT / 2;
+        
+        // Calculate real-time animation progress
+        // Walk animation takes 800ms to walk in, 800ms to walk out
+        const walkDurationMs = 800;
+        const startTime = guest.activityStartTime || Date.now();
+        const elapsedMs = Date.now() - startTime;
+        
+        // Total activity duration in real time (approximate based on game speed)
+        // At normal speed: 1 game minute = 100ms, so 10 game minutes = 1000ms
+        const totalDurationMs = (guest.initialActivityTime || 10) * 100;
+        const remainingMs = totalDurationMs - elapsedMs;
+        
+        let progress: number;
+        if (elapsedMs < walkDurationMs) {
+          // Walking in (0 -> 1)
+          progress = elapsedMs / walkDurationMs;
+        } else if (remainingMs < walkDurationMs && remainingMs > 0) {
+          // Walking out (1 -> 0)
+          progress = remainingMs / walkDurationMs;
+        } else if (remainingMs <= 0) {
+          // Done - back at path
+          progress = 0;
+        } else {
+          // Inside building
+          progress = 1;
+        }
+        
+        // Clamp and apply easing for smoother movement
+        progress = Math.max(0, Math.min(1, progress));
+        // Ease in-out for more natural movement
+        const easedProgress = progress < 0.5 
+          ? 2 * progress * progress 
+          : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+        
+        // Walk from path center toward building center
+        x = pathCenterX + (buildingCenterX - pathCenterX) * easedProgress;
+        y = pathCenterY + (buildingCenterY - pathCenterY) * easedProgress;
+      }
+    }
   }
   
   // Walking animation
@@ -310,7 +349,12 @@ function isShopBuilding(type: string): boolean {
     type === 'vr_experience' ||
     type === 'photo_booth' ||
     type === 'caricature' ||
-    type === 'face_paint'
+    type === 'face_paint' ||
+    type === 'restroom' ||
+    type === 'first_aid' ||
+    type === 'lockers' ||
+    type === 'stroller_rental' ||
+    type === 'atm'
   );
 }
 
@@ -446,22 +490,33 @@ export function updateGuest(
   if (updatedGuest.state === 'eating' || updatedGuest.state === 'shopping') {
     updatedGuest.queueTimer -= deltaTime;
     
-    // Update approach progress - walk in at start, walk out at end
-    if (updatedGuest.initialActivityTime > 0) {
-      const elapsed = updatedGuest.initialActivityTime - updatedGuest.queueTimer;
-      const remaining = updatedGuest.queueTimer;
-      const approachTime = 1.5; // Time to walk in/out in seconds
-      
-      if (elapsed < approachTime) {
-        // Walking in
-        updatedGuest.approachProgress = Math.min(1, elapsed / approachTime);
-      } else if (remaining < approachTime) {
-        // Walking out
-        updatedGuest.approachProgress = Math.max(0, remaining / approachTime);
-      } else {
-        // In the building
-        updatedGuest.approachProgress = 1;
-      }
+    // Initialize fields if not set
+    if (updatedGuest.approachProgress === undefined) {
+      updatedGuest.approachProgress = 0;
+    }
+    if (updatedGuest.initialActivityTime === undefined || updatedGuest.initialActivityTime <= 0) {
+      updatedGuest.initialActivityTime = updatedGuest.queueTimer + 1;
+    }
+    
+    // Proportional walk animation: first 15% of time walking in, last 15% walking out
+    const totalTime = updatedGuest.initialActivityTime;
+    const elapsed = totalTime - updatedGuest.queueTimer;
+    const remaining = updatedGuest.queueTimer;
+    const walkFraction = 0.15; // 15% of activity time for walk in/out
+    const walkTime = Math.max(3, totalTime * walkFraction); // At least 3 game minutes
+    
+    if (elapsed < walkTime) {
+      // Walking in (0 -> 1)
+      updatedGuest.approachProgress = elapsed / walkTime;
+    } else if (remaining < walkTime && remaining > 0) {
+      // Walking out (1 -> 0)
+      updatedGuest.approachProgress = remaining / walkTime;
+    } else if (remaining <= 0) {
+      // Done - back at path
+      updatedGuest.approachProgress = 0;
+    } else {
+      // Inside building
+      updatedGuest.approachProgress = 1;
     }
     
     if (updatedGuest.queueTimer <= 0) {
@@ -560,6 +615,7 @@ export function updateGuest(
             updatedGuest.queueTimer = activityTime;
             updatedGuest.initialActivityTime = activityTime;
             updatedGuest.approachProgress = 0;
+            updatedGuest.activityStartTime = Date.now();
             updatedGuest.path = [];
             updatedGuest.pathIndex = 0;
             updatedGuest.lastState = previousState;
@@ -571,6 +627,7 @@ export function updateGuest(
             updatedGuest.queueTimer = activityTime;
             updatedGuest.initialActivityTime = activityTime;
             updatedGuest.approachProgress = 0;
+            updatedGuest.activityStartTime = Date.now();
             updatedGuest.path = [];
             updatedGuest.pathIndex = 0;
             updatedGuest.lastState = previousState;
@@ -635,7 +692,7 @@ export function spawnGuests(
   const spawnChance = baseRate + ratingBonus + peakHourBonus;
   
   // Cap maximum guests
-  const maxGuests = 500;
+  const maxGuests = 5000;
   if (currentGuests.length >= maxGuests) return [];
   
   const newGuests: Guest[] = [];

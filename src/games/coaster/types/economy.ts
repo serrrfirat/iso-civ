@@ -256,6 +256,7 @@ export interface Guest {
   // Approach state (for walking into shops/food stands)
   approachProgress: number; // 0 = on path, 1 = at building
   initialActivityTime: number; // Total time for eating/shopping (to calculate approach progress)
+  activityStartTime: number; // Real-time timestamp when activity started (for smooth animation)
   
   // Needs (0-100, higher = more urgent)
   hunger: number;

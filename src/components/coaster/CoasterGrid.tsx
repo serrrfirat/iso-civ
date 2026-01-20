@@ -732,8 +732,8 @@ function drawPathTile(
   const pathW = w * pathWidthRatio;
   const halfWidth = pathW * 0.5;
 
-  // Edge stop distance (how close to tile edge the path extends)
-  const edgeStop = 0.98;
+  // Edge stop distance (paths extend fully to tile edge)
+  const edgeStop = 1.0;
 
   // Edge midpoints (matching road system exactly)
   const northEdgeX = x + w * 0.25;
@@ -815,11 +815,7 @@ function drawPathTile(
   }
 
   // Draw sidewalk connections to adjacent visitable buildings (shops, food stands, etc.)
-  // These are narrower connector paths that go from the main path to the building entrance
-  const connectorWidthRatio = 0.10; // Slightly narrower than main path
-  const connectorHalfWidth = w * connectorWidthRatio * 0.5;
-  
-  // Helper to draw a connector sidewalk to a building
+  // Use the same width and style as regular paths for consistency
   const drawBuildingConnector = (
     dirDx: number,
     dirDy: number,
@@ -827,30 +823,19 @@ function drawPathTile(
     edgeY: number
   ) => {
     const perp = getPerp(dirDx, dirDy);
+    // Use same stop distance as regular paths for consistency
     const stopX = cx + (edgeX - cx) * edgeStop;
     const stopY = cy + (edgeY - cy) * edgeStop;
     
-    // Draw connector surface
+    // Draw connector surface (same style as main path)
     ctx.fillStyle = PATH_COLORS.surface;
     ctx.beginPath();
-    ctx.moveTo(cx + perp.nx * connectorHalfWidth, cy + perp.ny * connectorHalfWidth);
-    ctx.lineTo(stopX + perp.nx * connectorHalfWidth, stopY + perp.ny * connectorHalfWidth);
-    ctx.lineTo(stopX - perp.nx * connectorHalfWidth, stopY - perp.ny * connectorHalfWidth);
-    ctx.lineTo(cx - perp.nx * connectorHalfWidth, cy - perp.ny * connectorHalfWidth);
+    ctx.moveTo(cx + perp.nx * halfWidth, cy + perp.ny * halfWidth);
+    ctx.lineTo(stopX + perp.nx * halfWidth, stopY + perp.ny * halfWidth);
+    ctx.lineTo(stopX - perp.nx * halfWidth, stopY - perp.ny * halfWidth);
+    ctx.lineTo(cx - perp.nx * halfWidth, cy - perp.ny * halfWidth);
     ctx.closePath();
     ctx.fill();
-    
-    // Draw connector edges
-    ctx.strokeStyle = PATH_COLORS.edge;
-    ctx.lineWidth = 0.6;
-    ctx.beginPath();
-    ctx.moveTo(cx + perp.nx * connectorHalfWidth, cy + perp.ny * connectorHalfWidth);
-    ctx.lineTo(stopX + perp.nx * connectorHalfWidth, stopY + perp.ny * connectorHalfWidth);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx - perp.nx * connectorHalfWidth, cy - perp.ny * connectorHalfWidth);
-    ctx.lineTo(stopX - perp.nx * connectorHalfWidth, stopY - perp.ny * connectorHalfWidth);
-    ctx.stroke();
   };
 
   // Draw connectors to adjacent buildings (only if there's no path already in that direction)
