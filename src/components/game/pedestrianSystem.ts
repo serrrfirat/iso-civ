@@ -744,6 +744,79 @@ function findNearbyPedestrianFast(
 }
 
 /**
+ * Spawn a pedestrian inside a shop/enterable building
+ * They will be partway through their shopping/activity time
+ */
+export function spawnPedestrianInsideBuilding(
+  id: number,
+  buildingX: number,
+  buildingY: number,
+  grid: Tile[][],
+  gridSize: number,
+  homeX: number,
+  homeY: number
+): Pedestrian | null {
+  const tile = grid[buildingY]?.[buildingX];
+  if (!tile) return null;
+  
+  // Verify this is an enterable building
+  if (!canPedestrianEnterBuilding(tile.building.type)) return null;
+  
+  // Find nearest road to spawn on when they exit
+  const roadTile = findNearestRoadToBuilding(grid, gridSize, buildingX, buildingY);
+  if (!roadTile) return null;
+  
+  // Find path home (for when they're done)
+  const path = findPathOnRoads(grid, gridSize, roadTile.x, roadTile.y, homeX, homeY);
+  if (!path || path.length === 0) return null;
+  
+  const ped = createPedestrian(
+    id,
+    homeX,
+    homeY,
+    buildingX,
+    buildingY,
+    getDestTypeForBuilding(tile.building.type),
+    path,
+    0,
+    'south'
+  );
+  
+  // Start already inside the building
+  ped.state = 'inside_building';
+  ped.buildingEntryProgress = 1; // Fully inside
+  ped.activity = getActivityForBuilding(tile.building.type);
+  ped.activityProgress = Math.random() * 0.6; // Already partway through
+  ped.activityDuration = PEDESTRIAN_BUILDING_MIN_TIME +
+    Math.random() * (PEDESTRIAN_BUILDING_MAX_TIME - PEDESTRIAN_BUILDING_MIN_TIME);
+  
+  // Position at the building (for when they exit)
+  ped.tileX = roadTile.x;
+  ped.tileY = roadTile.y;
+  
+  return ped;
+}
+
+/**
+ * Get destination type for a building type
+ */
+function getDestTypeForBuilding(buildingType: BuildingType): PedestrianDestType {
+  if (buildingType === 'school' || buildingType === 'university') {
+    return 'school';
+  }
+  if (buildingType === 'shop_small' || buildingType === 'shop_medium' || 
+      buildingType === 'mall' || buildingType === 'office_low' || 
+      buildingType === 'office_high') {
+    return 'commercial';
+  }
+  if (buildingType === 'factory_small' || buildingType === 'factory_medium' || 
+      buildingType === 'factory_large' || buildingType === 'warehouse') {
+    return 'industrial';
+  }
+  return 'home';
+}
+
+/**
  * Spawn a pedestrian that exits from a building
  */
 export function spawnPedestrianFromBuilding(

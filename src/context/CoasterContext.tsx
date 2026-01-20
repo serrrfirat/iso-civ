@@ -270,15 +270,52 @@ function normalizeLoadedState(state: GameState): GameState {
     }))
   );
 
+  // Recollect track tiles and pieces from the grid to fix any incorrect track order
+  // This ensures cars travel in the correct direction through all track pieces
+  const normalizedCoasters = state.coasters.map(coaster => {
+    // Collect the track from the grid using the improved algorithm
+    const { tiles: collectedTiles, pieces: collectedPieces } = collectCoasterTrack(normalizedGrid, coaster.id);
+    
+    // If we couldn't collect any tiles, fall back to existing data
+    if (collectedTiles.length === 0) {
+      return {
+        ...coaster,
+        trackTiles: coaster.trackTiles ?? [],
+        trains: createTrainsForCoaster(coaster.track.length, coaster.type),
+      };
+    }
+    
+    // Find station tile (with adjacent queue or station building)
+    const stationTile = findStationTile(normalizedGrid, collectedTiles, state.gridSize) || collectedTiles[0];
+    const stationIdx = collectedTiles.findIndex(t => t.x === stationTile.x && t.y === stationTile.y);
+    const effectiveStationIdx = stationIdx >= 0 ? stationIdx : 0;
+    
+    return {
+      ...coaster,
+      track: collectedPieces,
+      trackTiles: collectedTiles,
+      stationTileX: stationTile.x,
+      stationTileY: stationTile.y,
+      // Regenerate trains with proper multi-train configuration and station position
+      trains: createTrainsForCoaster(collectedPieces.length, coaster.type).map((train, trainIndex) => {
+        // Position trains evenly around the track, starting from station
+        const trainOffset = (trainIndex * collectedPieces.length) / Math.max(1, createTrainsForCoaster(collectedPieces.length, coaster.type).length);
+        const baseProgress = (effectiveStationIdx + trainOffset) % collectedPieces.length;
+        return {
+          ...train,
+          cars: train.cars.map((car, carIndex) => ({
+            ...car,
+            trackProgress: (baseProgress + carIndex * 0.18) % collectedPieces.length,
+          })),
+        };
+      }),
+    };
+  });
+
   return {
     ...state,
     grid: normalizedGrid,
-    coasters: state.coasters.map(coaster => ({
-      ...coaster,
-      trackTiles: coaster.trackTiles ?? [],
-      // Regenerate trains with proper multi-train configuration based on track length
-      trains: createTrainsForCoaster(coaster.track.length, coaster.type),
-    })),
+    coasters: normalizedCoasters,
     guests: state.guests.map(guest => ({
       ...guest,
       lastState: guest.lastState ?? guest.state,
@@ -378,6 +415,7 @@ function getDirectionOffset(dir: TrackDirection): { dx: number; dy: number } {
 /**
  * Collect a single connected component of track tiles starting from a given tile.
  * Returns tiles in connected order following track connections.
+ * Uses lenient connection checking to handle legacy tracks with imperfect directions.
  */
 function collectConnectedTrack(
   grid: Tile[][],
@@ -413,6 +451,8 @@ function collectConnectedTrack(
     const key = `${nx},${ny}`;
     
     let found = false;
+    
+    // First priority: tile in our exit direction
     if (!visited.has(key) && nx >= 0 && ny >= 0 && nx < gridSize && ny < gridSize) {
       const nextTile = grid[ny]?.[nx];
       if (nextTile?.trackPiece) {
@@ -421,7 +461,7 @@ function collectConnectedTrack(
       }
     }
     
-    // If primary direction didn't work, try all adjacent unvisited tiles
+    // Fallback: try all adjacent unvisited tiles (for legacy tracks with imperfect directions)
     if (!found) {
       const adjacentOffsets = [
         { dx: 1, dy: 0 }, { dx: -1, dy: 0 },
@@ -1022,6 +1062,33 @@ export function CoasterProvider({
               return distance < 4 && distance > 0; // Within 4 tiles ahead
             });
             
+            // Validate car spacing - if cars have drifted apart, reset them
+            const carSpacing = 0.18;
+            const maxCarDrift = carSpacing * 1.5; // Allow 50% variance before resetting
+            let needsSpacingReset = false;
+            for (let i = 1; i < cars.length; i++) {
+              const prevCar = cars[i - 1];
+              const currCar = cars[i];
+              const expectedDiff = carSpacing;
+              const actualDiff = (currCar.trackProgress - prevCar.trackProgress + trackLength) % trackLength;
+              // If difference is more than half the track, the car wrapped around
+              const normalizedDiff = actualDiff > trackLength / 2 ? trackLength - actualDiff : actualDiff;
+              if (Math.abs(normalizedDiff - expectedDiff) > maxCarDrift) {
+                needsSpacingReset = true;
+                break;
+              }
+            }
+            
+            if (needsSpacingReset) {
+              // Reset cars to proper spacing from lead car
+              const leadProgress = cars[0].trackProgress;
+              cars = cars.map((car, idx) => ({
+                ...car,
+                trackProgress: (leadProgress + idx * carSpacing) % trackLength,
+                velocity: car.velocity,
+              }));
+            }
+            
             // State machine for train operation
             switch (state) {
               case 'loading':
@@ -1030,7 +1097,12 @@ export function CoasterProvider({
                   state = 'dispatching';
                   stateTimer = 2; // 2 second dispatch
                 }
-                // Keep train stationary at station
+                // Keep train stationary at station - maintain proper car positions
+                cars = cars.map((car, idx) => ({
+                  ...car,
+                  trackProgress: (effectiveStationIndex + idx * carSpacing) % trackLength,
+                  velocity: 0,
+                }));
                 break;
                 
               case 'dispatching':
