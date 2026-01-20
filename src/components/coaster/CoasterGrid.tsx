@@ -816,7 +816,7 @@ function drawPathTile(
   drawGrassTile(ctx, x, y, 1);
 
   // Path width ratio (wider than queue lines for visual hierarchy)
-  const pathWidthRatio = 0.20;
+  const pathWidthRatio = 0.18;
   const pathW = w * pathWidthRatio;
   const halfWidth = pathW * 0.5;
 
@@ -843,7 +843,7 @@ function drawPathTile(
   const westDx = (westEdgeX - cx) / Math.hypot(westEdgeX - cx, westEdgeY - cy);
   const westDy = (westEdgeY - cy) / Math.hypot(westEdgeX - cx, westEdgeY - cy);
 
-  // Get perpendicular vector (like road system)
+  // Get perpendicular vector (screen-space)
   const getPerp = (dx: number, dy: number) => ({ nx: -dy, ny: dx });
 
   // Draw path surface
@@ -1063,7 +1063,7 @@ function drawQueueTile(
   const westDx = (westEdgeX - cx) / Math.hypot(westEdgeX - cx, westEdgeY - cy);
   const westDy = (westEdgeY - cy) / Math.hypot(westEdgeX - cx, westEdgeY - cy);
 
-  // Get perpendicular vector
+  // Get perpendicular vector (screen-space)
   const getPerp = (dx: number, dy: number) => ({ nx: -dy, ny: dx });
 
   // Draw queue surface to connected neighbors
@@ -1071,7 +1071,7 @@ function drawQueueTile(
 
   const connectionCount = (north ? 1 : 0) + (east ? 1 : 0) + (south ? 1 : 0) + (west ? 1 : 0);
 
-  // Draw path segments to connected neighbors
+  // Draw queue segments to connected neighbors
   if (north) {
     const stopX = cx + (northEdgeX - cx) * edgeStop;
     const stopY = cy + (northEdgeY - cy) * edgeStop;
