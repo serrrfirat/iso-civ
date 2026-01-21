@@ -727,7 +727,7 @@ export function spawnGuests(
   const spawnChance = baseRate + ratingBonus + peakHourBonus;
   
   // Cap maximum guests
-  const maxGuests = 5000;
+  const maxGuests = 50000;
   if (currentGuests.length >= maxGuests) return [];
   
   const newGuests: Guest[] = [];
