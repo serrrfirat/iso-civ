@@ -335,6 +335,10 @@ function drawWoodenCrossBracing(
   ctx.stroke();
   
   ctx.globalAlpha = 1;
+  
+  // Suppress unused parameter warnings
+  void perpX;
+  void perpY;
 }
 
 // =============================================================================
