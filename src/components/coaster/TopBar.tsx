@@ -3,7 +3,6 @@
 import React from 'react';
 import { useCoaster } from '@/context/CoasterContext';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 
 // =============================================================================
 // SPEED ICONS
@@ -47,13 +46,8 @@ function SuperFastIcon() {
 // =============================================================================
 
 export function TopBar() {
-  const { state, setSpeed, setActivePanel, setParkSettings } = useCoaster();
+  const { state, setSpeed, setActivePanel, addMoney } = useCoaster();
   const { settings, stats, finances, year, month, day, hour, minute, speed } = state;
-  
-  // Calculate demand based on ticket price
-  // At $0, demand is 100%. At $100, demand is roughly 30%. Sweet spot around $30-50.
-  const ticketPrice = settings.entranceFee;
-  const demandPercent = Math.max(5, Math.round(100 * Math.exp(-ticketPrice / 40)));
   
   // Format time - use Math.floor for minute since it can be fractional
   const displayMinute = Math.floor(minute);
@@ -139,53 +133,25 @@ export function TopBar() {
         </div>
       </div>
       
-      {/* Separator */}
-      <div className="w-px h-8 bg-slate-700" />
-      
-      {/* Ticket Price Slider */}
-      <div className="flex items-center gap-3 min-w-[200px]">
-        <div className="flex flex-col items-start">
-          <span className="text-white/90 text-xs font-medium">Ticket Price</span>
-          <span className="text-white/40 text-[10px]">Demand: {demandPercent}%</span>
-        </div>
-        <div className="flex items-center gap-2 flex-1">
-          <Slider
-            value={[ticketPrice]}
-            onValueChange={(value) => setParkSettings({ entranceFee: value[0] })}
-            min={0}
-            max={100}
-            step={5}
-            className="w-24"
-          />
-          <span className="text-green-400 font-medium text-sm min-w-[36px] text-right">${ticketPrice}</span>
-        </div>
-      </div>
-      
       {/* Spacer */}
       <div className="flex-1" />
       
       {/* Panel buttons */}
       <div className="flex items-center gap-2">
         <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => addMoney(500000)}
+          className="text-green-400 hover:text-green-300"
+        >
+          +$500k
+        </Button>
+        <Button
           variant={state.activePanel === 'finances' ? 'default' : 'ghost'}
           size="sm"
           onClick={() => setActivePanel(state.activePanel === 'finances' ? 'none' : 'finances')}
         >
           Finances
-        </Button>
-        <Button
-          variant={state.activePanel === 'guests' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setActivePanel(state.activePanel === 'guests' ? 'none' : 'guests')}
-        >
-          Guests
-        </Button>
-        <Button
-          variant={state.activePanel === 'rides' ? 'default' : 'ghost'}
-          size="sm"
-          onClick={() => setActivePanel(state.activePanel === 'rides' ? 'none' : 'rides')}
-        >
-          Rides
         </Button>
         <Button
           variant={state.activePanel === 'settings' ? 'default' : 'ghost'}

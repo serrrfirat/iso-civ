@@ -2303,7 +2303,11 @@ export function CoasterGrid({
     
     const guestsByTile = new Map<string, typeof state.guests>();
     state.guests.forEach(guest => {
-      const key = `${guest.tileX},${guest.tileY}`;
+      // Use effective tile position for z-ordering:
+      // If progress >= 0.5, guest visually appears on target tile
+      const effectiveX = guest.progress >= 0.5 ? guest.targetTileX : guest.tileX;
+      const effectiveY = guest.progress >= 0.5 ? guest.targetTileY : guest.tileY;
+      const key = `${effectiveX},${effectiveY}`;
       const existing = guestsByTile.get(key);
       if (existing) {
         existing.push(guest);

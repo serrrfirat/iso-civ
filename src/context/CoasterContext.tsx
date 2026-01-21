@@ -241,6 +241,7 @@ interface CoasterContextValue {
   // Park management
   setParkSettings: (settings: Partial<ParkSettings>) => void;
   addMoney: (amount: number) => void;
+  clearGuests: () => void;
   addNotification: (title: string, description: string, icon: Notification['icon']) => void;
   
   // Save/Load
@@ -647,25 +648,6 @@ function calculateCorrectDirection(
     
     // For straights and slopes, direction field = exit/travel direction
     if (piece.direction !== exitDir) {
-      // Check if direction is being flipped 180 degrees (not rotated 90 degrees)
-      const isDirectionFlipped = 
-        (piece.direction === 'north' && exitDir === 'south') ||
-        (piece.direction === 'south' && exitDir === 'north') ||
-        (piece.direction === 'east' && exitDir === 'west') ||
-        (piece.direction === 'west' && exitDir === 'east');
-      
-      // For slopes, if direction is flipped, swap startHeight and endHeight
-      // This ensures the train goes from the correct height to the correct height
-      // based on which edge it enters/exits
-      if (isDirectionFlipped && (type === 'slope_up_small' || type === 'slope_down_small')) {
-        return { 
-          ...piece, 
-          direction: exitDir,
-          startHeight: piece.endHeight,
-          endHeight: piece.startHeight,
-        };
-      }
-      
       return { ...piece, direction: exitDir };
     }
   }
@@ -823,27 +805,29 @@ function collectCoasterTrack(grid: Tile[][], coasterId: string): { tiles: { x: n
   ];
   
   let startTile = coasterTiles[0];
-  let queueDirection: { dx: number; dy: number } | null = null;
   
-  // Look for a tile with adjacent queue and record which direction the queue is
+  // Look for a tile with adjacent queue
   for (const { x, y } of coasterTiles) {
+    let hasAdjacentQueue = false;
     for (const { dx, dy } of adjacentOffsets) {
       const adjX = x + dx;
       const adjY = y + dy;
       if (adjX >= 0 && adjY >= 0 && adjX < gridSize && adjY < gridSize) {
         const adjTile = grid[adjY]?.[adjX];
         if (adjTile?.queue) {
-          startTile = { x, y };
-          queueDirection = { dx, dy };
+          hasAdjacentQueue = true;
           break;
         }
       }
     }
-    if (queueDirection) break;
+    if (hasAdjacentQueue) {
+      startTile = { x, y };
+      break;
+    }
   }
   
   // If no queue found, look for adjacent station building
-  if (!queueDirection) {
+  if (startTile === coasterTiles[0]) {
     for (const { x, y } of coasterTiles) {
       let hasAdjacentStation = false;
       for (const { dx, dy } of adjacentOffsets) {
@@ -865,76 +849,7 @@ function collectCoasterTrack(grid: Tile[][], coasterId: string): { tiles: { x: n
   }
 
   const visited = new Set<string>();
-  const result = collectConnectedTrack(grid, startTile.x, startTile.y, visited);
-  
-  // Check if track needs to be reversed based on slope directions
-  // For slopes, the original piece's direction and heights define "correct" travel direction
-  // If we're traveling through most slopes in the wrong direction, reverse the whole track
-  if (result.tiles.length >= 4) {
-    let slopesCorrect = 0;  // We travel in the direction that matches original piece
-    let slopesReversed = 0; // We travel opposite to original piece direction
-    
-    for (let i = 0; i < result.tiles.length; i++) {
-      const tile = result.tiles[i];
-      const originalPiece = grid[tile.y]?.[tile.x]?.trackPiece;
-      
-      // Only check slope pieces - they have clear directionality
-      if (originalPiece && (originalPiece.type === 'slope_up_small' || originalPiece.type === 'slope_down_small')) {
-        // Get the next tile to determine our travel direction through this piece
-        const nextIdx = (i + 1) % result.tiles.length;
-        if (nextIdx === 0 && i === result.tiles.length - 1) {
-          // Last tile wrapping to first - only valid for closed loops
-          // Skip this check if track might not be a closed loop
-          continue;
-        }
-        const nextTile = result.tiles[nextIdx];
-        const travelDx = nextTile.x - tile.x;
-        const travelDy = nextTile.y - tile.y;
-        
-        // Get the original piece's exit direction (where train SHOULD exit for correct travel)
-        const originalExitDir = getExitDirection(originalPiece);
-        const originalExitOffset = getDirectionOffset(originalExitDir);
-        
-        // Check if we're traveling in the original's intended direction
-        if (travelDx === originalExitOffset.dx && travelDy === originalExitOffset.dy) {
-          slopesCorrect++;
-        } else {
-          slopesReversed++;
-        }
-      }
-    }
-    
-    // If more slopes are reversed than correct, we need to reverse the whole track
-    const needsReverse = slopesReversed > slopesCorrect;
-    
-    if (needsReverse) {
-      // Reverse the track so slopes are traversed correctly
-      // Use the ORIGINAL pieces from the grid and re-correct them for the new direction
-      const reversedTiles = [...result.tiles].reverse();
-      
-      // Get original pieces from grid in reversed order
-      const originalPiecesReversed = reversedTiles.map(tile => {
-        const origPiece = grid[tile.y]?.[tile.x]?.trackPiece;
-        if (!origPiece) throw new Error('Missing track piece');
-        return { ...origPiece }; // Clone to avoid mutation
-      });
-      
-      // Now correct each piece's direction for the new (reversed) travel order
-      const reversedPieces = originalPiecesReversed.map((piece, i) => {
-        const prevTile = i > 0 ? reversedTiles[i - 1] : 
-                         (reversedTiles.length > 1 ? reversedTiles[reversedTiles.length - 1] : null);
-        const currTile = reversedTiles[i];
-        const nextTile = i < reversedTiles.length - 1 ? reversedTiles[i + 1] :
-                         (reversedTiles.length > 1 ? reversedTiles[0] : null);
-        
-        return calculateCorrectDirection(prevTile, currTile, nextTile, piece);
-      });
-      
-      return { tiles: reversedTiles, pieces: reversedPieces };
-    }
-  }
-  
-  return result;
+  return collectConnectedTrack(grid, startTile.x, startTile.y, visited);
 }
 
 /**
@@ -1445,20 +1360,14 @@ export function CoasterProvider({
           return weatheredGuest;
         }); // Don't filter out guests here - let them leave naturally through the exit
         
-        // Spawn guests (affected by weather and ticket price)
+        // Spawn guests (affected by weather)
         const baseSpawnedGuests = spawnGuests(prev.grid, updatedGuests, prev.stats.parkRating, hour);
 
-        // Calculate price-based demand modifier
-        // At $0, demand is 100%. At $100, demand is ~5%. Sweet spot around $20-40.
-        const ticketPrice = prev.settings.payPerRide ? 0 : prev.settings.entranceFee;
-        const priceDemandMultiplier = Math.max(0.05, Math.exp(-ticketPrice / 40));
-        
-        // Apply weather spawn multiplier AND price demand probabilistically
+        // Apply weather spawn multiplier probabilistically
         // Since spawns are typically 0-1 guests, we need to treat the multiplier as a probability
         // e.g., multiplier of 0.85 means 85% chance to keep each spawned guest
-        const combinedSpawnMultiplier = weatherEffects.guestSpawnMultiplier * priceDemandMultiplier;
         const spawnedGuestsRaw = baseSpawnedGuests.filter(() => 
-          Math.random() < combinedSpawnMultiplier
+          Math.random() < weatherEffects.guestSpawnMultiplier
         );
         const entranceFee = prev.settings.payPerRide ? 0 : prev.settings.entranceFee;
         const admissionRevenue = spawnedGuestsRaw.reduce((sum, guest) => sum + Math.min(guest.cash, entranceFee), 0);
@@ -1509,9 +1418,7 @@ export function CoasterProvider({
           }
 
           return nextGuest;
-        }).concat(spawnedGuests)
-          // Filter out guests who have exited the park
-          .filter(guest => guest.state !== 'exited');
+        }).concat(spawnedGuests);
 
         
         const guestsInPark = guests.length;
@@ -3234,7 +3141,14 @@ export function CoasterProvider({
       finances: { ...prev.finances, cash: prev.finances.cash + amount },
     }));
   }, []);
-  
+
+  const clearGuests = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      guests: [],
+    }));
+  }, []);
+
   const addNotification = useCallback((title: string, description: string, icon: Notification['icon']) => {
     const notification: Notification = {
       id: generateUUID(),
@@ -3345,6 +3259,7 @@ export function CoasterProvider({
 
     setParkSettings,
     addMoney,
+    clearGuests,
     addNotification,
     
     saveGame,

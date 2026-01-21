@@ -126,7 +126,7 @@ async function loadExampleState(
 }
 
 function SettingsPanel({ onClose }: { onClose: () => void }) {
-  const { state, setParkSettings, exportState, loadState, setActivePanel, newGame, addMoney } = useCoaster();
+  const { state, setParkSettings, exportState, loadState, setActivePanel, newGame, addMoney, clearGuests } = useCoaster();
   const { settings, gridSize } = state;
   
   const [importValue, setImportValue] = useState('');
@@ -198,6 +198,19 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
                     })
                   }
                 />
+              </div>
+              <div className="flex items-center justify-between py-2">
+                <div>
+                  <div className="text-sm font-medium">Clear All Guests</div>
+                  <p className="text-xs text-muted-foreground">Remove all guests from the park ({state.guests.length} guests)</p>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={clearGuests}
+                >
+                  Clear
+                </Button>
               </div>
             </div>
           </div>
