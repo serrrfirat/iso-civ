@@ -1498,6 +1498,58 @@ function drawSprite(
   return true;
 }
 
+/**
+ * Draw an animated warning indicator for incomplete track ends
+ * Shows a small pulsing warning dot
+ */
+function drawIncompleteTrackWarning(
+  ctx: CanvasRenderingContext2D,
+  screenX: number,
+  screenY: number,
+  tick: number,
+  _coasterName: string
+) {
+  // Pulsing animation based on tick
+  const pulse = Math.sin(tick * 0.15) * 0.5 + 0.5; // 0 to 1
+  const alpha = 0.8 + pulse * 0.2; // Alpha from 0.8 to 1.0
+  
+  // Position at center of the tile
+  const iconX = screenX + TILE_WIDTH / 2;
+  const iconY = screenY + TILE_HEIGHT / 2;
+  
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  
+  // Small outer glow
+  const glowRadius = 8 + pulse * 2;
+  const gradient = ctx.createRadialGradient(iconX, iconY, 2, iconX, iconY, glowRadius);
+  gradient.addColorStop(0, 'rgba(255, 80, 50, 0.7)');
+  gradient.addColorStop(0.6, 'rgba(255, 80, 50, 0.2)');
+  gradient.addColorStop(1, 'rgba(255, 80, 50, 0)');
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(iconX, iconY, glowRadius, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Small warning dot
+  ctx.fillStyle = '#f97316'; // Orange
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(iconX, iconY, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  
+  // Tiny exclamation mark
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 7px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('!', iconX, iconY);
+  
+  ctx.restore();
+}
+
 function drawTrackSegment(
   ctx: CanvasRenderingContext2D,
   trackPiece: Tile['trackPiece'],
@@ -1526,7 +1578,8 @@ function drawTrackSegment(
     const loopHeight = Math.max(3, endHeight + 3);
     // Offset Y for track elevation
     const elevatedY = y - startHeight * HEIGHT_UNIT;
-    drawLoopTrack(ctx, x, elevatedY, direction, loopHeight, effectiveTrackColor, effectiveStrutStyle, coasterCategory, tick);
+    // Pass startHeight as baseHeight so the support column reaches the ground
+    drawLoopTrack(ctx, x, elevatedY, direction, loopHeight, effectiveTrackColor, effectiveStrutStyle, coasterCategory, tick, startHeight);
   } else {
     // Default fallback to straight for unimplemented pieces
     drawStraightTrack(ctx, x, y, direction, startHeight, effectiveTrackColor, effectiveStrutStyle, coasterCategory, tick);
@@ -2010,6 +2063,83 @@ export function CoasterGrid({
     }
     return map;
   }, [coasters]);
+  
+  // Helper functions for track direction calculations (matching CoasterContext.tsx logic)
+  const getExitDirection = useCallback((piece: { type: string; direction: 'north' | 'east' | 'south' | 'west' }): 'north' | 'east' | 'south' | 'west' => {
+    const { type, direction } = piece;
+    
+    if (type === 'turn_right_flat') {
+      const rightTurn: Record<'north' | 'east' | 'south' | 'west', 'north' | 'east' | 'south' | 'west'> = {
+        north: 'east', east: 'south', south: 'west', west: 'north'
+      };
+      return rightTurn[direction];
+    }
+    
+    if (type === 'turn_left_flat') {
+      const leftTurn: Record<'north' | 'east' | 'south' | 'west', 'north' | 'east' | 'south' | 'west'> = {
+        north: 'west', west: 'south', south: 'east', east: 'north'
+      };
+      return leftTurn[direction];
+    }
+    
+    return direction;
+  }, []);
+  
+  const getDirectionOffset = useCallback((dir: 'north' | 'east' | 'south' | 'west'): { dx: number; dy: number } => {
+    const offsets: Record<'north' | 'east' | 'south' | 'west', { dx: number; dy: number }> = {
+      north: { dx: -1, dy: 0 },
+      south: { dx: 1, dy: 0 },
+      east: { dx: 0, dy: -1 },
+      west: { dx: 0, dy: 1 },
+    };
+    return offsets[dir];
+  }, []);
+  
+  // Compute incomplete track endpoints for warning indicators
+  const incompleteTrackEnds = useMemo(() => {
+    const ends: { x: number; y: number; coasterId: string; coasterName: string }[] = [];
+    
+    for (const coaster of coasters) {
+      const { track, trackTiles } = coaster;
+      
+      // Need at least 4 pieces to form a loop
+      if (track.length < 4 || trackTiles.length < 4) {
+        // If there's at least 1 tile, mark the last one as incomplete
+        if (trackTiles.length > 0 && track.length > 0) {
+          const lastTile = trackTiles[trackTiles.length - 1];
+          ends.push({ 
+            x: lastTile.x, 
+            y: lastTile.y, 
+            coasterId: coaster.id,
+            coasterName: coaster.name 
+          });
+        }
+        continue;
+      }
+      
+      // Check if track forms a complete loop
+      const firstTile = trackTiles[0];
+      const lastTile = trackTiles[trackTiles.length - 1];
+      const lastPiece = track[track.length - 1];
+      
+      const exitDir = getExitDirection(lastPiece);
+      const offset = getDirectionOffset(exitDir);
+      const exitX = lastTile.x + offset.dx;
+      const exitY = lastTile.y + offset.dy;
+      
+      // If exit doesn't lead back to first tile, track is incomplete
+      if (exitX !== firstTile.x || exitY !== firstTile.y) {
+        ends.push({ 
+          x: lastTile.x, 
+          y: lastTile.y, 
+          coasterId: coaster.id,
+          coasterName: coaster.name 
+        });
+      }
+    }
+    
+    return ends;
+  }, [coasters, getExitDirection, getDirectionOffset]);
   
   // Check if current tool supports drag-to-draw
   const isTrackDragTool = useMemo(() => TRACK_DRAG_TOOLS.includes(selectedTool), [selectedTool]);
@@ -2514,6 +2644,12 @@ const tile = grid[y][x];
     // Multi-tile building sprites are now drawn inline during the main loop
     // when we reach their "front corner" tile for correct isometric depth ordering
     
+    // Draw incomplete track warnings - show pulsing warning on the open end of incomplete tracks
+    for (const end of incompleteTrackEnds) {
+      const { screenX, screenY } = gridToScreen(end.x, end.y, 0, 0);
+      drawIncompleteTrackWarning(ctx, screenX, screenY, tick, end.coasterName);
+    }
+    
     // Draw hover highlights AFTER all tiles (so they appear on top)
     // Helper to draw an isometric diamond highlight
     const drawHighlight = (sx: number, sy: number, fillColor = 'rgba(251, 191, 36, 0.3)', strokeColor = '#fbbf24') => {
@@ -2556,7 +2692,7 @@ const tile = grid[y][x];
     }
     
     ctx.restore();
-  }, [grid, gridSize, offset, zoom, canvasSize, tick, selectedTile, hoveredTile, selectedTool, spriteSheets, waterImage, state.guests, state.coasters, trackDragPreviewTiles, isTrackDragging, coasterInfoMap]);
+  }, [grid, gridSize, offset, zoom, canvasSize, tick, selectedTile, hoveredTile, selectedTool, spriteSheets, waterImage, state.guests, state.coasters, trackDragPreviewTiles, isTrackDragging, coasterInfoMap, incompleteTrackEnds]);
   
   // Lighting canvas sizing
   useEffect(() => {

@@ -1103,7 +1103,8 @@ export function drawLoopTrack(
   trackColor: string = COLORS.rail,
   strutStyle: StrutStyle = 'metal',
   coasterCategory?: CoasterCategory,
-  _tick: number = 0
+  _tick: number = 0,
+  baseHeight: number = 0  // Height of track above ground (for support calculation)
 ) {
   void coasterCategory; // Category can be used for future loop styling
   const w = TILE_WIDTH;
@@ -1184,9 +1185,10 @@ export function drawLoopTrack(
   const lightColor = isWood ? COLORS.woodLight : COLORS.metalLight;
   const accentColor = isWood ? COLORS.woodAccent : COLORS.metalMain;
   
-  // Support extends from ground (bottom of tile) up past the loop top
-  // Ground is at the bottom edge of the isometric tile
-  const groundY = startY + h; // Bottom of tile (ground level)
+  // Support extends from actual ground level up past the loop top
+  // startY is already adjusted for elevation, so we need to add back the baseHeight offset
+  // to find the true ground level
+  const groundY = startY + h + baseHeight * HEIGHT_UNIT; // Actual ground level
   const supportTopY = tileCenter.y - loopRadius * 2 - 3;
   const supportHeight = groundY - supportTopY;
   const supportWidth = isWood ? 5 : 4;
