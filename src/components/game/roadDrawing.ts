@@ -79,9 +79,9 @@ export function drawRoad(
   const mergeInfo = getMergeInfo(gridX, gridY);
   
   // Calculate base road width based on road type
-  const laneWidthRatio = mergeInfo.type === 'highway' ? 0.16 :
-                        mergeInfo.type === 'avenue' ? 0.15 :
-                        0.14;
+  const laneWidthRatio = mergeInfo.type === 'highway' ? 0.22 :
+                        mergeInfo.type === 'avenue' ? 0.20 :
+                        0.18;
   const roadW = w * laneWidthRatio;
   
   // Sidewalk configuration
@@ -89,8 +89,8 @@ export function drawRoad(
   const sidewalkColor = ROAD_COLORS.SIDEWALK;
   const curbColor = ROAD_COLORS.CURB;
   
-  // Edge stop distance
-  const edgeStop = 0.98;
+  // Edge stop distance - extend past edge (>1.0) to ensure overlap and flush alignment at tile boundaries
+  const edgeStop = 1.15;
   
   // Calculate edge midpoints
   const northEdgeX = x + w * 0.25;
@@ -327,8 +327,8 @@ export function drawRoad(
     ctx.fill();
   }
   
-  // Center intersection
-  const centerSize = roadW * 1.4;
+  // Center intersection - larger size to ensure full coverage at turns
+  const centerSize = roadW * 1.6;
   ctx.beginPath();
   ctx.moveTo(cx, cy - centerSize);
   ctx.lineTo(cx + centerSize, cy);

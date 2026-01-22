@@ -13,6 +13,8 @@ import {
   updatePedestrianState,
   spawnPedestrianAtRecreation,
   spawnPedestrianFromBuilding,
+  spawnPedestrianInsideBuilding,
+  spawnPedestrianApproachingShop,
   findBeachTiles,
   getRandomBeachTile,
   spawnPedestrianAtBeach,
@@ -300,9 +302,22 @@ export function useVehicleSystems(
       
       let dest = destinations[Math.floor(Math.random() * destinations.length)];
       
-      // 40% chance to re-roll and specifically pick a sports/active facility if available
-      // These are rarer in most cities so we boost their selection probability
-      if (Math.random() < 0.4 && dest.type === 'park') {
+      // 35% chance to pick a commercial destination (shop) - boost shopping activity
+      const commercialDests = destinations.filter(d => d.type === 'commercial');
+      if (Math.random() < 0.35 && commercialDests.length > 0) {
+        // Prefer shops over offices for visible shopping
+        const { grid: currentGrid } = worldStateRef.current;
+        const shopDests = commercialDests.filter(d => {
+          const tile = currentGrid[d.y]?.[d.x];
+          const buildingType = tile?.building.type;
+          return buildingType === 'shop_small' || buildingType === 'shop_medium' || buildingType === 'mall';
+        });
+        dest = shopDests.length > 0 
+          ? shopDests[Math.floor(Math.random() * shopDests.length)]
+          : commercialDests[Math.floor(Math.random() * commercialDests.length)];
+      }
+      // 25% chance to re-roll and specifically pick a sports/active facility if available
+      else if (Math.random() < 0.25 && dest.type === 'park') {
         const { grid: currentGrid } = worldStateRef.current;
         const boostedDests = destinations.filter(d => {
           if (d.type !== 'park') return false;
@@ -320,7 +335,15 @@ export function useVehicleSystems(
         return false;
       }
       
-      const startIndex = Math.floor(Math.random() * path.length);
+      // For shop destinations, start closer to destination so we see arrivals more often
+      let startIndex: number;
+      if (dest.type === 'commercial' && path.length > 3) {
+        // Start in the second half of the path (closer to shop)
+        const minStart = Math.floor(path.length * 0.5);
+        startIndex = minStart + Math.floor(Math.random() * (path.length - minStart));
+      } else {
+        startIndex = Math.floor(Math.random() * path.length);
+      }
       const startTile = path[startIndex];
       
       let direction: CarDirection = 'south';
@@ -350,8 +373,8 @@ export function useVehicleSystems(
       return true;
     }
     
-    // 22% - Pedestrian already at a recreation area
-    if (spawnType < 0.87) {
+    // 18% - Pedestrian already at a recreation area
+    if (spawnType < 0.83) {
       const recreationAreas = findRecreationAreasCallback();
       if (recreationAreas.length === 0) return false;
       
@@ -385,7 +408,67 @@ export function useVehicleSystems(
       return false;
     }
     
-    // 15% - Pedestrian exiting from a building
+    // 5% - Pedestrian already inside a shop/building (shopping, working, etc.)
+    if (spawnType < 0.88) {
+      const enterableBuildings = findEnterableBuildingsCallback();
+      if (enterableBuildings.length === 0) return false;
+      
+      // Prefer shops/commercial buildings for more visible shopping activity
+      const shopBuildings = enterableBuildings.filter(b => 
+        b.buildingType === 'shop_small' || b.buildingType === 'shop_medium' || b.buildingType === 'mall'
+      );
+      const buildingList = shopBuildings.length > 0 && Math.random() < 0.7 ? shopBuildings : enterableBuildings;
+      
+      const building = buildingList[Math.floor(Math.random() * buildingList.length)];
+      const home = residentials[Math.floor(Math.random() * residentials.length)];
+      
+      const ped = spawnPedestrianInsideBuilding(
+        pedestrianIdRef.current++,
+        building.x,
+        building.y,
+        currentGrid,
+        currentGridSize,
+        home.x,
+        home.y
+      );
+      
+      if (ped) {
+        pedestriansRef.current.push(ped);
+        return true;
+      }
+      return false;
+    }
+    
+    // 7% - Pedestrian approaching a shop (visible at entrance)
+    if (spawnType < 0.95) {
+      const enterableBuildings = findEnterableBuildingsCallback();
+      const shopBuildings = enterableBuildings.filter(b => 
+        b.buildingType === 'shop_small' || b.buildingType === 'shop_medium' || b.buildingType === 'mall'
+      );
+      
+      if (shopBuildings.length === 0) return false;
+      
+      const shop = shopBuildings[Math.floor(Math.random() * shopBuildings.length)];
+      const home = residentials[Math.floor(Math.random() * residentials.length)];
+      
+      const ped = spawnPedestrianApproachingShop(
+        pedestrianIdRef.current++,
+        shop.x,
+        shop.y,
+        currentGrid,
+        currentGridSize,
+        home.x,
+        home.y
+      );
+      
+      if (ped) {
+        pedestriansRef.current.push(ped);
+        return true;
+      }
+      return false;
+    }
+    
+    // 5% - Pedestrian exiting from a building
     const enterableBuildings = findEnterableBuildingsCallback();
     if (enterableBuildings.length === 0) return false;
     
