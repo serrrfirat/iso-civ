@@ -21,6 +21,8 @@ import { drawBeachOnWater } from '@/components/game/drawing';
 const TRACK_DRAG_TOOLS: Tool[] = [
   'coaster_build',
   'coaster_track',
+  'coaster_slope_up',
+  'coaster_slope_down',
   'path',
   'queue',
   'bulldoze',
