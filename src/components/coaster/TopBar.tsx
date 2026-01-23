@@ -3,6 +3,7 @@
 import React from 'react';
 import { useCoaster } from '@/context/CoasterContext';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 
 // =============================================================================
 // SPEED ICONS
@@ -46,8 +47,12 @@ function SuperFastIcon() {
 // =============================================================================
 
 export function TopBar() {
-  const { state, setSpeed, setActivePanel, addMoney } = useCoaster();
+  const { state, setSpeed, setActivePanel, setParkSettings } = useCoaster();
   const { settings, stats, finances, year, month, day, hour, minute, speed } = state;
+  
+  // Calculate demand based on ticket price
+  const ticketPrice = settings.entranceFee;
+  const demandPercent = Math.max(30, Math.round(100 * Math.exp(-ticketPrice / 80)));
   
   // Format time - use Math.floor for minute since it can be fractional
   const displayMinute = Math.floor(minute);
@@ -133,19 +138,28 @@ export function TopBar() {
         </div>
       </div>
       
+      {/* Separator */}
+      <div className="w-px h-8 bg-slate-700" />
+      
+      {/* Ticket Price Slider - compact */}
+      <div className="flex items-center gap-2">
+        <span className="text-white/70 text-xs">Ticket</span>
+        <Slider
+          value={[ticketPrice]}
+          onValueChange={(value) => setParkSettings({ entranceFee: value[0] })}
+          min={0}
+          max={100}
+          step={5}
+          className="w-16"
+        />
+        <span className="text-green-400 font-medium text-xs min-w-[28px]">${ticketPrice}</span>
+      </div>
+      
       {/* Spacer */}
       <div className="flex-1" />
       
       {/* Panel buttons */}
       <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => addMoney(500000)}
-          className="text-green-400 hover:text-green-300"
-        >
-          +$500k
-        </Button>
         <Button
           variant={state.activePanel === 'finances' ? 'default' : 'ghost'}
           size="sm"
