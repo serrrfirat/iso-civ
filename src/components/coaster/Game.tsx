@@ -15,7 +15,7 @@ interface GameProps {
 }
 
 export default function CoasterGame({ onExit }: GameProps) {
-  const { state, isStateReady, setTool } = useCoaster();
+  const { state, isStateReady, setTool, setSpeed } = useCoaster();
   const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
   const [viewport, setViewport] = useState<{
     offset: { x: number; y: number };
@@ -40,12 +40,17 @@ export default function CoasterGame({ onExit }: GameProps) {
         e.preventDefault();
         setTool('select');
         setSelectedTile(null);
+      } else if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        // Toggle pause/unpause: if paused (speed 0), resume to normal (speed 1)
+        // If running, pause (speed 0)
+        setSpeed(state.speed === 0 ? 1 : 0);
       }
     };
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setTool]);
+  }, [setTool, setSpeed, state.speed]);
   
   if (!isStateReady) {
     return (
