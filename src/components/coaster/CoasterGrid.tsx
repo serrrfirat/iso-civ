@@ -2545,6 +2545,7 @@ export function CoasterGrid({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const isTouchDraggingRef = useRef(false);
   const initialPinchDistanceRef = useRef<number | null>(null);
   const initialZoomRef = useRef(1);
   const lastTouchCenterRef = useRef<{ x: number; y: number } | null>(null);
@@ -3369,6 +3370,7 @@ const tile = grid[y][x];
       const touch = e.touches[0];
       touchStartRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() };
       setDragStart({ x: touch.clientX - offset.x, y: touch.clientY - offset.y });
+      isTouchDraggingRef.current = true;
       setIsDragging(true);
       initialPinchDistanceRef.current = null;
       lastTouchCenterRef.current = null;
@@ -3377,6 +3379,7 @@ const tile = grid[y][x];
       initialPinchDistanceRef.current = distance;
       initialZoomRef.current = zoom;
       lastTouchCenterRef.current = getTouchCenter(e.touches[0], e.touches[1]);
+      isTouchDraggingRef.current = false;
       setIsDragging(false);
     }
   }, [offset, zoom, getTouchDistance, getTouchCenter]);
@@ -3384,7 +3387,7 @@ const tile = grid[y][x];
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
 
-    if (e.touches.length === 1 && isDragging && !initialPinchDistanceRef.current) {
+    if (e.touches.length === 1 && isTouchDraggingRef.current && !initialPinchDistanceRef.current) {
       const touch = e.touches[0];
       setOffset({
         x: touch.clientX - dragStart.x,
@@ -3415,7 +3418,7 @@ const tile = grid[y][x];
         lastTouchCenterRef.current = currentCenter;
       }
     }
-  }, [isDragging, dragStart, zoom, offset, getTouchDistance, getTouchCenter]);
+  }, [dragStart, zoom, offset, getTouchDistance, getTouchCenter]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     const touchStart = touchStartRef.current;
@@ -3454,12 +3457,14 @@ const tile = grid[y][x];
       }
 
       setIsDragging(false);
+      isTouchDraggingRef.current = false;
       touchStartRef.current = null;
       initialPinchDistanceRef.current = null;
       lastTouchCenterRef.current = null;
     } else if (e.touches.length === 1) {
       const touch = e.touches[0];
       setDragStart({ x: touch.clientX - offset.x, y: touch.clientY - offset.y });
+      isTouchDraggingRef.current = true;
       setIsDragging(true);
       initialPinchDistanceRef.current = null;
       lastTouchCenterRef.current = null;
