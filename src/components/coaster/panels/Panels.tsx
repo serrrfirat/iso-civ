@@ -337,6 +337,13 @@ function SettingsPanel({ onClose }: { onClose: () => void }) {
               </Button>
               <Button
                 variant="outline"
+                className="w-full"
+                onClick={() => loadExampleState('example_state_2.json', loadState, setActivePanel)}
+              >
+                Load Example State 2
+              </Button>
+              <Button
+                variant="outline"
                 className="w-full text-green-400 hover:text-green-300"
                 onClick={() => addMoney(500000)}
               >
