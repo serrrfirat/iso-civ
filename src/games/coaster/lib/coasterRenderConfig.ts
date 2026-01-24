@@ -342,8 +342,8 @@ const RIDES_SMALL_SHEET: SpriteSheet = {
     { name: 'ride_bumper_cars', row: 3, col: 0, offsetY: 80, scale: 0.6 }, // 3x2
     { name: 'ride_go_karts', row: 3, col: 1, offsetY: 150, scale: 0.6 }, // 4x3
     { name: 'ride_simulator', row: 3, col: 2, offsetY: 70, scale: 0.55 }, // 2x2
-    { name: 'ride_motion_theater', row: 3, col: 3, offsetY: 80, scale: 0.55 }, // 3x2
-    { name: 'ride_4d_theater', row: 3, col: 4, offsetY: 80, scale: 0.55 }, // 3x2
+    { name: 'ride_motion_theater', row: 3, col: 3, offsetY: 105, scale: 0.55 }, // 3x2
+    { name: 'ride_4d_theater', row: 3, col: 4, offsetY: 105, scale: 0.55 }, // 3x2
     // Row 4: Water rides (2x2 and 3x3)
     { name: 'ride_bumper_boats', row: 4, col: 0, offsetY: 80, scale: 0.52 }, // 3x2
     { name: 'ride_paddle_boats', row: 4, col: 1, offsetY: 80, scale: 0.5 }, // 3x2
@@ -398,7 +398,7 @@ const RIDES_LARGE_SHEET: SpriteSheet = {
     // Row 5: Shows (3x3 large structures) - need offsetY ~100 for 3x3
     { name: 'show_4d', row: 5, col: 0, offsetY: 100, scale: 0.65 },
     { name: 'show_stunt', row: 5, col: 1, offsetY: 150, scale: 0.58 }, // 3x3
-    { name: 'show_dolphin', row: 5, col: 2, offsetY: 190, scale: 0.68 }, // 4x4
+    { name: 'show_dolphin', row: 5, col: 2, offsetY: 215, scale: 0.68 }, // 4x4
     { name: 'show_amphitheater', row: 5, col: 3, offsetY: 220, scale: 0.7 }, // 4x4
     { name: 'show_parade_float', row: 5, col: 4, offsetY: 70, scale: 0.55 }, // 2x2
   ],
