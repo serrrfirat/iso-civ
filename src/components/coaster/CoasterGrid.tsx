@@ -2754,13 +2754,15 @@ export function CoasterGrid({
           const trackTile = coaster.trackTiles[trackIndex];
           if (!trackTile) return;
           
-          // Get the ACTUAL track piece from the grid (not the cached one in coaster.track)
-          // This ensures the car is positioned on the track as it's actually drawn
+          // Validate that the grid tile still belongs to this coaster
           const gridTile = state.grid[trackTile.y]?.[trackTile.x];
           if (!gridTile?.trackPiece || gridTile.coasterTrackId !== coaster.id) return;
           
-          // Use the grid's track piece for positioning to match the rendered track
-          const actualTrackPiece = gridTile.trackPiece;
+          // Use the coaster's track piece (which has the corrected direction based on flow)
+          // rather than the grid's track piece (which may have the original placement direction).
+          // This ensures the train moves in the correct direction within each tile.
+          const actualTrackPiece = coaster.track[trackIndex];
+          if (!actualTrackPiece) return;
 
           const { screenX, screenY } = gridToScreen(trackTile.x, trackTile.y, 0, 0);
           const centerX = screenX + TILE_WIDTH / 2;

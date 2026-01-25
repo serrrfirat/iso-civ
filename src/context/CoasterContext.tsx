@@ -1137,6 +1137,20 @@ function ensureAllTracksHaveCoasters(
           }
         }
         
+        // Sync grid track pieces with corrected directions from componentPieces
+        // This ensures the drawn track matches where the train moves
+        for (let i = 0; i < componentTiles.length; i++) {
+          const { x: tx, y: ty } = componentTiles[i];
+          const correctedPiece = componentPieces[i];
+          if (correctedPiece && newGrid[ty][tx].trackPiece) {
+            // Only update if direction actually changed
+            if (newGrid[ty][tx].trackPiece!.direction !== correctedPiece.direction) {
+              newGrid[ty][tx].trackPiece = correctedPiece;
+              changed = true;
+            }
+          }
+        }
+        
         if (!matchingCoaster) {
           // No matching coaster - create a new one
           const newCoasterId = generateUUID();
