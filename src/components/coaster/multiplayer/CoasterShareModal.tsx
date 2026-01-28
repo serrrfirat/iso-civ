@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useMultiplayer } from '@/context/MultiplayerContext';
 import { useCoaster } from '@/context/CoasterContext';
-import { Copy, Check, Loader2 } from 'lucide-react';
+import { Copy, Check, Loader2, AlertCircle } from 'lucide-react';
 
 interface ShareModalProps {
   open: boolean;
@@ -21,31 +21,43 @@ interface ShareModalProps {
 export function CoasterShareModal({ open, onOpenChange }: ShareModalProps) {
   const [copied, setCopied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const hasAttemptedCreateRef = useRef(false);
 
   const { roomCode, createRoom } = useMultiplayer();
   const { state, isStateReady } = useCoaster();
 
-  useEffect(() => {
-    if (open && !roomCode && !isCreating && isStateReady) {
-      setIsCreating(true);
-      createRoom(state.settings.name, state)
-        .then((code) => {
-          window.history.replaceState({}, '', `/coaster/coop/${code}`);
-        })
-        .catch((err) => {
-          console.error('[CoasterShareModal] Failed to create room:', err);
-        })
-        .finally(() => {
-          setIsCreating(false);
-        });
-    }
-  }, [open, roomCode, isCreating, isStateReady, createRoom, state]);
+  const attemptCreateRoom = useCallback(() => {
+    if (isCreating || roomCode || !isStateReady) return;
+    setIsCreating(true);
+    setCreateError(null);
+    createRoom(state.settings.name, state)
+      .then((code) => {
+        window.history.replaceState({}, '', `/coaster/coop/${code}`);
+      })
+      .catch((err) => {
+        console.error('[CoasterShareModal] Failed to create room:', err);
+        const message = err instanceof Error ? err.message : 'Failed to create co-op session';
+        setCreateError(message);
+      })
+      .finally(() => {
+        setIsCreating(false);
+      });
+  }, [createRoom, isCreating, isStateReady, roomCode, state]);
 
   useEffect(() => {
     if (!open) {
       setCopied(false);
+      setCreateError(null);
+      hasAttemptedCreateRef.current = false;
+      return;
     }
-  }, [open]);
+
+    if (!roomCode && !isCreating && isStateReady && !createError && !hasAttemptedCreateRef.current) {
+      hasAttemptedCreateRef.current = true;
+      attemptCreateRoom();
+    }
+  }, [open, roomCode, isCreating, isStateReady, createError, attemptCreateRoom]);
 
   const handleCopyLink = () => {
     if (!roomCode) return;
@@ -71,12 +83,7 @@ export function CoasterShareModal({ open, onOpenChange }: ShareModalProps) {
         </DialogHeader>
 
         <div className="space-y-6 py-4 overflow-hidden">
-          {isCreating || !roomCode ? (
-            <div className="flex items-center justify-center gap-2 py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-              <span className="text-slate-400">Creating co-op session...</span>
-            </div>
-          ) : (
+          {roomCode ? (
             <>
               <div className="text-center">
                 <div className="text-4xl font-mono font-bold tracking-widest text-white mb-2">
@@ -115,6 +122,33 @@ export function CoasterShareModal({ open, onOpenChange }: ShareModalProps) {
                 Close
               </Button>
             </>
+          ) : createError ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-red-400">
+                <AlertCircle className="w-4 h-4" />
+                <span>{createError}</span>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => onOpenChange(false)}
+                  variant="outline"
+                  className="flex-1 border-slate-600 hover:bg-slate-700"
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={attemptCreateRoom}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-white border border-slate-600"
+                >
+                  Retry
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2 py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              <span className="text-slate-400">Creating co-op session...</span>
+            </div>
           )}
         </div>
       </DialogContent>
