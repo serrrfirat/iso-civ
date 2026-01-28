@@ -17,9 +17,10 @@ export type SavedParkMeta = {
   month: number;
   day: number;
   savedAt: number;
+  roomCode?: string;
 };
 
-export function buildSavedParkMeta(state: GameState, savedAt: number = Date.now()): SavedParkMeta {
+export function buildSavedParkMeta(state: GameState, savedAt: number = Date.now(), roomCode?: string): SavedParkMeta {
   return {
     id: state.id,
     name: state.settings?.name ?? 'Unnamed Park',
@@ -31,6 +32,7 @@ export function buildSavedParkMeta(state: GameState, savedAt: number = Date.now(
     month: state.month ?? 1,
     day: state.day ?? 1,
     savedAt,
+    roomCode,
   };
 }
 
@@ -57,9 +59,13 @@ export function writeSavedParksIndex(parks: SavedParkMeta[]): void {
 
 export function upsertSavedParkMeta(meta: SavedParkMeta, parks?: SavedParkMeta[]): SavedParkMeta[] {
   const list = parks ? [...parks] : readSavedParksIndex();
-  const existingIndex = list.findIndex((park) => park.id === meta.id);
+  const existingIndex = list.findIndex((park) => park.id === meta.id || (meta.roomCode && park.roomCode === meta.roomCode));
   if (existingIndex >= 0) {
-    list[existingIndex] = meta;
+    const existing = list[existingIndex];
+    list[existingIndex] = {
+      ...meta,
+      roomCode: meta.roomCode ?? existing.roomCode,
+    };
   } else {
     list.push(meta);
   }
