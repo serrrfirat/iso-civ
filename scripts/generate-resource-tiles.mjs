@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const API_KEY = "REDACTED_API_KEY";
+const API_KEY = process.env.GOOGLE_API_KEY;
+if (!API_KEY) {
+  console.error("Missing GOOGLE_API_KEY environment variable. Set it in .env or export it.");
+  process.exit(1);
+}
 const OUTPUT_DIR = "/Users/firatsertgoz/Documents/agent-civ/public/sprites/generated";
 
 const SPRITES = [
