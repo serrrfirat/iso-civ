@@ -1,6 +1,6 @@
 import { CivTile, TERRAIN_COLORS, RESOURCE_COLORS, CivId, CIV_COLORS, TerrainType } from '@/games/civ/types';
 import { getDiamondCorners } from '@/components/game/drawing';
-import { spriteCache, TERRAIN_TILESET_PATH, getTerrainVariant, BUILDING_SPRITES } from '@/lib/civ/spriteLoader';
+import { spriteCache, getTerrainVariant, BUILDING_SPRITES, RESOURCE_SPRITES } from '@/lib/civ/spriteLoader';
 
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32; // 2:1 isometric ratio — matches the tileset sprites
@@ -82,9 +82,9 @@ function getTerrainHeight(terrain: TerrainType): number {
 // Sprite-based terrain tile drawing
 // ---------------------------------------------------------------------------
 
-/** Whether a terrain type has a usable sprite in the tileset (rows 0-3 are clean 64x64 grid) */
+/** Whether a terrain type has a usable sprite in the tileset */
 function hasTerrainSprite(terrain: TerrainType): boolean {
-  return terrain === 'plains' || terrain === 'forest' || terrain === 'desert';
+  return terrain === 'plains' || terrain === 'forest' || terrain === 'desert' || terrain === 'water' || terrain === 'hills';
 }
 
 /**
@@ -99,22 +99,34 @@ function drawTerrainSprite(
   terrain: TerrainType,
   gx: number, gy: number,
 ): boolean {
-  const tileset = spriteCache.getImage(TERRAIN_TILESET_PATH);
-  if (!tileset) return false;
+  // Desert and forest both use plains as base tile
+  const baseTerrain = (terrain === 'forest' || terrain === 'desert') ? 'plains' : terrain;
+  const { region, tileset } = getTerrainVariant(baseTerrain, gx, gy);
 
-  // For forest, draw plains base first
-  const baseTerrain = terrain === 'forest' ? 'plains' : terrain;
-  const region = getTerrainVariant(baseTerrain, gx, gy);
+  const tilesetImg = spriteCache.getImage(tileset);
+  if (!tilesetImg) return false;
 
   // Sprite diamond center is at (32, 32) in the 64x64 cell.
   // Our tile center is at (screenX + TILE_WIDTH/2, screenY + TILE_HEIGHT/2).
-  // Align: dx = screenX, dy = screenY + TILE_HEIGHT/2 - SPRITE_CELL/2
   const dx = screenX;
   const dy = screenY + TILE_HEIGHT / 2 - SPRITE_CELL / 2;
 
-  spriteCache.drawSprite(ctx, TERRAIN_TILESET_PATH, region, dx, dy, SPRITE_CELL, SPRITE_CELL);
+  spriteCache.drawSprite(ctx, tileset, region, dx, dy, SPRITE_CELL, SPRITE_CELL);
 
-  // For forest tiles, overlay a tree decoration
+  // Desert: overlay sandy tint on top of grass base
+  if (terrain === 'desert') {
+    const corners = getDiamondCorners(screenX, screenY, TILE_WIDTH, TILE_HEIGHT);
+    ctx.fillStyle = 'rgba(210, 180, 110, 0.65)';
+    ctx.beginPath();
+    ctx.moveTo(corners.top.x, corners.top.y);
+    ctx.lineTo(corners.right.x, corners.right.y);
+    ctx.lineTo(corners.bottom.x, corners.bottom.y);
+    ctx.lineTo(corners.left.x, corners.left.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Forest: overlay tree decoration
   if (terrain === 'forest') {
     const treeKey = (gx + gy) % 2 === 0 ? 'firtree' : 'oaktree';
     const treePath = BUILDING_SPRITES[treeKey];
@@ -130,33 +142,65 @@ function drawTerrainSprite(
 }
 
 // ---------------------------------------------------------------------------
-// Resource dots
+// Resource icons (drawn directly on terrain with no background)
 // ---------------------------------------------------------------------------
 
-function drawResourceDot(ctx: CanvasRenderingContext2D, x: number, y: number, resource: string, zoom: number): void {
-  if (zoom < 0.6) return;
-  const color = RESOURCE_COLORS[resource as keyof typeof RESOURCE_COLORS];
-  if (!color) return;
+/** Resource color scheme for programmatic markers */
+const RESOURCE_MARKER_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
+  food:       { bg: '#4CAF50', fg: '#FFF', label: 'F' },
+  gold:       { bg: '#FFD700', fg: '#000', label: 'G' },
+  production: { bg: '#9E9E9E', fg: '#FFF', label: 'P' },
+  horses:     { bg: '#8B4513', fg: '#FFF', label: 'H' },
+};
 
-  const cx = x + TILE_WIDTH / 2;
-  const cy = y + TILE_HEIGHT / 2;
-  const radius = zoom > 1 ? 4 : 3;
+function drawResourceIcon(ctx: CanvasRenderingContext2D, screenX: number, screenY: number, resource: string, zoom: number): void {
+  if (zoom < 0.4) return;
 
-  // Outer glow
-  ctx.fillStyle = color + '60';
+  const cx = screenX + TILE_WIDTH / 2;
+  const cy = screenY + TILE_HEIGHT / 2;
+  const iconSize = zoom > 1 ? 16 : 12;
+
+  // Try sprite icon first (food, gold, production have RPG icons)
+  const spritePath = RESOURCE_SPRITES[resource];
+  if (spritePath) {
+    const img = spriteCache.getImage(spritePath);
+    if (img) {
+      // Subtle drop shadow
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2, iconSize * 0.5, iconSize * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      spriteCache.drawImage(ctx, spritePath,
+        cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);
+      return;
+    }
+  }
+
+  // Programmatic marker (used for horses and as fallback)
+  const marker = RESOURCE_MARKER_COLORS[resource];
+  if (!marker) return;
+  const r = zoom > 1 ? 7 : 5;
+
+  // Circle background
+  ctx.fillStyle = marker.bg;
   ctx.beginPath();
-  ctx.arc(cx, cy, radius + 2, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
-
-  // Core dot
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.fill();
-
   ctx.strokeStyle = '#000';
-  ctx.lineWidth = 0.5;
+  ctx.lineWidth = 1;
   ctx.stroke();
+
+  // Letter label
+  if (zoom >= 0.6) {
+    ctx.fillStyle = marker.fg;
+    ctx.font = `bold ${r}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(marker.label, cx, cy + 0.5);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -257,9 +301,9 @@ export function renderTerrain(
         drawWaterAnimation(ctx, screen.x, screen.y, time);
       }
 
-      // Resource dot
+      // Resource icon
       if (tile.resource) {
-        drawResourceDot(ctx, screen.x, screen.y - height, tile.resource, zoom);
+        drawResourceIcon(ctx, screen.x, screen.y - height, tile.resource, zoom);
       }
     }
   }

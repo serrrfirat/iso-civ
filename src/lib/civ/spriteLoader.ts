@@ -30,6 +30,9 @@ const TILE_H = 64;
 /** Path to the isometric terrain tileset (640x1024, 10 columns x 16 rows) */
 export const TERRAIN_TILESET_PATH = '/sprites/terrain/iso-64x64-outside.png';
 
+/** Path to the desert terrain tileset (1024x512, 16 columns x 8 rows, 64x64 cells) */
+export const DESERT_TILESET_PATH = '/sprites/terrain/desert1.png';
+
 /**
  * Terrain sprite regions — each TerrainType maps to 2-3 variant tile regions
  * from the iso-64x64-outside.png spritesheet so we get visual variety.
@@ -44,6 +47,11 @@ export const TERRAIN_TILESET_PATH = '/sprites/terrain/iso-64x64-outside.png';
  *   desert  — Row 3  (y=192): grass with brown edges (closest match), cols 0, 1, 2
  *   forest  — Row 0  (y=0):   grass base with tree-adjacent cols 5, 6, 7
  */
+/**
+ * Terrain sprite regions from the MAIN tileset (iso-64x64-outside.png).
+ * Hills now uses the brown-edged grass tiles (row 3) which look like dry terrain.
+ * Desert uses a SEPARATE tileset (desert1.png) — see DESERT_SPRITES below.
+ */
 export const TERRAIN_SPRITES: Record<TerrainType, SpriteRegion[]> = {
   plains: [
     { x: 0 * TILE_W, y: 0 * TILE_H, w: TILE_W, h: TILE_H },
@@ -56,9 +64,9 @@ export const TERRAIN_SPRITES: Record<TerrainType, SpriteRegion[]> = {
     { x: 7 * TILE_W, y: 0 * TILE_H, w: TILE_W, h: TILE_H },
   ],
   hills: [
-    { x: 0 * TILE_W, y: 4 * TILE_H, w: TILE_W, h: TILE_H },
-    { x: 1 * TILE_W, y: 4 * TILE_H, w: TILE_W, h: TILE_H },
-    { x: 2 * TILE_W, y: 4 * TILE_H, w: TILE_W, h: TILE_H },
+    { x: 0 * TILE_W, y: 3 * TILE_H, w: TILE_W, h: TILE_H },
+    { x: 1 * TILE_W, y: 3 * TILE_H, w: TILE_W, h: TILE_H },
+    { x: 2 * TILE_W, y: 3 * TILE_H, w: TILE_W, h: TILE_H },
   ],
   mountain: [
     { x: 0 * TILE_W, y: 6 * TILE_H, w: TILE_W, h: TILE_H },
@@ -70,12 +78,22 @@ export const TERRAIN_SPRITES: Record<TerrainType, SpriteRegion[]> = {
     { x: 1 * TILE_W, y: 10 * TILE_H, w: TILE_W, h: TILE_H },
     { x: 2 * TILE_W, y: 10 * TILE_H, w: TILE_W, h: TILE_H },
   ],
+  // Desert placeholder — actual rendering uses DESERT_SPRITES from desert1.png
   desert: [
-    { x: 0 * TILE_W, y: 3 * TILE_H, w: TILE_W, h: TILE_H },
-    { x: 1 * TILE_W, y: 3 * TILE_H, w: TILE_W, h: TILE_H },
-    { x: 2 * TILE_W, y: 3 * TILE_H, w: TILE_W, h: TILE_H },
+    { x: 0 * TILE_W, y: 0 * TILE_H, w: TILE_W, h: TILE_H },
   ],
 };
+
+/**
+ * Desert-specific sprite regions from desert1.png (1024x512, 64x64 cells).
+ * Row 0 has flat sandy diamond tiles — cols 0-5 are clean sand variants.
+ */
+export const DESERT_SPRITES: SpriteRegion[] = [
+  { x: 0 * TILE_W, y: 0 * TILE_H, w: TILE_W, h: TILE_H },
+  { x: 1 * TILE_W, y: 0 * TILE_H, w: TILE_W, h: TILE_H },
+  { x: 2 * TILE_W, y: 0 * TILE_H, w: TILE_W, h: TILE_H },
+  { x: 3 * TILE_W, y: 0 * TILE_H, w: TILE_W, h: TILE_H },
+];
 
 /**
  * Building sprite paths — individual PNGs keyed by BuildingType (plus extras).
@@ -95,6 +113,22 @@ export const BUILDING_SPRITES: Record<string, string> = {
 
 /** City sprite — the castle image used to represent cities on the map */
 export const CITY_SPRITE = '/sprites/buildings/citysim/castle.png';
+
+/** Resource icon paths — small icons drawn on top of terrain */
+export const RESOURCE_SPRITES: Record<string, string> = {
+  food:       '/sprites/icons/rpg/I_C_Bread.png',
+  gold:       '/sprites/icons/rpg/I_GoldCoin.png',
+  production: '/sprites/icons/rpg/W_Mace003.png',
+  // horses: drawn programmatically (no suitable icon in pack)
+};
+
+/** Unit type icon paths (Imagen 4 generated sprites) */
+export const UNIT_SPRITES: Record<string, string> = {
+  warrior: '/sprites/generated/warrior.png',
+  archer:  '/sprites/generated/archer.png',
+  scout:   '/sprites/generated/scout.png',
+  settler: '/sprites/generated/settler.png',
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -121,10 +155,14 @@ export function getTerrainVariant(
   terrain: TerrainType,
   gx: number,
   gy: number,
-): SpriteRegion {
+): { region: SpriteRegion; tileset: string } {
+  if (terrain === 'desert') {
+    const index = tileHash(gx, gy) % DESERT_SPRITES.length;
+    return { region: DESERT_SPRITES[index], tileset: DESERT_TILESET_PATH };
+  }
   const variants = TERRAIN_SPRITES[terrain];
   const index = tileHash(gx, gy) % variants.length;
-  return variants[index];
+  return { region: variants[index], tileset: TERRAIN_TILESET_PATH };
 }
 
 // ---------------------------------------------------------------------------
@@ -187,8 +225,11 @@ class SpriteCache {
   async preloadAll(): Promise<void> {
     const paths: string[] = [
       TERRAIN_TILESET_PATH,
+      DESERT_TILESET_PATH,
       CITY_SPRITE,
       ...Object.values(BUILDING_SPRITES),
+      ...Object.values(RESOURCE_SPRITES),
+      ...Object.values(UNIT_SPRITES),
     ];
 
     const results = await Promise.allSettled(paths.map((p) => this.loadImage(p)));

@@ -1,6 +1,6 @@
 import { Unit, City, CivId, CIV_COLORS, UnitType } from '@/games/civ/types';
 import { gridToScreen, TILE_WIDTH, TILE_HEIGHT } from './TerrainRenderer';
-import { spriteCache, CITY_SPRITE } from '@/lib/civ/spriteLoader';
+import { spriteCache, CITY_SPRITE, UNIT_SPRITES } from '@/lib/civ/spriteLoader';
 
 // ============================================================================
 // Unit shape rendering
@@ -114,7 +114,8 @@ export function renderUnits(
   ctx.translate(offset.x, offset.y);
   ctx.scale(zoom, zoom);
 
-  const unitSize = 8;
+  const unitSize = 10;
+  const spriteSize = 36; // Generated sprites are detailed — draw at visible size
 
   for (const unit of Object.values(units)) {
     const screen = gridToScreen(unit.x, unit.y);
@@ -122,9 +123,37 @@ export function renderUnits(
     const cy = screen.y + TILE_HEIGHT / 2 - 4;
 
     const civColor = CIV_COLORS[unit.ownerId];
-    const drawFn = UNIT_SHAPES[unit.type];
-    if (drawFn) {
-      drawFn(ctx, cx, cy, unitSize, civColor.primary);
+
+    // Try generated sprite
+    const spritePath = UNIT_SPRITES[unit.type];
+    const spriteImg = spritePath ? spriteCache.getImage(spritePath) : null;
+
+    if (spriteImg) {
+      // Draw unit sprite anchored at bottom-center of tile
+      const sw = spriteSize;
+      const sh = spriteSize;
+      const dx = cx - sw / 2;
+      const dy = cy - sh + 6; // anchor bottom to tile center
+
+      spriteCache.drawImage(ctx, spritePath, dx, dy, sw, sh);
+
+      // Colored ring at feet for civ identification
+      ctx.strokeStyle = civColor.primary;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2, 10, 5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2, 11, 6, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      // Fallback to geometric shapes
+      const drawFn = UNIT_SHAPES[unit.type];
+      if (drawFn) {
+        drawFn(ctx, cx, cy, unitSize, civColor.primary);
+      }
     }
 
     drawHealthBar(ctx, cx, cy, unit.hp, unit.maxHp, unitSize);
