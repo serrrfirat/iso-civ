@@ -1,6 +1,6 @@
 import { CivTile, TERRAIN_COLORS, RESOURCE_COLORS, CivId, CIV_COLORS, TerrainType } from '@/games/civ/types';
 import { getDiamondCorners } from '@/components/game/drawing';
-import { spriteCache, getTerrainVariant, BUILDING_SPRITES, RESOURCE_SPRITES } from '@/lib/civ/spriteLoader';
+import { spriteCache, getTerrainVariant, BUILDING_SPRITES, RESOURCE_SPRITES, MOUNTAIN_SPRITE, IMPROVEMENT_SPRITES } from '@/lib/civ/spriteLoader';
 
 const TILE_WIDTH = 64;
 const TILE_HEIGHT = 32; // 2:1 isometric ratio — matches the tileset sprites
@@ -16,8 +16,11 @@ export function gridToScreen(gx: number, gy: number): { x: number; y: number } {
 }
 
 export function screenToGrid(sx: number, sy: number): { x: number; y: number } {
-  const x = (sx / (TILE_WIDTH / 2) + sy / (TILE_HEIGHT / 2)) / 2;
-  const y = (sy / (TILE_HEIGHT / 2) - sx / (TILE_WIDTH / 2)) / 2;
+  // Adjust for the diamond being rendered at (TILE_WIDTH/2, 0) offset from
+  // the gridToScreen origin (which returns the bounding box top-left).
+  const ax = sx - TILE_WIDTH / 2;
+  const x = (ax / (TILE_WIDTH / 2) + sy / (TILE_HEIGHT / 2)) / 2;
+  const y = (sy / (TILE_HEIGHT / 2) - ax / (TILE_WIDTH / 2)) / 2;
   return { x: Math.floor(x), y: Math.floor(y) };
 }
 
@@ -84,7 +87,8 @@ function getTerrainHeight(terrain: TerrainType): number {
 
 /** Whether a terrain type has a usable sprite in the tileset */
 function hasTerrainSprite(terrain: TerrainType): boolean {
-  return terrain === 'plains' || terrain === 'forest' || terrain === 'desert' || terrain === 'water' || terrain === 'hills';
+  return terrain === 'plains' || terrain === 'forest' || terrain === 'desert'
+    || terrain === 'water' || terrain === 'hills' || terrain === 'mountain';
 }
 
 /**
@@ -99,8 +103,9 @@ function drawTerrainSprite(
   terrain: TerrainType,
   gx: number, gy: number,
 ): boolean {
-  // Desert and forest both use plains as base tile
-  const baseTerrain = (terrain === 'forest' || terrain === 'desert') ? 'plains' : terrain;
+  // Desert, forest, and mountain use plains/hills as base tile
+  const baseTerrain = terrain === 'forest' || terrain === 'desert' ? 'plains'
+    : terrain === 'mountain' ? 'hills' : terrain;
   const { region, tileset } = getTerrainVariant(baseTerrain, gx, gy);
 
   const tilesetImg = spriteCache.getImage(tileset);
@@ -135,6 +140,17 @@ function drawTerrainSprite(
       const treeCx = screenX + TILE_WIDTH / 2 - treeSize / 2;
       const treeCy = screenY - treeSize * 0.4;
       spriteCache.drawImage(ctx, treePath, treeCx, treeCy, treeSize, treeSize);
+    }
+  }
+
+  // Mountain: overlay generated mountain sprite
+  if (terrain === 'mountain') {
+    const mountainImg = spriteCache.getImage(MOUNTAIN_SPRITE);
+    if (mountainImg) {
+      const mSize = 36;
+      const mx = screenX + TILE_WIDTH / 2 - mSize / 2;
+      const my = screenY - mSize * 0.5;
+      spriteCache.drawImage(ctx, MOUNTAIN_SPRITE, mx, my, mSize, mSize);
     }
   }
 
@@ -299,6 +315,17 @@ export function renderTerrain(
       // Water shimmer
       if (tile.terrain === 'water') {
         drawWaterAnimation(ctx, screen.x, screen.y, time);
+      }
+
+      // Improvement sprite (farm, mine, road)
+      if (tile.improvement) {
+        const impPath = IMPROVEMENT_SPRITES[tile.improvement];
+        if (impPath && spriteCache.getImage(impPath)) {
+          const impSize = 24;
+          const impX = screen.x + TILE_WIDTH / 2 - impSize / 2;
+          const impY = screen.y - height + TILE_HEIGHT / 2 - impSize / 2 - 4;
+          spriteCache.drawImage(ctx, impPath, impX, impY, impSize, impSize);
+        }
       }
 
       // Resource icon

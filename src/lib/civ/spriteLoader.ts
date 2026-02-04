@@ -116,11 +116,21 @@ export const CITY_SPRITE = '/sprites/buildings/citysim/castle.png';
 
 /** Resource icon paths — small icons drawn on top of terrain */
 export const RESOURCE_SPRITES: Record<string, string> = {
-  food:       '/sprites/icons/rpg/I_C_Bread.png',
-  gold:       '/sprites/icons/rpg/I_GoldCoin.png',
+  food:       '/sprites/generated/farm.png',
+  gold:       '/sprites/generated/goldmine.png',
   production: '/sprites/icons/rpg/W_Mace003.png',
-  // horses: drawn programmatically (no suitable icon in pack)
+  horses:     '/sprites/generated/horses.png',
 };
+
+/** Improvement sprite paths (AI-generated) */
+export const IMPROVEMENT_SPRITES: Record<string, string> = {
+  farm: '/sprites/generated/farm.png',
+  mine: '/sprites/generated/mine.png',
+  road: '/sprites/generated/road.png',
+};
+
+/** Mountain decoration sprite (AI-generated, rendered on top of terrain) */
+export const MOUNTAIN_SPRITE = '/sprites/generated/mountain.png';
 
 /** Unit type icon paths (Imagen 4 generated sprites) */
 export const UNIT_SPRITES: Record<string, string> = {
@@ -166,6 +176,60 @@ export function getTerrainVariant(
 }
 
 // ---------------------------------------------------------------------------
+// Background removal for AI-generated sprites (RGB with no alpha channel)
+// ---------------------------------------------------------------------------
+
+/** Set of sprite paths that need background removal (all AI-generated PNGs) */
+const SPRITES_NEEDING_BG_REMOVAL = new Set([
+  ...Object.values(UNIT_SPRITES),
+  ...Object.values(IMPROVEMENT_SPRITES),
+  MOUNTAIN_SPRITE,
+  '/sprites/generated/horses.png',
+  '/sprites/generated/farm.png',
+  '/sprites/generated/goldmine.png',
+]);
+
+/**
+ * Remove the checkered/white background from an AI-generated sprite.
+ * These sprites are RGB (no alpha) with a fake transparency pattern baked in.
+ * We detect light gray / white pixels and set them to fully transparent.
+ */
+function removeBackground(img: HTMLImageElement): HTMLImageElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return img;
+
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    // Detect the checkered transparency pattern:
+    // Light pixels (near-white and light grays) that form the fake background.
+    // Checkered patterns alternate between ~(255,255,255) and ~(204,204,204).
+    const isLight = r > 190 && g > 190 && b > 190;
+    const isGrayish = Math.abs(r - g) < 15 && Math.abs(g - b) < 15;
+
+    if (isLight && isGrayish) {
+      data[i + 3] = 0; // fully transparent
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+
+  const result = new Image();
+  result.src = canvas.toDataURL('image/png');
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // SpriteCache — singleton image loader and drawing helper
 // ---------------------------------------------------------------------------
 
@@ -180,6 +244,8 @@ class SpriteCache {
    * Load an image by its src path. Returns a cached image immediately if
    * already loaded, otherwise kicks off a load and returns a promise.
    * Concurrent calls for the same src share one in-flight request.
+   *
+   * AI-generated unit sprites automatically get background removal applied.
    */
   async loadImage(src: string): Promise<HTMLImageElement> {
     // Already loaded — return immediately
@@ -191,12 +257,15 @@ class SpriteCache {
     if (inflight) return inflight;
 
     // Start a new load
+    const needsBgRemoval = SPRITES_NEEDING_BG_REMOVAL.has(src);
+
     const promise = new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
-        this.images.set(src, img);
+        const final = needsBgRemoval ? removeBackground(img) : img;
+        this.images.set(src, final);
         this.loading.delete(src);
-        resolve(img);
+        resolve(final);
       };
       img.onerror = (_event) => {
         this.loading.delete(src);
@@ -227,8 +296,10 @@ class SpriteCache {
       TERRAIN_TILESET_PATH,
       DESERT_TILESET_PATH,
       CITY_SPRITE,
+      MOUNTAIN_SPRITE,
       ...Object.values(BUILDING_SPRITES),
       ...Object.values(RESOURCE_SPRITES),
+      ...Object.values(IMPROVEMENT_SPRITES),
       ...Object.values(UNIT_SPRITES),
     ];
 
