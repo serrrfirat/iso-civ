@@ -6,8 +6,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const gameId = `game_${id}`;
-  const state = getGame(gameId);
+  const state = getGame(`game_${id}`) ?? getGame(id);
 
   if (!state) {
     return NextResponse.json({ error: 'Game not found' }, { status: 404 });

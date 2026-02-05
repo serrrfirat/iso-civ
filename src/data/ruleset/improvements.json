@@ -1,0 +1,20 @@
+{
+  "farm": {
+    "name": "Farm",
+    "validTerrain": ["plains", "desert"],
+    "turnsToComplete": 3,
+    "effects": { "food": 1 }
+  },
+  "mine": {
+    "name": "Mine",
+    "validTerrain": ["hills"],
+    "turnsToComplete": 4,
+    "effects": { "production": 1 }
+  },
+  "road": {
+    "name": "Road",
+    "validTerrain": ["plains", "forest", "hills", "desert"],
+    "turnsToComplete": 2,
+    "effects": { "movement": 1 }
+  }
+}

@@ -2,8 +2,9 @@
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useCivGame } from '@/context/CivGameContext';
-import { renderTerrain, screenToGrid, gridToScreen, TILE_WIDTH, TILE_HEIGHT, renderFogOfWar } from './TerrainRenderer';
+import { renderTerrain, screenToGrid, gridToScreen, TILE_WIDTH, TILE_HEIGHT, renderFogOfWar, renderBarbarianCamps } from './TerrainRenderer';
 import { renderUnits, renderCities } from './UnitRenderer';
+import { renderCombatEffects, cleanupCombatEffects } from './CombatEffectRenderer';
 import { CivId } from '@/games/civ/types';
 import { spriteCache } from '@/lib/civ/spriteLoader';
 
@@ -12,7 +13,7 @@ const ZOOM_MAX = 3.0;
 const KEY_PAN_SPEED = 520;
 
 export function CivCanvas() {
-  const { state, stateRef, perspective } = useCivGame();
+  const { state, stateRef, setState, perspective, setSelectedCityId, setViewport, setPanToGrid } = useCivGame();
   const terrainCanvasRef = useRef<HTMLCanvasElement>(null);
   const entityCanvasRef = useRef<HTMLCanvasElement>(null);
   const uiCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -29,6 +30,7 @@ export function CivCanvas() {
   const lastTimeRef = useRef(0);
   const keysRef = useRef<Set<string>>(new Set());
   const dragStartRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
 
   offsetRef.current = offset;
   zoomRef.current = zoom;
@@ -59,6 +61,34 @@ export function CivCanvas() {
     spriteCache.preloadAll();
     return () => window.removeEventListener('resize', resizeCanvases);
   }, [resizeCanvases]);
+
+  // Sync viewport state to context for minimap
+  useEffect(() => {
+    const container = containerRef.current;
+    const rect = container?.getBoundingClientRect();
+    setViewport({
+      offset,
+      zoom,
+      canvasSize: { width: rect?.width || 0, height: rect?.height || 0 },
+    });
+  }, [offset, zoom, setViewport]);
+
+  // Register pan-to-grid function for minimap clicks
+  useEffect(() => {
+    const panToGridFn = (gridX: number, gridY: number) => {
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+
+      // Convert grid coords to screen coords
+      const screen = gridToScreen(gridX, gridY);
+      // Center the target tile in the viewport
+      const targetX = rect.width / 2 - (screen.x + TILE_WIDTH / 2) * zoomRef.current;
+      const targetY = rect.height / 2 - (screen.y + TILE_HEIGHT / 2) * zoomRef.current;
+      setOffset({ x: targetX, y: targetY });
+    };
+    setPanToGrid(panToGridFn);
+  }, [setPanToGrid]);
 
   // Main render loop
   useEffect(() => {
@@ -98,12 +128,30 @@ export function CivCanvas() {
         );
       }
 
-      // Entity layer (units + cities)
+      // Entity layer (units + cities + barbarian camps + combat effects)
       const entityCtx = entityCanvasRef.current?.getContext('2d');
       if (entityCtx) {
         entityCtx.clearRect(0, 0, rect.width, rect.height);
+        // Render barbarian camps before cities (so camps appear behind structures if overlapping)
+        renderBarbarianCamps(entityCtx, currentState.barbarianCamps, currentOffset, currentZoom);
         renderCities(entityCtx, currentState.cities, currentOffset, currentZoom);
-        renderUnits(entityCtx, currentState.units, currentOffset, currentZoom);
+        // Pass current time for unit animation interpolation
+        const now = Date.now();
+        renderUnits(entityCtx, currentState.units, currentOffset, currentZoom, now);
+
+        // Render combat effects
+        if (currentState.combatEffects && currentState.combatEffects.length > 0) {
+          renderCombatEffects(entityCtx, currentState.combatEffects, currentOffset, currentZoom, now);
+
+          // Clean up expired effects periodically
+          const cleanedEffects = cleanupCombatEffects(currentState.combatEffects, now);
+          if (cleanedEffects.length !== currentState.combatEffects.length) {
+            setState(prev => ({
+              ...prev,
+              combatEffects: cleanupCombatEffects(prev.combatEffects, Date.now()),
+            }));
+          }
+        }
       }
 
       // UI layer (fog of war + hover)
@@ -149,12 +197,13 @@ export function CivCanvas() {
       running = false;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [stateRef, perspective, hoveredTile]);
+  }, [stateRef, setState, perspective, hoveredTile]);
 
   // Mouse events
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     setIsDragging(true);
     dragStartRef.current = { x: e.clientX, y: e.clientY, ox: offsetRef.current.x, oy: offsetRef.current.y };
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
   }, []);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -175,10 +224,45 @@ export function CivCanvas() {
     setHoveredTile(gridPos);
   }, [isDragging]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    // Distinguish click from drag: if mouse moved less than 5px, treat as click
+    const downPos = mouseDownPosRef.current;
+    if (downPos) {
+      const dx = e.clientX - downPos.x;
+      const dy = e.clientY - downPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < 5) {
+        // This is a click, not a drag — check for city on tile
+        const container = containerRef.current;
+        if (container) {
+          const rect = container.getBoundingClientRect();
+          const sx = (e.clientX - rect.left - offsetRef.current.x) / zoomRef.current;
+          const sy = (e.clientY - rect.top - offsetRef.current.y) / zoomRef.current;
+          const gridPos = screenToGrid(sx, sy);
+          const currentState = stateRef.current;
+
+          if (
+            gridPos.x >= 0 && gridPos.x < currentState.gridSize &&
+            gridPos.y >= 0 && gridPos.y < currentState.gridSize
+          ) {
+            const tile = currentState.grid[gridPos.y]?.[gridPos.x];
+            if (tile?.cityId) {
+              setSelectedCityId(tile.cityId);
+            } else {
+              setSelectedCityId(null);
+            }
+          } else {
+            setSelectedCityId(null);
+          }
+        }
+      }
+    }
+
     setIsDragging(false);
     dragStartRef.current = null;
-  }, []);
+    mouseDownPosRef.current = null;
+  }, [stateRef, setSelectedCityId]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -227,7 +311,7 @@ export function CivCanvas() {
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseLeave={() => { setIsDragging(false); dragStartRef.current = null; mouseDownPosRef.current = null; }}
       onWheel={handleWheel}
     >
       <canvas ref={terrainCanvasRef} className="absolute inset-0" />

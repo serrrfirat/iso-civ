@@ -1,0 +1,8 @@
+{
+  "plains":   { "moveCost": 1,   "defenseBonus": 0, "food": 2, "production": 0, "gold": 0 },
+  "forest":   { "moveCost": 2,   "defenseBonus": 2, "food": 1, "production": 1, "gold": 0 },
+  "hills":    { "moveCost": 2,   "defenseBonus": 3, "food": 0, "production": 2, "gold": 0 },
+  "mountain": { "moveCost": 999, "defenseBonus": 5, "food": 0, "production": 1, "gold": 0 },
+  "desert":   { "moveCost": 1,   "defenseBonus": 0, "food": 0, "production": 0, "gold": 1 },
+  "water":    { "moveCost": 1,   "defenseBonus": 0, "food": 1, "production": 0, "gold": 1, "navalOnly": true }
+}

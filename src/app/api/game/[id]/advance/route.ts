@@ -65,8 +65,8 @@ export async function POST(
 
   try {
     if (useAI) {
-      state = await advanceTurn(state, Date.now(), (s) => {
-        updateGame(s);
+      state = await advanceTurn(state, Date.now(), (s, event) => {
+        updateGame(s, event);
       });
     } else {
       state = advanceTurnLocal(state, Date.now());

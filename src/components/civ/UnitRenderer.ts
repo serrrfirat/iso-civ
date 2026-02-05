@@ -1,12 +1,50 @@
-import { Unit, City, CivId, CIV_COLORS, UnitType } from '@/games/civ/types';
+import { Unit, City, CivId, CIV_COLORS, UnitAnimation } from '@/games/civ/types';
 import { gridToScreen, TILE_WIDTH, TILE_HEIGHT } from './TerrainRenderer';
 import { spriteCache, CITY_SPRITE, UNIT_SPRITES } from '@/lib/civ/spriteLoader';
 
 // ============================================================================
-// Unit shape rendering
+// Animation interpolation utilities
 // ============================================================================
 
-const UNIT_SHAPES: Record<UnitType, (ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string) => void> = {
+/** Easing function for smooth animation (ease-out cubic) */
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+/** Get interpolated screen position for a unit, accounting for animation state */
+function getUnitScreenPosition(unit: Unit, currentTime: number): { x: number; y: number; isAnimating: boolean } {
+  const anim = unit.animating;
+
+  if (anim) {
+    const elapsed = currentTime - anim.startTime;
+    const progress = Math.min(1, elapsed / anim.duration);
+
+    if (progress >= 1) {
+      // Animation complete - clear it and return final position
+      unit.animating = undefined;
+      return { ...gridToScreen(unit.x, unit.y), isAnimating: false };
+    }
+
+    // Interpolate between from and to positions in screen space
+    const easedProgress = easeOutCubic(progress);
+    const fromScreen = gridToScreen(anim.fromX, anim.fromY);
+    const toScreen = gridToScreen(unit.x, unit.y);
+
+    return {
+      x: fromScreen.x + (toScreen.x - fromScreen.x) * easedProgress,
+      y: fromScreen.y + (toScreen.y - fromScreen.y) * easedProgress,
+      isAnimating: true,
+    };
+  }
+
+  return { ...gridToScreen(unit.x, unit.y), isAnimating: false };
+}
+
+// ============================================================================
+// Unit shape rendering — fallback geometric shapes when sprites not available
+// ============================================================================
+
+const UNIT_SHAPES: Record<string, (ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string) => void> = {
   warrior: (ctx, cx, cy, size, color) => {
     // Shield shape
     ctx.fillStyle = color;
@@ -22,7 +60,6 @@ const UNIT_SHAPES: Record<UnitType, (ctx: CanvasRenderingContext2D, cx: number, 
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
     ctx.stroke();
-    // Sword cross
     ctx.strokeStyle = '#FFF';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -44,7 +81,6 @@ const UNIT_SHAPES: Record<UnitType, (ctx: CanvasRenderingContext2D, cx: number, 
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
     ctx.stroke();
-    // Arrow line
     ctx.strokeStyle = '#FFF';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -65,7 +101,6 @@ const UNIT_SHAPES: Record<UnitType, (ctx: CanvasRenderingContext2D, cx: number, 
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
     ctx.stroke();
-    // Eye dot
     ctx.fillStyle = '#FFF';
     ctx.beginPath();
     ctx.arc(cx, cy, size * 0.2, 0, Math.PI * 2);
@@ -86,6 +121,32 @@ const UNIT_SHAPES: Record<UnitType, (ctx: CanvasRenderingContext2D, cx: number, 
     ctx.fill();
   },
 };
+
+/** Generic fallback shape for unit types without a specific shape */
+function drawGenericUnit(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string, label: string): void {
+  // Pentagon shape
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const angle = (i * 2 * Math.PI) / 5 - Math.PI / 2;
+    const x = cx + size * 0.8 * Math.cos(angle);
+    const y = cy + size * 0.8 * Math.sin(angle);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // First letter of unit type
+  ctx.fillStyle = '#FFF';
+  ctx.font = `bold ${Math.round(size * 0.8)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label[0].toUpperCase(), cx, cy);
+}
 
 function drawHealthBar(ctx: CanvasRenderingContext2D, cx: number, cy: number, hp: number, maxHp: number, size: number): void {
   if (hp >= maxHp) return;
@@ -109,31 +170,33 @@ export function renderUnits(
   units: Record<string, Unit>,
   offset: { x: number; y: number },
   zoom: number,
+  currentTime?: number,
 ): void {
   ctx.save();
   ctx.translate(offset.x, offset.y);
   ctx.scale(zoom, zoom);
 
   const unitSize = 10;
-  const spriteSize = 36; // Generated sprites are detailed — draw at visible size
+  const spriteSize = 36;
+  const now = currentTime ?? Date.now();
 
   for (const unit of Object.values(units)) {
-    const screen = gridToScreen(unit.x, unit.y);
+    // Get interpolated screen position (handles animation)
+    const screen = getUnitScreenPosition(unit, now);
     const cx = screen.x + TILE_WIDTH / 2;
     const cy = screen.y + TILE_HEIGHT / 2 - 4;
 
-    const civColor = CIV_COLORS[unit.ownerId];
+    const civColor = CIV_COLORS[unit.ownerId] ?? { primary: '#888', secondary: '#CCC' };
 
     // Try generated sprite
     const spritePath = UNIT_SPRITES[unit.type];
     const spriteImg = spritePath ? spriteCache.getImage(spritePath) : null;
 
     if (spriteImg) {
-      // Draw unit sprite anchored at bottom-center of tile
       const sw = spriteSize;
       const sh = spriteSize;
       const dx = cx - sw / 2;
-      const dy = cy - sh + 6; // anchor bottom to tile center
+      const dy = cy - sh + 6;
 
       spriteCache.drawImage(ctx, spritePath, dx, dy, sw, sh);
 
@@ -153,6 +216,8 @@ export function renderUnits(
       const drawFn = UNIT_SHAPES[unit.type];
       if (drawFn) {
         drawFn(ctx, cx, cy, unitSize, civColor.primary);
+      } else {
+        drawGenericUnit(ctx, cx, cy, unitSize, civColor.primary, unit.type);
       }
     }
 
@@ -180,27 +245,24 @@ export function renderCities(
     const screen = gridToScreen(city.x, city.y);
     const cx = screen.x + TILE_WIDTH / 2;
     const cy = screen.y + TILE_HEIGHT / 2;
-    const civColor = CIV_COLORS[city.ownerId];
+    const civColor = CIV_COLORS[city.ownerId] ?? { primary: '#888', secondary: '#CCC' };
 
     // Try sprite castle, fall back to diamond
     const castleImg = spriteCache.getImage(CITY_SPRITE);
     if (castleImg) {
-      // Castle sprite is 368x345 — scale to fit on tile (~48x45)
       const scale = 48 / 368;
       const sw = 368 * scale;
       const sh = 345 * scale;
       const dx = cx - sw / 2;
-      const dy = cy - sh + 6; // anchor bottom to tile center
+      const dy = cy - sh + 6;
 
       spriteCache.drawImage(ctx, CITY_SPRITE, dx, dy, sw, sh);
 
-      // Color tint overlay (multiply-like effect using colored diamond beneath)
       ctx.globalAlpha = 0.15;
       ctx.fillStyle = civColor.primary;
       ctx.fillRect(dx, dy, sw, sh);
       ctx.globalAlpha = 1.0;
     } else {
-      // Fallback: colored diamond
       const citySize = 14;
       ctx.fillStyle = civColor.primary;
       ctx.beginPath();
@@ -225,12 +287,11 @@ export function renderCities(
       ctx.fill();
     }
 
-    // Civ color banner (small colored flag)
+    // Civ color banner
     ctx.fillStyle = civColor.primary;
     ctx.fillRect(cx - 3, cy - 24, 6, 10);
     ctx.fillStyle = civColor.secondary;
     ctx.fillRect(cx - 2, cy - 23, 4, 3);
-    // Flag pole
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -259,7 +320,6 @@ export function renderCities(
       ctx.fillStyle = '#FFF';
       ctx.fillText(city.name, cx, cy - 27);
 
-      // Population badge
       ctx.font = '8px sans-serif';
       ctx.fillStyle = '#FFD700';
       ctx.fillText(`pop ${city.population}`, cx, cy + 16);

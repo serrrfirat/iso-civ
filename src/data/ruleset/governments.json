@@ -1,0 +1,43 @@
+{
+  "despotism": {
+    "name": "Despotism",
+    "techReq": null,
+    "effects": {},
+    "description": "The default government with no bonuses or penalties."
+  },
+  "monarchy": {
+    "name": "Monarchy",
+    "techReq": "feudalism",
+    "effects": {
+      "goldPerCity": 1
+    },
+    "description": "+1 gold per city. Requires Feudalism tech."
+  },
+  "republic": {
+    "name": "Republic",
+    "techReq": "republic",
+    "effects": {
+      "tradeBonus": 2,
+      "unitMaintenanceReduction": 1
+    },
+    "description": "+2 trade, -1 military unit maintenance. Requires Republic tech."
+  },
+  "democracy": {
+    "name": "Democracy",
+    "techReq": "democracy",
+    "effects": {
+      "happinessBonus": 3,
+      "warWearinessReduction": 0.5
+    },
+    "description": "+3 happiness, -50% war weariness. Requires Democracy tech."
+  },
+  "communism": {
+    "name": "Communism",
+    "techReq": "communism",
+    "effects": {
+      "productionBonus": 2,
+      "noHappinessPenalty": true
+    },
+    "description": "+2 production, no happiness penalty from population. Requires Communism tech."
+  }
+}

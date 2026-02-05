@@ -3,15 +3,25 @@
 import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
+type MapSize = 'small' | 'medium' | 'large' | 'huge';
+
+const MAP_SIZE_LABELS: Record<MapSize, string> = {
+  small: 'Small (20x20)',
+  medium: 'Medium (30x30)',
+  large: 'Large (40x40)',
+  huge: 'Huge (50x50)',
+};
+
 export default function HomePage() {
   const router = useRouter();
   const [seed, setSeed] = useState('');
+  const [mapSize, setMapSize] = useState<MapSize>('medium');
   const [isCreating, setIsCreating] = useState(false);
 
   const handleNewGame = useCallback(() => {
     const gameSeed = seed ? parseInt(seed, 10) || hashString(seed) : Math.floor(Math.random() * 1000000);
-    router.push(`/game/${gameSeed}`);
-  }, [seed, router]);
+    router.push(`/game/${gameSeed}?mapSize=${mapSize}`);
+  }, [seed, mapSize, router]);
 
   const handleWatchDemo = useCallback(() => {
     router.push('/game/42');
@@ -67,6 +77,21 @@ export default function HomePage() {
           >
             Watch Demo
           </button>
+
+          {/* Map size selector */}
+          <div className="w-full">
+            <select
+              value={mapSize}
+              onChange={e => setMapSize(e.target.value as MapSize)}
+              className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-white/70 text-sm focus:outline-none focus:border-white/30 cursor-pointer"
+            >
+              {Object.entries(MAP_SIZE_LABELS).map(([value, label]) => (
+                <option key={value} value={value} className="bg-gray-900 text-white">
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* Seed input */}
           <div className="flex gap-2">

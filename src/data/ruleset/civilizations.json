@@ -1,0 +1,35 @@
+{
+  "rome": {
+    "name": "Roman Empire",
+    "leader": "Caesar Augustus",
+    "personality": "militaristic and diplomatic",
+    "color": "#DC2626",
+    "secondaryColor": "#FCA5A5",
+    "cityNames": ["Roma", "Mediolanum", "Neapolis", "Florentia", "Venetia", "Ravenna", "Pompeii", "Tarentum"],
+    "startPosition": { "x": 5, "y": 5 },
+    "startUnits": ["warrior", "scout"],
+    "bonuses": { "production": 1 }
+  },
+  "egypt": {
+    "name": "Kingdom of Egypt",
+    "leader": "Cleopatra VII",
+    "personality": "scientific and trade-focused",
+    "color": "#D97706",
+    "secondaryColor": "#FDE68A",
+    "cityNames": ["Thebes", "Memphis", "Alexandria", "Heliopolis", "Giza", "Luxor", "Aswan", "Abydos"],
+    "startPosition": { "x": 24, "y": 5 },
+    "startUnits": ["warrior", "scout"],
+    "bonuses": { "science": 1 }
+  },
+  "mongolia": {
+    "name": "Mongol Empire",
+    "leader": "Genghis Khan",
+    "personality": "aggressive and expansionist",
+    "color": "#2563EB",
+    "secondaryColor": "#93C5FD",
+    "cityNames": ["Karakorum", "Sarai", "Almaliq", "Shangdu", "Avarga", "Bukhara", "Tabriz", "Samarkand"],
+    "startPosition": { "x": 14, "y": 24 },
+    "startUnits": ["warrior", "scout"],
+    "bonuses": { "movement": 1 }
+  }
+}

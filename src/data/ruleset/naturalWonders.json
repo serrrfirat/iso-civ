@@ -1,0 +1,64 @@
+{
+  "mt_everest": {
+    "name": "Mt. Everest",
+    "preferredTerrain": ["mountain"],
+    "bonuses": {
+      "food": 2,
+      "culture": 1
+    },
+    "discoveryBonus": 1
+  },
+  "great_barrier_reef": {
+    "name": "Great Barrier Reef",
+    "preferredTerrain": ["water"],
+    "bonuses": {
+      "food": 2,
+      "gold": 2
+    },
+    "discoveryBonus": 1
+  },
+  "grand_canyon": {
+    "name": "Grand Canyon",
+    "preferredTerrain": ["desert", "hills"],
+    "bonuses": {
+      "production": 1,
+      "culture": 2
+    },
+    "discoveryBonus": 1
+  },
+  "victoria_falls": {
+    "name": "Victoria Falls",
+    "preferredTerrain": ["plains", "forest"],
+    "bonuses": {
+      "food": 2,
+      "gold": 2
+    },
+    "discoveryBonus": 1
+  },
+  "krakatoa": {
+    "name": "Krakatoa",
+    "preferredTerrain": ["water", "hills"],
+    "bonuses": {
+      "science": 5
+    },
+    "discoveryBonus": 1
+  },
+  "rock_of_gibraltar": {
+    "name": "Rock of Gibraltar",
+    "preferredTerrain": ["hills", "mountain"],
+    "bonuses": {
+      "food": 2,
+      "gold": 5
+    },
+    "discoveryBonus": 1
+  },
+  "old_faithful": {
+    "name": "Old Faithful",
+    "preferredTerrain": ["plains", "hills"],
+    "bonuses": {
+      "science": 2,
+      "gold": 3
+    },
+    "discoveryBonus": 1
+  }
+}

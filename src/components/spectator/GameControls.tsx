@@ -2,20 +2,24 @@
 
 import React, { useCallback } from 'react';
 import { useCivGame } from '@/context/CivGameContext';
-import { CivId, CIV_COLORS } from '@/games/civ/types';
+import { CIV_COLORS } from '@/games/civ/types';
 
 export function GameControls() {
-  const { perspective, setPerspective, autoAdvance, setAutoAdvance, speed, setSpeed, state, setState } = useCivGame();
+  const { perspective, setPerspective, autoAdvance, setAutoAdvance, speed, setSpeed, state, setState, isAdvancing, setIsAdvancing } = useCivGame();
 
-  const perspectives: Array<{ id: CivId | 'global'; label: string; color?: string }> = [
+  const perspectives: Array<{ id: string; label: string; color?: string }> = [
     { id: 'global', label: 'Global' },
-    { id: 'rome', label: 'Rome', color: CIV_COLORS.rome.primary },
-    { id: 'egypt', label: 'Egypt', color: CIV_COLORS.egypt.primary },
-    { id: 'mongolia', label: 'Mongolia', color: CIV_COLORS.mongolia.primary },
+    ...Object.keys(state.civilizations).map(civId => ({
+      id: civId,
+      label: CIV_COLORS[civId]?.label ?? civId,
+      color: CIV_COLORS[civId]?.primary,
+    })),
   ];
 
   const handleAdvanceTurn = useCallback(async () => {
-    // Trigger server-side turn advancement via API
+    if (isAdvancing) return;
+    setIsAdvancing(true);
+
     try {
       const res = await fetch(`/api/game/${state.id}/advance`, { method: 'POST' });
       if (res.ok) {
@@ -29,8 +33,10 @@ export function GameControls() {
         turn: prev.turn + 1,
         phase: 'idle',
       }));
+    } finally {
+      setIsAdvancing(false);
     }
-  }, [state.id, setState]);
+  }, [state.id, setState, isAdvancing, setIsAdvancing]);
 
   return (
     <div className="flex items-center gap-3">
@@ -73,10 +79,13 @@ export function GameControls() {
       {/* Turn advance */}
       <button
         onClick={handleAdvanceTurn}
-        disabled={state.winner !== null}
-        className="text-xs px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded font-bold transition-colors"
+        disabled={state.winner !== null || isAdvancing}
+        className="text-xs px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded font-bold transition-colors flex items-center gap-1.5"
       >
-        Next Turn
+        {isAdvancing && (
+          <span className="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        )}
+        {isAdvancing ? 'Processing...' : 'Next Turn'}
       </button>
 
       {/* Auto-advance toggle */}

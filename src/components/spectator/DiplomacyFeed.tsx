@@ -2,7 +2,7 @@
 
 import React, { useRef, useEffect } from 'react';
 import { useCivGame } from '@/context/CivGameContext';
-import { CIV_COLORS, CivId, DiplomacyMessage } from '@/games/civ/types';
+import { CIV_COLORS, DiplomacyMessage } from '@/games/civ/types';
 
 const TYPE_ICONS: Record<DiplomacyMessage['type'], string> = {
   message: '',
@@ -21,8 +21,8 @@ const TYPE_STYLES: Record<DiplomacyMessage['type'], string> = {
 };
 
 function MessageCard({ msg }: { msg: DiplomacyMessage }) {
-  const fromColor = CIV_COLORS[msg.from];
-  const toLabel = msg.to === 'all' ? 'All' : CIV_COLORS[msg.to as CivId]?.label || msg.to;
+  const fromColor = CIV_COLORS[msg.from] ?? { primary: '#888', secondary: '#CCC', label: msg.from };
+  const toLabel = msg.to === 'all' ? 'All' : CIV_COLORS[msg.to]?.label || msg.to;
 
   return (
     <div className={`px-3 py-2 border-l-2 ${TYPE_STYLES[msg.type]} bg-gray-800/50 rounded-r`}>

@@ -1,18 +1,18 @@
 import { CivGameState, CivId, DiplomacyMessage } from '@/games/civ/types';
 import { runDiplomacyPhase, runPlanningPhase, generateNarration } from './agentService';
 import { validateAction, executeAction, processEndOfTurn } from './civSimulation';
+import { ruleset } from './ruleset';
 
 export type TurnCallback = (state: CivGameState, event: string) => void;
-
-const CIV_IDS: CivId[] = ['rome', 'egypt', 'mongolia'];
 
 export async function advanceTurn(state: CivGameState, seed: number, onUpdate?: TurnCallback): Promise<CivGameState> {
   if (state.winner) return state;
 
   const allEvents: string[] = [];
-  const aliveCivs = CIV_IDS.filter(id => state.civilizations[id].isAlive);
+  const civIds = Object.keys(state.civilizations);
+  const aliveCivs = civIds.filter(id => state.civilizations[id].isAlive);
 
-  // ── Phase 1: Diplomacy (sequential to avoid CLI contention) ──
+  // -- Phase 1: Diplomacy (sequential to avoid CLI contention) --
   state.phase = 'diplomacy';
   onUpdate?.(state, 'diplomacy_start');
 
@@ -33,7 +33,7 @@ export async function advanceTurn(state: CivGameState, seed: number, onUpdate?: 
 
   onUpdate?.(state, 'diplomacy_complete');
 
-  // ── Phase 2: Planning (sequential) ──
+  // -- Phase 2: Planning (sequential) --
   state.phase = 'planning';
   onUpdate?.(state, 'planning_start');
 
@@ -46,7 +46,7 @@ export async function advanceTurn(state: CivGameState, seed: number, onUpdate?: 
 
   onUpdate?.(state, 'planning_complete');
 
-  // ── Phase 3: Resolution ──
+  // -- Phase 3: Resolution --
   state.phase = 'resolution';
   onUpdate?.(state, 'resolution_start');
 
@@ -64,7 +64,7 @@ export async function advanceTurn(state: CivGameState, seed: number, onUpdate?: 
 
   onUpdate?.(state, 'resolution_complete');
 
-  // ── Phase 4: Narration ──
+  // -- Phase 4: Narration --
   state.phase = 'narration';
   onUpdate?.(state, 'narration_start');
 
@@ -86,8 +86,9 @@ export function advanceTurnLocal(state: CivGameState, seed: number): CivGameStat
   if (state.winner) return state;
 
   state.phase = 'resolution';
+  const civIds = Object.keys(state.civilizations);
 
-  for (const civId of CIV_IDS) {
+  for (const civId of civIds) {
     const civ = state.civilizations[civId];
     if (!civ.isAlive) continue;
 

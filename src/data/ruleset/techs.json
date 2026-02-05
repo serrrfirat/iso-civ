@@ -1,0 +1,56 @@
+{
+  "ancient": [
+    { "id": "pottery",          "name": "Pottery",           "cost": 25,  "prereqs": [] },
+    { "id": "animal_husbandry", "name": "Animal Husbandry",  "cost": 25,  "prereqs": [] },
+    { "id": "mining",           "name": "Mining",            "cost": 25,  "prereqs": [] },
+    { "id": "mysticism",        "name": "Mysticism",         "cost": 25,  "prereqs": [] },
+    { "id": "archery",          "name": "Archery",           "cost": 30,  "prereqs": [] },
+    { "id": "masonry",          "name": "Masonry",           "cost": 35,  "prereqs": ["mining"] },
+    { "id": "bronze_working",   "name": "Bronze Working",    "cost": 40,  "prereqs": ["mining"] },
+    { "id": "the_wheel",        "name": "The Wheel",         "cost": 35,  "prereqs": ["animal_husbandry"] },
+    { "id": "sailing",          "name": "Sailing",           "cost": 40,  "prereqs": ["pottery"] },
+    { "id": "writing",          "name": "Writing",           "cost": 45,  "prereqs": ["pottery"] },
+    { "id": "calendar",         "name": "Calendar",          "cost": 40,  "prereqs": ["mysticism"] },
+    { "id": "currency",         "name": "Currency",          "cost": 50,  "prereqs": ["writing"] },
+    { "id": "horseback_riding", "name": "Horseback Riding",  "cost": 50,  "prereqs": ["animal_husbandry", "the_wheel"] }
+  ],
+  "classical": [
+    { "id": "iron_working",     "name": "Iron Working",      "cost": 60,  "prereqs": ["bronze_working"] },
+    { "id": "mathematics",      "name": "Mathematics",       "cost": 60,  "prereqs": ["currency"] },
+    { "id": "construction",     "name": "Construction",      "cost": 65,  "prereqs": ["masonry", "the_wheel"] },
+    { "id": "code_of_laws",     "name": "Code of Laws",      "cost": 55,  "prereqs": ["writing"] },
+    { "id": "drama",            "name": "Drama & Poetry",    "cost": 60,  "prereqs": ["calendar", "writing"] },
+    { "id": "theology",         "name": "Theology",          "cost": 65,  "prereqs": ["mysticism", "writing"] },
+    { "id": "engineering",      "name": "Engineering",       "cost": 70,  "prereqs": ["mathematics", "construction"] },
+    { "id": "philosophy",       "name": "Philosophy",        "cost": 70,  "prereqs": ["drama", "code_of_laws"] },
+    { "id": "republic",         "name": "Republic",          "cost": 75,  "prereqs": ["code_of_laws", "philosophy"] }
+  ],
+  "medieval": [
+    { "id": "civil_service",    "name": "Civil Service",     "cost": 80,  "prereqs": ["code_of_laws", "horseback_riding"] },
+    { "id": "feudalism",        "name": "Feudalism",         "cost": 80,  "prereqs": ["civil_service"] },
+    { "id": "education",        "name": "Education",         "cost": 85,  "prereqs": ["theology", "philosophy"] },
+    { "id": "machinery",        "name": "Machinery",         "cost": 85,  "prereqs": ["engineering"] },
+    { "id": "chivalry",         "name": "Chivalry",          "cost": 90,  "prereqs": ["civil_service", "horseback_riding"] },
+    { "id": "steel",            "name": "Steel",             "cost": 90,  "prereqs": ["iron_working", "machinery"] },
+    { "id": "physics",          "name": "Physics",           "cost": 95,  "prereqs": ["machinery", "mathematics"] },
+    { "id": "banking",          "name": "Banking",           "cost": 90,  "prereqs": ["education", "currency"] },
+    { "id": "printing_press",   "name": "Printing Press",    "cost": 100, "prereqs": ["machinery", "physics"] },
+    { "id": "astronomy",        "name": "Astronomy",         "cost": 95,  "prereqs": ["education", "mathematics"] },
+    { "id": "castles",          "name": "Castles",           "cost": 85,  "prereqs": ["chivalry", "construction"] }
+  ],
+  "renaissance": [
+    { "id": "democracy",        "name": "Democracy",         "cost": 120, "prereqs": ["republic", "printing_press"] },
+    { "id": "economics",        "name": "Economics",         "cost": 110, "prereqs": ["banking", "printing_press"] }
+  ],
+  "industrial": [
+    { "id": "communism",        "name": "Communism",         "cost": 150, "prereqs": ["economics", "philosophy"] }
+  ],
+  "modern": [
+    { "id": "rocketry",         "name": "Rocketry",          "cost": 180, "prereqs": ["physics", "steel"] },
+    { "id": "satellites",       "name": "Satellites",        "cost": 200, "prereqs": ["rocketry"] },
+    { "id": "space_flight",     "name": "Space Flight",      "cost": 220, "prereqs": ["rocketry", "satellites"] }
+  ],
+  "information": [
+    { "id": "alpha_centauri",   "name": "Alpha Centauri",    "cost": 300, "prereqs": ["space_flight"] }
+  ]
+}

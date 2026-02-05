@@ -1,0 +1,37 @@
+{
+  "great_scientist": {
+    "name": "Great Scientist",
+    "type": "scientist",
+    "baseThreshold": 100,
+    "ability": "Can be expended to instantly complete current research or construct an Academy (+4 science)",
+    "unitType": "great_scientist"
+  },
+  "great_artist": {
+    "name": "Great Artist",
+    "type": "artist",
+    "baseThreshold": 100,
+    "ability": "Can be expended to trigger a Golden Age or create a Great Work (+4 culture)",
+    "unitType": "great_artist"
+  },
+  "great_general": {
+    "name": "Great General",
+    "type": "general",
+    "baseThreshold": 100,
+    "ability": "Provides combat bonus to nearby units or can construct a Citadel",
+    "unitType": "great_general"
+  },
+  "great_merchant": {
+    "name": "Great Merchant",
+    "type": "merchant",
+    "baseThreshold": 100,
+    "ability": "Can be expended for a large gold bonus or establish a trade mission",
+    "unitType": "great_merchant"
+  },
+  "great_engineer": {
+    "name": "Great Engineer",
+    "type": "engineer",
+    "baseThreshold": 100,
+    "ability": "Can be expended to rush production in a city or construct a Manufactory (+4 production)",
+    "unitType": "great_engineer"
+  }
+}

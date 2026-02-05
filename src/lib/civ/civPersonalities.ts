@@ -1,11 +1,11 @@
-import { CivId, CivGameState, Civilization, CIV_COLORS } from '@/games/civ/types';
+import { CivId, CivGameState, CIV_COLORS } from '@/games/civ/types';
+import { ruleset } from './ruleset';
 
 export function getSystemPrompt(civId: CivId, state: CivGameState): string {
   const civ = state.civilizations[civId];
-  const otherCivs = (['rome', 'egypt', 'mongolia'] as CivId[]).filter(id => id !== civId);
+  const civDef = ruleset.getCiv(civId);
 
-  const personality = PERSONALITY_PROMPTS[civId];
-
+  const personality = getPersonalityPrompt(civId);
   const worldView = buildWorldView(civId, state);
 
   return `You are the leader of ${civ.name}, known as ${civ.leaderName}.
@@ -27,6 +27,7 @@ RULES:
 export function getActionPrompt(civId: CivId, state: CivGameState, diplomacyContext: string): string {
   const civ = state.civilizations[civId];
   const worldView = buildWorldView(civId, state);
+  const contentSummary = ruleset.getContentSummary(civ.researchedTechs);
 
   return `You are ${civ.leaderName} of ${civ.name}. Based on the diplomacy phase and current situation, decide your actions for this turn.
 
@@ -35,29 +36,44 @@ ${worldView}
 RECENT DIPLOMACY:
 ${diplomacyContext || 'No diplomatic exchanges this turn.'}
 
+TECHNOLOGY:
+Researched: ${civ.researchedTechs.length > 0 ? civ.researchedTechs.join(', ') : 'none'}
+${civ.currentResearch ? `Currently researching: ${civ.currentResearch.techId} (${civ.currentResearch.progress}/${civ.currentResearch.cost})` : 'No active research.'}
+Science per turn: ${civ.sciencePerTurn}
+
+${contentSummary}
+
 Available actions (use the provided tools):
 1. move_unit: Move a unit to a new position
 2. attack: Attack an adjacent enemy unit
 3. found_city: Found a new city with a settler
 4. build: Start producing a unit or building in a city
+5. set_research: Choose which technology to research next
 
 STRATEGIC GUIDELINES:
 - Explore with scouts to find resources and enemy positions
-- Build warriors/archers for defense and offense
+- Build military units for defense and offense
 - Expand with settlers when you have enough military to protect them
 - Focus production on what you need most: military if threatened, economy if safe
+- Research technologies to unlock new units and buildings
 - Consider your diplomatic relationships when deciding who to attack
 
 Return your actions using the provided tools. You may take multiple actions per turn.`;
 }
 
-const PERSONALITY_PROMPTS: Record<CivId, string> = {
-  rome: `PERSONALITY: You are Caesar Augustus, a cunning and pragmatic ruler. You believe in the glory of Rome and pursue both military dominance and diplomatic alliances. You speak with authority and classical Roman gravitas. You prefer to build alliances before war, but you are ruthless when betrayed. You value order, infrastructure, and the expansion of Roman civilization. Your diplomacy is formal but with underlying steel.`,
+function getPersonalityPrompt(civId: CivId): string {
+  const civDef = ruleset.getCiv(civId);
+  if (!civDef) return '';
 
-  egypt: `PERSONALITY: You are Cleopatra VII, a brilliant and charismatic ruler. You are scientifically minded and trade-focused, preferring to build wealth and knowledge over brute conquest. You use charm and strategic marriage/alliance offers to maintain power. You speak elegantly and with wit. You prefer economic dominance over military conquest, but you can be fierce when cornered. Your diplomacy is sophisticated and sometimes deceptive.`,
+  // Dynamic personality prompts based on ruleset data
+  const personalities: Record<string, string> = {
+    rome: `PERSONALITY: You are Caesar Augustus, a cunning and pragmatic ruler. You believe in the glory of Rome and pursue both military dominance and diplomatic alliances. You speak with authority and classical Roman gravitas. You prefer to build alliances before war, but you are ruthless when betrayed. You value order, infrastructure, and the expansion of Roman civilization. Your diplomacy is formal but with underlying steel.`,
+    egypt: `PERSONALITY: You are Cleopatra VII, a brilliant and charismatic ruler. You are scientifically minded and trade-focused, preferring to build wealth and knowledge over brute conquest. You use charm and strategic marriage/alliance offers to maintain power. You speak elegantly and with wit. You prefer economic dominance over military conquest, but you can be fierce when cornered. Your diplomacy is sophisticated and sometimes deceptive.`,
+    mongolia: `PERSONALITY: You are Genghis Khan, an aggressive and expansionist conqueror. You respect strength and despise weakness. You speak directly and sometimes brutally. You prefer swift military action over prolonged diplomacy, though you may offer vassalage before war. You value loyalty above all and punish betrayal severely. Your diplomacy is blunt and threatening, but you can be surprisingly fair to those who submit.`,
+  };
 
-  mongolia: `PERSONALITY: You are Genghis Khan, an aggressive and expansionist conqueror. You respect strength and despise weakness. You speak directly and sometimes brutally. You prefer swift military action over prolonged diplomacy, though you may offer vassalage before war. You value loyalty above all and punish betrayal severely. Your diplomacy is blunt and threatening, but you can be surprisingly fair to those who submit.`,
-};
+  return personalities[civId] || `PERSONALITY: You are ${civDef.leader}, leader of ${civDef.name}. Your style is ${civDef.personality}. Act accordingly in diplomacy and strategy.`;
+}
 
 function buildWorldView(civId: CivId, state: CivGameState): string {
   const civ = state.civilizations[civId];
@@ -65,12 +81,17 @@ function buildWorldView(civId: CivId, state: CivGameState): string {
 
   // Own stats
   lines.push(`YOUR CIVILIZATION: ${civ.name}`);
-  lines.push(`Gold: ${civ.gold}`);
+  lines.push(`Gold: ${civ.gold} | Science: ${civ.sciencePerTurn}/turn`);
+  lines.push(`Technologies: ${civ.researchedTechs.length > 0 ? civ.researchedTechs.join(', ') : 'none'}`);
+  if (civ.currentResearch) {
+    lines.push(`Researching: ${civ.currentResearch.techId} (${civ.currentResearch.progress}/${civ.currentResearch.cost})`);
+  }
+
   lines.push(`Cities (${civ.cities.length}):`);
   for (const cityId of civ.cities) {
     const city = state.cities[cityId];
     if (!city) continue;
-    lines.push(`  - ${city.name} (pop ${city.population}, +${city.goldPerTurn}g/t, +${city.productionPerTurn}p/t, buildings: ${city.buildings.join(', ') || 'none'}${city.currentProduction ? `, building: ${city.currentProduction.target} (${city.currentProduction.progress}/${city.currentProduction.cost})` : ''})`);
+    lines.push(`  - ${city.name} (pop ${city.population}, +${city.goldPerTurn}g/t, +${city.productionPerTurn}p/t, +${city.sciencePerTurn}s/t, buildings: ${city.buildings.join(', ') || 'none'}${city.currentProduction ? `, building: ${city.currentProduction.target} (${city.currentProduction.progress}/${city.currentProduction.cost})` : ''})`);
   }
 
   lines.push(`Units (${civ.units.length}):`);
@@ -81,10 +102,10 @@ function buildWorldView(civId: CivId, state: CivGameState): string {
   }
 
   // Other civs (visible info only)
-  const otherCivs = (['rome', 'egypt', 'mongolia'] as CivId[]).filter(id => id !== civId);
+  const civIds = Object.keys(state.civilizations).filter(id => id !== civId);
   const knownSet = new Set(civ.knownTiles);
 
-  for (const otherId of otherCivs) {
+  for (const otherId of civIds) {
     const other = state.civilizations[otherId];
     if (!other.isAlive) {
       lines.push(`\n${other.name}: ELIMINATED`);
@@ -115,7 +136,10 @@ function buildWorldView(civId: CivId, state: CivGameState): string {
 }
 
 export function getNarratorPrompt(turnEvents: string[], state: CivGameState): string {
-  return `You are a dramatic narrator for a civilization game between Rome (Caesar Augustus), Egypt (Cleopatra VII), and Mongolia (Genghis Khan).
+  const civIds = Object.keys(state.civilizations);
+  const scoreStr = civIds.map(id => `${CIV_COLORS[id]?.label ?? id}: ${state.civilizations[id].score}`).join(', ');
+
+  return `You are a dramatic narrator for a civilization game between ${civIds.map(id => `${state.civilizations[id].name} (${state.civilizations[id].leaderName})`).join(', ')}.
 
 Turn ${state.turn}/${state.maxTurns} just completed. Here's what happened:
 
@@ -124,10 +148,10 @@ ${turnEvents.join('\n')}
 DIPLOMACY THIS TURN:
 ${state.diplomacyLog
     .filter(m => m.turn === state.turn)
-    .map(m => `${CIV_COLORS[m.from]?.label ?? m.from} to ${m.to === 'all' ? 'all' : (CIV_COLORS[m.to as CivId]?.label ?? m.to)}: "${m.content}"`)
+    .map(m => `${CIV_COLORS[m.from]?.label ?? m.from} to ${m.to === 'all' ? 'all' : (CIV_COLORS[m.to]?.label ?? m.to)}: "${m.content}"`)
     .join('\n') || 'No diplomatic exchanges.'}
 
-SCORES: ${(['rome', 'egypt', 'mongolia'] as CivId[]).map(id => `${CIV_COLORS[id].label}: ${state.civilizations[id].score}`).join(', ')}
+SCORES: ${scoreStr}
 
 Write a dramatic, concise narration (2-3 sentences) describing the most important events of this turn. Be entertaining and build tension. Write in the style of a historical documentary narrator. Focus on the most dramatic events: wars, betrayals, new cities, or shifting alliances.`;
 }

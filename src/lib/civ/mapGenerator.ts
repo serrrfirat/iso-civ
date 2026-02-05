@@ -1,4 +1,45 @@
-import { CivTile, TerrainType, ResourceType, CivId, CivGameState, Civilization, Unit, City } from '@/games/civ/types';
+import { CivTile, TerrainType, ResourceType, CivId, CivGameState, Civilization, Unit, City, NaturalWonder, BarbarianCamp } from '@/games/civ/types';
+import { ruleset } from './ruleset';
+
+// ============================================================================
+// Map Size Configuration
+// ============================================================================
+
+export const MAP_SIZES = {
+  small: 20,
+  medium: 30,
+  large: 40,
+  huge: 50,
+} as const;
+
+export type MapSizeKey = keyof typeof MAP_SIZES;
+
+// Base positions are defined for a 30x30 map, we scale them proportionally
+const BASE_MAP_SIZE = 30;
+
+// Base start positions (for 30x30 map) - matches civilizations.json defaults
+const BASE_START_POSITIONS: Record<string, { x: number; y: number }> = {
+  rome: { x: 5, y: 5 },
+  egypt: { x: 24, y: 5 },
+  mongolia: { x: 14, y: 24 },
+};
+
+/**
+ * Scale start positions proportionally to the new map size
+ */
+function getScaledStartPositions(mapSize: number): Record<string, { x: number; y: number }> {
+  const scale = mapSize / BASE_MAP_SIZE;
+  const scaledPositions: Record<string, { x: number; y: number }> = {};
+
+  for (const [civId, pos] of Object.entries(BASE_START_POSITIONS)) {
+    scaledPositions[civId] = {
+      x: Math.round(pos.x * scale),
+      y: Math.round(pos.y * scale),
+    };
+  }
+
+  return scaledPositions;
+}
 
 // ============================================================================
 // Simplex-style noise for terrain generation
@@ -83,7 +124,7 @@ function placeResource(terrain: TerrainType, rng: () => number): ResourceType | 
   if (roll > 0.85) {
     switch (terrain) {
       case 'plains': return rng() > 0.5 ? 'food' : 'horses';
-      case 'hills': return 'production';
+      case 'hills': return rng() > 0.7 ? 'iron' : 'production';
       case 'desert': return 'gold';
       case 'forest': return 'food';
       default: return undefined;
@@ -95,12 +136,6 @@ function placeResource(terrain: TerrainType, rng: () => number): ResourceType | 
 // ============================================================================
 // Start position balancing
 // ============================================================================
-
-const START_POSITIONS_30: Array<{ x: number; y: number }> = [
-  { x: 5, y: 5 },      // top-left (Rome)
-  { x: 24, y: 5 },     // top-right (Egypt)
-  { x: 14, y: 24 },    // bottom-center (Mongolia)
-];
 
 function ensureStartViable(grid: CivTile[][], pos: { x: number; y: number }, size: number): void {
   // Clear a 3x3 area around start position to plains
@@ -133,20 +168,124 @@ function ensureStartViable(grid: CivTile[][], pos: { x: number; y: number }, siz
 }
 
 // ============================================================================
-// City names per civilization
+// Natural Wonder Placement
 // ============================================================================
 
-const CITY_NAMES: Record<CivId, string[]> = {
-  rome: ['Roma', 'Mediolanum', 'Neapolis', 'Florentia', 'Venetia'],
-  egypt: ['Thebes', 'Memphis', 'Alexandria', 'Heliopolis', 'Giza'],
-  mongolia: ['Karakorum', 'Sarai', 'Almaliq', 'Shangdu', 'Avarga'],
-};
+/**
+ * Place natural wonders on the map, avoiding start positions
+ * Returns a record of placed natural wonders
+ */
+function placeNaturalWonders(
+  grid: CivTile[][],
+  gridSize: number,
+  startPositions: Record<string, { x: number; y: number }>,
+  rng: () => number,
+  count: number = 3
+): Record<string, NaturalWonder> {
+  const naturalWonders: Record<string, NaturalWonder> = {};
+  const wonderIds = ruleset.getNaturalWonderIds();
+
+  // Shuffle wonder IDs
+  const shuffledWonders = [...wonderIds].sort(() => rng() - 0.5);
+
+  // Get start positions to avoid (within radius 5)
+  const forbiddenTiles = new Set<string>();
+  for (const pos of Object.values(startPositions)) {
+    for (let fdy = -5; fdy <= 5; fdy++) {
+      for (let fdx = -5; fdx <= 5; fdx++) {
+        forbiddenTiles.add(`${pos.x + fdx},${pos.y + fdy}`);
+      }
+    }
+  }
+
+  // Find candidate tiles for each wonder
+  let placedCount = 0;
+  for (const wonderId of shuffledWonders) {
+    if (placedCount >= count) break;
+
+    const wonderDef = ruleset.getNaturalWonder(wonderId);
+    if (!wonderDef) continue;
+
+    // Find tiles matching preferred terrain
+    const candidateTiles: { x: number; y: number; score: number }[] = [];
+
+    for (let cy = 3; cy < gridSize - 3; cy++) {
+      for (let cx = 3; cx < gridSize - 3; cx++) {
+        const key = `${cx},${cy}`;
+        if (forbiddenTiles.has(key)) continue;
+
+        const tile = grid[cy][cx];
+        // Skip tiles with cities or existing natural wonders
+        if (tile.cityId || tile.naturalWonderId) continue;
+
+        // Check if terrain matches preferred terrain
+        const terrainMatch = wonderDef.preferredTerrain.includes(tile.terrain);
+        if (!terrainMatch) continue;
+
+        // Calculate score based on how interesting the location is
+        let score = rng() * 10; // Random base score
+
+        // Bonus for being on preferred terrain
+        score += 20;
+
+        // Bonus for being near water (scenic)
+        for (let ndy = -1; ndy <= 1; ndy++) {
+          for (let ndx = -1; ndx <= 1; ndx++) {
+            const nx = cx + ndx;
+            const ny = cy + ndy;
+            if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
+              if (grid[ny][nx].terrain === 'water') score += 5;
+            }
+          }
+        }
+
+        // Penalty for being too close to other natural wonders
+        for (const existing of Object.values(naturalWonders)) {
+          const dist = Math.abs(cx - existing.x) + Math.abs(cy - existing.y);
+          if (dist < 8) score -= (8 - dist) * 5;
+        }
+
+        candidateTiles.push({ x: cx, y: cy, score });
+      }
+    }
+
+    // Sort by score and pick the best one
+    candidateTiles.sort((a, b) => b.score - a.score);
+
+    if (candidateTiles.length > 0) {
+      const chosen = candidateTiles[0];
+
+      // Create the natural wonder
+      const wonder: NaturalWonder = {
+        id: wonderId,
+        name: wonderDef.name,
+        x: chosen.x,
+        y: chosen.y,
+        bonuses: { ...wonderDef.bonuses },
+      };
+
+      naturalWonders[wonderId] = wonder;
+      grid[chosen.y][chosen.x].naturalWonderId = wonderId;
+
+      // Mark this tile and surrounding tiles as forbidden for other wonders
+      for (let bdy = -3; bdy <= 3; bdy++) {
+        for (let bdx = -3; bdx <= 3; bdx++) {
+          forbiddenTiles.add(`${chosen.x + bdx},${chosen.y + bdy}`);
+        }
+      }
+
+      placedCount++;
+    }
+  }
+
+  return naturalWonders;
+}
 
 // ============================================================================
 // Game state generation
 // ============================================================================
 
-export function generateMap(seed: number, gridSize: number = 30): CivTile[][] {
+export function generateMap(seed: number, gridSize: number = 30, scaledStartPositions?: Record<string, { x: number; y: number }>): CivTile[][] {
   const elevationNoise = noise2D(seed);
   const moistureNoise = noise2D(seed + 1000);
   const rng = seededRandom(seed + 2000);
@@ -175,8 +314,11 @@ export function generateMap(seed: number, gridSize: number = 30): CivTile[][] {
     grid.push(row);
   }
 
-  // Ensure start positions are viable
-  for (const pos of START_POSITIONS_30) {
+  // Ensure start positions are viable (use scaled positions if provided)
+  const startPositions = scaledStartPositions ?? Object.fromEntries(
+    Object.entries(ruleset.civilizations).map(([id, civDef]) => [id, civDef.startPosition])
+  );
+  for (const [, pos] of Object.entries(startPositions)) {
     ensureStartViable(grid, pos, gridSize);
   }
 
@@ -193,72 +335,142 @@ function genCityId(): string {
   return `c${nextCityId++}`;
 }
 
+let nextBarbarianCampId = 1;
+function genBarbarianCampId(): string {
+  return `bcamp${nextBarbarianCampId++}`;
+}
+
+function placeBarbarianCamps(
+  grid: CivTile[][],
+  gridSize: number,
+  startPositions: Record<string, { x: number; y: number }>,
+  rng: () => number
+): Record<string, BarbarianCamp> {
+  const camps: Record<string, BarbarianCamp> = {};
+  const numCamps = 2 + Math.floor(rng() * 3);
+  const minDistFromCiv = Math.floor(gridSize * 0.25);
+  const civPositions = Object.values(startPositions);
+  const validPositions: { x: number; y: number }[] = [];
+
+  for (let y = 0; y < gridSize; y++) {
+    for (let x = 0; x < gridSize; x++) {
+      const tile = grid[y][x];
+      if (tile.terrain === 'water' || tile.terrain === 'mountain') continue;
+      if (tile.ownerId || tile.cityId) continue;
+      let farEnough = true;
+      for (const civPos of civPositions) {
+        const dist = Math.abs(x - civPos.x) + Math.abs(y - civPos.y);
+        if (dist < minDistFromCiv) { farEnough = false; break; }
+      }
+      if (farEnough) validPositions.push({ x, y });
+    }
+  }
+
+  for (let i = validPositions.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [validPositions[i], validPositions[j]] = [validPositions[j], validPositions[i]];
+  }
+
+  const placedCamps: { x: number; y: number }[] = [];
+  for (let i = 0; i < numCamps && validPositions.length > 0; i++) {
+    let pos: { x: number; y: number } | null = null;
+    for (let j = 0; j < validPositions.length; j++) {
+      const candidate = validPositions[j];
+      let farFromOtherCamps = true;
+      for (const placed of placedCamps) {
+        const dist = Math.abs(candidate.x - placed.x) + Math.abs(candidate.y - placed.y);
+        if (dist < 5) { farFromOtherCamps = false; break; }
+      }
+      if (farFromOtherCamps) { pos = candidate; validPositions.splice(j, 1); break; }
+    }
+    if (pos) {
+      const campId = genBarbarianCampId();
+      camps[campId] = { id: campId, x: pos.x, y: pos.y, strength: 50 + Math.floor(rng() * 30) };
+      placedCamps.push(pos);
+    }
+  }
+  return camps;
+}
+
 export function createInitialGameState(seed: number, gridSize: number = 30, maxTurns: number = 20): CivGameState {
   nextUnitId = 1;
   nextCityId = 1;
+  nextBarbarianCampId = 1;
 
-  const grid = generateMap(seed, gridSize);
-  const civIds: CivId[] = ['rome', 'egypt', 'mongolia'];
-  const starts = START_POSITIONS_30;
+  // Get scaled start positions for this map size
+  const scaledStartPositions = getScaledStartPositions(gridSize);
+
+  const grid = generateMap(seed, gridSize, scaledStartPositions);
+  const rng = seededRandom(seed + 5000); // RNG for barbarian camps and natural wonders
+  const barbarianCamps = placeBarbarianCamps(grid, gridSize, scaledStartPositions, rng);
+  const naturalWonders = placeNaturalWonders(grid, gridSize, scaledStartPositions, rng, 3);
+  const civIds = ruleset.getCivIds();
 
   const units: Record<string, Unit> = {};
   const cities: Record<string, City> = {};
-  const civilizations: Record<CivId, Civilization> = {} as Record<CivId, Civilization>;
+  const civilizations: Record<string, Civilization> = {};
 
-  const civConfigs: Record<CivId, { name: string; leader: string; personality: string }> = {
-    rome: { name: 'Roman Empire', leader: 'Caesar Augustus', personality: 'militaristic and diplomatic' },
-    egypt: { name: 'Kingdom of Egypt', leader: 'Cleopatra VII', personality: 'scientific and trade-focused' },
-    mongolia: { name: 'Mongol Empire', leader: 'Genghis Khan', personality: 'aggressive and expansionist' },
-  };
-
-  for (let i = 0; i < civIds.length; i++) {
-    const civId = civIds[i];
-    const pos = starts[i];
-    const config = civConfigs[civId];
+  for (const civId of civIds) {
+    const civDef = ruleset.getCiv(civId)!;
+    // Use scaled position instead of the default from ruleset
+    const pos = scaledStartPositions[civId] ?? civDef.startPosition;
 
     // Create starting city
     const cityId = genCityId();
-    const cityName = CITY_NAMES[civId][0];
+    const cityName = civDef.cityNames[0];
     cities[cityId] = {
       id: cityId, name: cityName, ownerId: civId,
       x: pos.x, y: pos.y, population: 1,
       goldPerTurn: 3, foodPerTurn: 2, productionPerTurn: 2,
+      sciencePerTurn: 0,
+      culturePerTurn: 1,
+      cultureStored: 0,
+      borderRadius: 1,
       buildings: [], defense: 5,
+      localHappiness: 0,
     };
     grid[pos.y][pos.x].cityId = cityId;
     grid[pos.y][pos.x].ownerId = civId;
 
-    // Claim territory around city (radius 2)
-    for (let dy = -2; dy <= 2; dy++) {
-      for (let dx = -2; dx <= 2; dx++) {
+    // Claim territory around city using borderRadius
+    const initialRadius = cities[cityId].borderRadius;
+    for (let dy = -initialRadius; dy <= initialRadius; dy++) {
+      for (let dx = -initialRadius; dx <= initialRadius; dx++) {
         const nx = pos.x + dx;
         const ny = pos.y + dy;
         if (nx >= 0 && nx < gridSize && ny >= 0 && ny < gridSize) {
-          if (Math.abs(dx) + Math.abs(dy) <= 2) {
+          if (Math.abs(dx) + Math.abs(dy) <= initialRadius) {
             grid[ny][nx].ownerId = civId;
           }
         }
       }
     }
 
-    // Create starting units
+    // Create starting units from ruleset
+    const startUnitTypes = civDef.startUnits;
     const unitPositions = [
-      { x: pos.x + 1, y: pos.y, type: 'warrior' as const },
-      { x: pos.x, y: pos.y + 1, type: 'scout' as const },
+      { x: pos.x + 1, y: pos.y },
+      { x: pos.x, y: pos.y + 1 },
+      { x: pos.x - 1, y: pos.y },
+      { x: pos.x, y: pos.y - 1 },
     ];
 
     const unitIds: string[] = [];
-    for (const upos of unitPositions) {
+    for (let i = 0; i < startUnitTypes.length && i < unitPositions.length; i++) {
+      const upos = unitPositions[i];
+      const unitType = startUnitTypes[i];
+      const unitDef = ruleset.getUnit(unitType);
+      if (!unitDef) continue;
+
       if (upos.x >= 0 && upos.x < gridSize && upos.y >= 0 && upos.y < gridSize
         && grid[upos.y][upos.x].terrain !== 'water' && grid[upos.y][upos.x].terrain !== 'mountain') {
         const unitId = genUnitId();
-        const stats = UNIT_STATS[upos.type];
         units[unitId] = {
-          id: unitId, type: upos.type, ownerId: civId,
+          id: unitId, type: unitType, ownerId: civId,
           x: upos.x, y: upos.y,
-          hp: stats.maxHp, maxHp: stats.maxHp,
-          attack: stats.attack, defense: stats.defense,
-          movement: stats.movement, movementLeft: stats.movement,
+          hp: unitDef.hp, maxHp: unitDef.hp,
+          attack: unitDef.attack, defense: unitDef.defense,
+          movement: unitDef.movement, movementLeft: unitDef.movement,
         };
         grid[upos.y][upos.x].unitId = unitId;
         unitIds.push(unitId);
@@ -280,7 +492,8 @@ export function createInitialGameState(seed: number, gridSize: number = 30, maxT
     // Units reveal their own visibility
     for (const uid of unitIds) {
       const u = units[uid];
-      const range = u.type === 'scout' ? 4 : 2;
+      const unitDef = ruleset.getUnit(u.type);
+      const range = unitDef?.vision ?? 2;
       for (let dy = -range; dy <= range; dy++) {
         for (let dx = -range; dx <= range; dx++) {
           const nx = u.x + dx;
@@ -292,17 +505,50 @@ export function createInitialGameState(seed: number, gridSize: number = 30, maxT
       }
     }
 
-    const relationships: Record<CivId, 'neutral'> = { rome: 'neutral', egypt: 'neutral', mongolia: 'neutral' };
+    // Initialize relationships as neutral with all other civs
+    const relationships: Record<string, 'neutral'> = {};
+    for (const otherId of civIds) {
+      relationships[otherId] = 'neutral';
+    }
 
     civilizations[civId] = {
-      id: civId, name: config.name, leaderName: config.leader,
-      color: CIV_VISUAL[civId].primary, secondaryColor: CIV_VISUAL[civId].secondary,
+      id: civId, name: civDef.name, leaderName: civDef.leader,
+      color: civDef.color, secondaryColor: civDef.secondaryColor,
       gold: 20,
       cities: [cityId], units: unitIds,
       knownTiles: Array.from(knownTiles),
       relationships,
-      personality: config.personality,
+      personality: civDef.personality,
       isAlive: true, score: 0,
+      researchedTechs: [],
+      currentResearch: null,
+      sciencePerTurn: 1,
+      goldenAgePoints: 0,
+      goldenAgeTurns: 0,
+      goldenAgesCompleted: 0,
+      greatPeopleProgress: {
+        scientist: 0,
+        artist: 0,
+        general: 0,
+        merchant: 0,
+        engineer: 0,
+      },
+      greatPeopleThresholds: {
+        scientist: 100,
+        artist: 100,
+        general: 100,
+        merchant: 100,
+        engineer: 100,
+      },
+      government: 'despotism',
+      anarchyTurns: 0,
+      happiness: 10,
+      warWeariness: 0,
+      spaceshipParts: {
+        booster: false,
+        cockpit: false,
+        engine: false,
+      },
     };
   }
 
@@ -316,26 +562,16 @@ export function createInitialGameState(seed: number, gridSize: number = 30, maxT
     civilizations,
     units,
     cities,
+    tradeRoutes: {},
+    naturalWonders,
+    barbarianCamps,
+    barbarianUnits: [],
     diplomacyLog: [],
     currentNarration: 'The ancient world stirs. Three great civilizations rise from the mist of time...',
     combatLog: [],
+    combatEffects: [],
+    notifications: [],
+    turnEvents: [],
     winner: null,
   };
 }
-
-// ============================================================================
-// Unit stats (imported from types for convenience)
-// ============================================================================
-
-export const UNIT_STATS: Record<string, { maxHp: number; attack: number; defense: number; movement: number }> = {
-  warrior: { maxHp: 100, attack: 10, defense: 8, movement: 2 },
-  archer:  { maxHp: 80, attack: 8, defense: 5, movement: 2 },
-  scout:   { maxHp: 60, attack: 4, defense: 3, movement: 4 },
-  settler: { maxHp: 50, attack: 0, defense: 2, movement: 2 },
-};
-
-const CIV_VISUAL: Record<CivId, { primary: string; secondary: string }> = {
-  rome: { primary: '#DC2626', secondary: '#FCA5A5' },
-  egypt: { primary: '#D97706', secondary: '#FDE68A' },
-  mongolia: { primary: '#2563EB', secondary: '#93C5FD' },
-};
