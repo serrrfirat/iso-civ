@@ -8,6 +8,9 @@ export type TurnCallback = (state: CivGameState, event: string) => void;
 export async function advanceTurn(state: CivGameState, seed: number, onUpdate?: TurnCallback): Promise<CivGameState> {
   if (state.winner) return state;
 
+  // Clear camera events from previous turn
+  state.cameraEvents = [];
+
   const allEvents: string[] = [];
   const civIds = Object.keys(state.civilizations);
   const aliveCivs = civIds.filter(id => state.civilizations[id].isAlive);
@@ -84,6 +87,9 @@ export async function advanceTurn(state: CivGameState, seed: number, onUpdate?: 
 // Fallback: advance turn without AI (for testing / when CLI not available)
 export function advanceTurnLocal(state: CivGameState, seed: number): CivGameState {
   if (state.winner) return state;
+
+  // Clear camera events from previous turn
+  state.cameraEvents = [];
 
   state.phase = 'resolution';
   const civIds = Object.keys(state.civilizations);

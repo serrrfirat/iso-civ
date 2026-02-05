@@ -1,4 +1,4 @@
-import { CivGameState, CivId, AgentAction, Unit, City, NotificationType, GameNotification, TurnEvent, TurnEventType, TradeRoute, GreatPersonType, GovernmentType } from '@/games/civ/types';
+import { CivGameState, CivId, AgentAction, Unit, City, NotificationType, GameNotification, TurnEvent, TurnEventType, TradeRoute, GreatPersonType, GovernmentType, CameraEvent, CameraEventType } from '@/games/civ/types';
 import { findPath, isInEnemyZoC } from './pathfinding';
 import { resolveCombat, resolveCityAttack, resolveRangedCombat } from './combatResolver';
 import { ruleset } from './ruleset';
@@ -6,6 +6,14 @@ import { processResearch, isUnitAvailable, isBuildingAvailable, calculateCitySci
 
 // Government anarchy duration in turns
 const ANARCHY_DURATION = 5;
+
+// Camera event priority constants (higher = more important)
+const CAMERA_PRIORITY = {
+  combat: 100,
+  city_founded: 80,
+  unit_destroyed: 90,
+  tech_complete: 60,
+} as const;
 
 // ============================================================================
 // Resource requirement helper
@@ -75,6 +83,33 @@ export function addNotification(
     timestamp: Date.now(),
   };
   state.notifications.push(notification);
+}
+
+// ============================================================================
+// Camera Event Helper
+// ============================================================================
+
+/**
+ * Add a camera event to trigger auto-pan in the UI
+ * @param state - The current game state
+ * @param type - The type of camera event
+ * @param x - Grid x coordinate
+ * @param y - Grid y coordinate
+ */
+export function addCameraEvent(
+  state: CivGameState,
+  type: CameraEventType,
+  x: number,
+  y: number
+): void {
+  const priority = CAMERA_PRIORITY[type];
+  const event: CameraEvent = {
+    type,
+    x,
+    y,
+    priority,
+  };
+  state.cameraEvents.push(event);
 }
 
 // ============================================================================
@@ -444,6 +479,9 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
       };
       state.combatEffects.push(combatEffect);
 
+      // Add camera event for combat (center on defender position)
+      addCameraEvent(state, 'combat', defenderX, defenderY);
+
       if (result.defenderDestroyed) {
         const def = state.units[action.targetId];
         if (def) {
@@ -457,6 +495,8 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
           events.push(`${result.defenderCiv}'s ${defUnitType} was destroyed`);
           addNotification(state, 'combat', `${defCiv.name}'s ${defUnitType} was destroyed in combat!`, result.defenderCiv, { x: defenderX, y: defenderY });
           addTurnEvent(state, 'unit_destroyed', `${state.civilizations[result.defenderCiv]?.name || result.defenderCiv}'s ${defUnitType} was destroyed at (${defenderX}, ${defenderY})`, result.defenderCiv);
+          // Add camera event for unit destruction
+          addCameraEvent(state, 'unit_destroyed', defenderX, defenderY);
         }
       }
 
@@ -472,6 +512,8 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
           delete state.units[action.unitId];
           events.push(`${result.attackerCiv}'s ${atkUnitType} was destroyed`);
           addNotification(state, 'combat', `${atkCiv.name}'s ${atkUnitType} was destroyed in combat!`, result.attackerCiv, { x: attackerX, y: attackerY });
+          // Add camera event for unit destruction
+          addCameraEvent(state, 'unit_destroyed', attackerX, attackerY);
           addTurnEvent(state, 'unit_destroyed', `${state.civilizations[result.attackerCiv]?.name || result.attackerCiv}'s ${atkUnitType} was destroyed at (${attackerX}, ${attackerY})`, result.attackerCiv);
         }
       }
@@ -529,6 +571,8 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
       events.push(`${civId} founded ${action.cityName}`);
       addNotification(state, 'city', `${civ.name} founded ${action.cityName}!`, civId, { x: city.x, y: city.y });
       addTurnEvent(state, 'city_founded', `${state.civilizations[civId]?.name || civId} founded ${action.cityName} at (${settler.x}, ${settler.y})`, civId);
+      // Add camera event for city founding
+      addCameraEvent(state, 'city_founded', city.x, city.y);
       break;
     }
 
@@ -658,6 +702,9 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
       };
       state.combatEffects.push(combatEffect);
 
+      // Add camera event for ranged combat (center on defender position)
+      addCameraEvent(state, 'combat', defenderX, defenderY);
+
       if (result.defenderDestroyed) {
         const def = state.units[defenderId];
         if (def) {
@@ -671,6 +718,8 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
           events.push(`${result.defenderCiv}'s ${defUnitType} was destroyed`);
           addNotification(state, 'unit', `${defCiv.name}'s ${defUnitType} was destroyed!`, result.defenderCiv, { x: defenderX, y: defenderY });
           addTurnEvent(state, 'unit_destroyed', `${state.civilizations[result.defenderCiv]?.name || result.defenderCiv}'s ${defUnitType} was destroyed at (${defenderX}, ${defenderY})`, result.defenderCiv);
+          // Add camera event for unit destruction
+          addCameraEvent(state, 'unit_destroyed', defenderX, defenderY);
         }
       }
 

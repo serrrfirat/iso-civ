@@ -4,7 +4,7 @@
 
 import { CivGameState, Civilization, City } from '@/games/civ/types';
 import { ruleset, RulesetTech } from './ruleset';
-import { addNotification, addTurnEvent } from './civSimulation';
+import { addNotification, addTurnEvent, addCameraEvent } from './civSimulation';
 
 // ============================================================================
 // Science calculation
@@ -79,6 +79,15 @@ export function processResearch(state: CivGameState, civId: string): string[] {
     events.push(`${civ.name} discovered ${tech?.name ?? techId}!`);
     addNotification(state, 'tech', `${civ.name} discovered ${tech?.name ?? techId}!`, civId);
     addTurnEvent(state, 'research_completed', `${civ.name} discovered ${tech?.name ?? techId}`, civId);
+
+    // Add camera event for tech completion (center on capital city)
+    if (civ.cities.length > 0) {
+      const capitalId = civ.cities[0];
+      const capital = state.cities[capitalId];
+      if (capital) {
+        addCameraEvent(state, 'tech_complete', capital.x, capital.y);
+      }
+    }
 
     // Check what this tech unlocks
     const newUnits = Object.entries(ruleset.units)

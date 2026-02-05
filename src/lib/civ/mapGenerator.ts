@@ -572,6 +572,7 @@ export function createInitialGameState(seed: number, gridSize: number = 30, maxT
     combatEffects: [],
     notifications: [],
     turnEvents: [],
+    cameraEvents: [],
     winner: null,
   };
 }

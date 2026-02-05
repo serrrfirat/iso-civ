@@ -5,7 +5,7 @@ import { useCivGame } from '@/context/CivGameContext';
 import { CivId, TERRAIN_COLORS, CIV_COLORS } from '@/games/civ/types';
 import { gridToScreen, TILE_WIDTH, TILE_HEIGHT } from '@/components/civ/TerrainRenderer';
 
-const MINIMAP_SIZE = 150;
+const DEFAULT_MINIMAP_SIZE = 150;
 
 // Minimap terrain colors (simplified flat colors)
 const MINIMAP_TERRAIN_COLORS: Record<string, string> = {
@@ -26,11 +26,23 @@ interface MinimapProps {
   viewportZoom: number;
   /** Canvas dimensions */
   canvasSize: { width: number; height: number };
+  /** Size of the minimap in pixels (default: 150) */
+  size?: number;
+  /** Whether to render as standalone with positioning, or inline without (default: true) */
+  standalone?: boolean;
 }
 
-export function Minimap({ onPanTo, viewportOffset, viewportZoom, canvasSize }: MinimapProps) {
+export function Minimap({
+  onPanTo,
+  viewportOffset,
+  viewportZoom,
+  canvasSize,
+  size = DEFAULT_MINIMAP_SIZE,
+  standalone = true
+}: MinimapProps) {
   const { state, perspective } = useCivGame();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const MINIMAP_SIZE = size;
 
   // Get known tiles set based on perspective
   const getKnownTiles = useCallback((): Set<string> | null => {
@@ -69,7 +81,7 @@ export function Minimap({ onPanTo, viewportOffset, viewportZoom, canvasSize }: M
     const offsetY = (MINIMAP_SIZE - worldHeight * scale) / 2 - minY * scale;
 
     return { scale, offsetX, offsetY, minX, minY, worldWidth, worldHeight };
-  }, [state.gridSize]);
+  }, [state.gridSize, MINIMAP_SIZE]);
 
   // Render the minimap
   const render = useCallback(() => {
@@ -182,7 +194,7 @@ export function Minimap({ onPanTo, viewportOffset, viewportZoom, canvasSize }: M
       ctx.fillRect(rectX, rectY, rectW, rectH);
     }
 
-  }, [state, getMinimapTransform, getKnownTiles, viewportOffset, viewportZoom, canvasSize]);
+  }, [state, getMinimapTransform, getKnownTiles, viewportOffset, viewportZoom, canvasSize, MINIMAP_SIZE]);
 
   // Re-render on state changes
   useEffect(() => {
@@ -218,16 +230,34 @@ export function Minimap({ onPanTo, viewportOffset, viewportZoom, canvasSize }: M
     onPanTo(Math.round(gx), Math.round(gy));
   }, [onPanTo, getMinimapTransform]);
 
+  // Standalone mode renders with absolute positioning (original behavior)
+  // Inline mode renders just the canvas for embedding in other components
+  if (standalone) {
+    return (
+      <div
+        className="absolute bottom-16 left-2 z-10 rounded-lg overflow-hidden border-2 border-amber-600/60 bg-slate-950/90 shadow-lg"
+        style={{ width: MINIMAP_SIZE, height: MINIMAP_SIZE }}
+      >
+        {/* Corner decorations for Civ 6 style */}
+        <div className="absolute -top-0.5 -left-0.5 w-2 h-2 border-t-2 border-l-2 border-amber-500/80 z-10" />
+        <div className="absolute -top-0.5 -right-0.5 w-2 h-2 border-t-2 border-r-2 border-amber-500/80 z-10" />
+        <div className="absolute -bottom-0.5 -left-0.5 w-2 h-2 border-b-2 border-l-2 border-amber-500/80 z-10" />
+        <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 border-b-2 border-r-2 border-amber-500/80 z-10" />
+        <canvas
+          ref={canvasRef}
+          style={{ width: MINIMAP_SIZE, height: MINIMAP_SIZE, cursor: 'pointer' }}
+          onClick={handleClick}
+        />
+      </div>
+    );
+  }
+
+  // Inline mode - just the canvas
   return (
-    <div
-      className="absolute bottom-16 left-2 z-10 rounded-lg overflow-hidden border-2 border-gray-700 bg-gray-900/90 shadow-lg"
-      style={{ width: MINIMAP_SIZE, height: MINIMAP_SIZE }}
-    >
-      <canvas
-        ref={canvasRef}
-        style={{ width: MINIMAP_SIZE, height: MINIMAP_SIZE, cursor: 'pointer' }}
-        onClick={handleClick}
-      />
-    </div>
+    <canvas
+      ref={canvasRef}
+      style={{ width: MINIMAP_SIZE, height: MINIMAP_SIZE, cursor: 'pointer' }}
+      onClick={handleClick}
+    />
   );
 }

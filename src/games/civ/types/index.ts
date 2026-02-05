@@ -168,6 +168,16 @@ export interface NaturalWonder {
   discoveredBy?: CivId; // First civ to have it in territory gets happiness bonus
 }
 
+// Camera event types for auto-pan system
+export type CameraEventType = 'combat' | 'city_founded' | 'unit_destroyed' | 'tech_complete';
+
+export interface CameraEvent {
+  type: CameraEventType;
+  x: number;
+  y: number;
+  priority: number;
+}
+
 // Turn event types for the event log
 export type TurnEventType =
   | 'move'
@@ -251,6 +261,7 @@ export interface CivGameState {
   combatEffects: CombatEffect[];
   notifications: GameNotification[];
   turnEvents: TurnEvent[];
+  cameraEvents: CameraEvent[];
   winner: CivId | null;
   victoryType?: VictoryType;
 }

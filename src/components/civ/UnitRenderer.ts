@@ -3,6 +3,25 @@ import { gridToScreen, TILE_WIDTH, TILE_HEIGHT } from './TerrainRenderer';
 import { spriteCache, CITY_SPRITE, UNIT_SPRITES } from '@/lib/civ/spriteLoader';
 
 // ============================================================================
+// Unit selection/hover state (managed by CivCanvas)
+// ============================================================================
+
+let selectedUnitId: string | null = null;
+let hoveredUnitId: string | null = null;
+
+export function setSelectedUnit(unitId: string | null): void {
+  selectedUnitId = unitId;
+}
+
+export function setHoveredUnit(unitId: string | null): void {
+  hoveredUnitId = unitId;
+}
+
+export function getHoveredUnit(): string | null {
+  return hoveredUnitId;
+}
+
+// ============================================================================
 // Animation interpolation utilities
 // ============================================================================
 
@@ -148,21 +167,168 @@ function drawGenericUnit(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   ctx.fillText(label[0].toUpperCase(), cx, cy);
 }
 
-function drawHealthBar(ctx: CanvasRenderingContext2D, cx: number, cy: number, hp: number, maxHp: number, size: number): void {
-  if (hp >= maxHp) return;
-  const barWidth = size * 1.6;
+// ============================================================================
+// Civ 6 Style Unit Banner Components
+// ============================================================================
+
+/** Draw Civ 6 style health bar with rounded ends positioned below unit */
+function drawHealthBar(ctx: CanvasRenderingContext2D, cx: number, cy: number, hp: number, maxHp: number, barWidth: number = 24): void {
   const barHeight = 3;
-  const barY = cy + size + 2;
+  const barY = cy + 12; // Position below unit
   const barX = cx - barWidth / 2;
   const ratio = hp / maxHp;
+  const borderRadius = barHeight / 2;
 
-  ctx.fillStyle = '#333';
-  ctx.fillRect(barX, barY, barWidth, barHeight);
-  ctx.fillStyle = ratio > 0.6 ? '#22C55E' : ratio > 0.3 ? '#EAB308' : '#EF4444';
-  ctx.fillRect(barX, barY, barWidth * ratio, barHeight);
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 0.5;
-  ctx.strokeRect(barX, barY, barWidth, barHeight);
+  // Background (dark gray with slight transparency)
+  ctx.fillStyle = 'rgba(30, 30, 30, 0.9)';
+  ctx.beginPath();
+  ctx.roundRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2, borderRadius + 1);
+  ctx.fill();
+
+  // Empty bar background
+  ctx.fillStyle = '#1a1a1a';
+  ctx.beginPath();
+  ctx.roundRect(barX, barY, barWidth, barHeight, borderRadius);
+  ctx.fill();
+
+  // Health fill with color based on HP percentage
+  // Green > 66%, Yellow 33-66%, Red < 33%
+  let healthColor: string;
+  if (ratio > 0.66) {
+    healthColor = '#22C55E'; // Green
+  } else if (ratio > 0.33) {
+    healthColor = '#EAB308'; // Yellow
+  } else {
+    healthColor = '#EF4444'; // Red
+  }
+
+  if (ratio > 0) {
+    const fillWidth = Math.max(barHeight, barWidth * ratio); // Ensure minimum width for rounded end
+    ctx.fillStyle = healthColor;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, fillWidth, barHeight, borderRadius);
+    ctx.fill();
+
+    // Slight gradient/shine on health bar
+    const gradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+    gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.roundRect(barX, barY, fillWidth, barHeight, borderRadius);
+    ctx.fill();
+  }
+}
+
+/** Draw civ color banner/flag above unit - small triangle flag */
+function drawCivBanner(ctx: CanvasRenderingContext2D, cx: number, cy: number, primary: string, secondary: string): void {
+  const flagX = cx;
+  const flagY = cy - 20; // Position above unit
+  const flagWidth = 8;
+  const flagHeight = 10;
+  const poleHeight = 14;
+
+  // Flag pole (thin line)
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(flagX, flagY + flagHeight);
+  ctx.lineTo(flagX, flagY + flagHeight + poleHeight);
+  ctx.stroke();
+
+  // Flag triangle (pointing right)
+  ctx.fillStyle = primary;
+  ctx.beginPath();
+  ctx.moveTo(flagX, flagY);
+  ctx.lineTo(flagX + flagWidth, flagY + flagHeight / 2);
+  ctx.lineTo(flagX, flagY + flagHeight);
+  ctx.closePath();
+  ctx.fill();
+
+  // Flag border
+  ctx.strokeStyle = secondary;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Small accent stripe
+  ctx.fillStyle = secondary;
+  ctx.beginPath();
+  ctx.moveTo(flagX, flagY + 2);
+  ctx.lineTo(flagX + flagWidth * 0.6, flagY + flagHeight / 2);
+  ctx.lineTo(flagX, flagY + flagHeight - 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** Draw movement pips (small dots) showing remaining movement points */
+function drawMovementPips(ctx: CanvasRenderingContext2D, cx: number, cy: number, movement: number, movementLeft: number): void {
+  if (movement <= 0) return;
+
+  const pipRadius = 2;
+  const pipSpacing = 6;
+  const totalWidth = (movement - 1) * pipSpacing;
+  const startX = cx - totalWidth / 2;
+  const pipY = cy + 18; // Below health bar
+
+  for (let i = 0; i < movement; i++) {
+    const pipX = startX + i * pipSpacing;
+    const hasMoves = i < movementLeft;
+
+    // Pip background/shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.beginPath();
+    ctx.arc(pipX, pipY + 0.5, pipRadius + 0.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pip fill
+    ctx.fillStyle = hasMoves ? '#FFFFFF' : '#4a4a4a';
+    ctx.beginPath();
+    ctx.arc(pipX, pipY, pipRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Slight highlight on filled pips
+    if (hasMoves) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.beginPath();
+      ctx.arc(pipX - 0.5, pipY - 0.5, pipRadius * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/** Draw selection/hover glow effect around unit */
+function drawSelectionGlow(ctx: CanvasRenderingContext2D, cx: number, cy: number, isSelected: boolean, isHovered: boolean, time: number): void {
+  if (!isSelected && !isHovered) return;
+
+  const baseRadius = 16;
+  const pulseAmount = isSelected ? 3 : 1.5;
+  const pulseSpeed = isSelected ? 0.003 : 0.002;
+  const pulse = Math.sin(time * pulseSpeed) * pulseAmount;
+  const radius = baseRadius + pulse;
+
+  // Outer glow (multiple layers for softer effect)
+  const glowLayers = isSelected ? 4 : 2;
+  const baseAlpha = isSelected ? 0.4 : 0.25;
+  const glowColor = isSelected ? '255, 215, 0' : '255, 255, 255'; // Gold for selected, white for hover
+
+  for (let i = glowLayers; i >= 1; i--) {
+    const layerRadius = radius + i * 3;
+    const alpha = baseAlpha * (1 - i / (glowLayers + 1));
+
+    ctx.strokeStyle = `rgba(${glowColor}, ${alpha})`;
+    ctx.lineWidth = 2 + i;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 2, layerRadius, layerRadius * 0.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Inner bright ring
+  ctx.strokeStyle = isSelected ? 'rgba(255, 215, 0, 0.8)' : 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = isSelected ? 2 : 1.5;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 2, radius, radius * 0.5, 0, 0, Math.PI * 2);
+  ctx.stroke();
 }
 
 export function renderUnits(
@@ -187,6 +353,11 @@ export function renderUnits(
     const cy = screen.y + TILE_HEIGHT / 2 - 4;
 
     const civColor = CIV_COLORS[unit.ownerId] ?? { primary: '#888', secondary: '#CCC' };
+    const isSelected = unit.id === selectedUnitId;
+    const isHovered = unit.id === hoveredUnitId;
+
+    // Draw selection/hover glow BEFORE unit sprite (so it appears behind)
+    drawSelectionGlow(ctx, cx, cy, isSelected, isHovered, now);
 
     // Try generated sprite
     const spritePath = UNIT_SPRITES[unit.type];
@@ -200,7 +371,7 @@ export function renderUnits(
 
       spriteCache.drawImage(ctx, spritePath, dx, dy, sw, sh);
 
-      // Colored ring at feet for civ identification
+      // Colored ring at feet for civ identification (kept for consistency with sprite)
       ctx.strokeStyle = civColor.primary;
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -221,10 +392,49 @@ export function renderUnits(
       }
     }
 
-    drawHealthBar(ctx, cx, cy, unit.hp, unit.maxHp, unitSize);
+    // Draw Civ 6 style banner/flag above unit
+    drawCivBanner(ctx, cx - 12, cy, civColor.primary, civColor.secondary);
+
+    // Draw health bar below unit (always show, even at full health for consistency)
+    drawHealthBar(ctx, cx, cy, unit.hp, unit.maxHp, 24);
+
+    // Draw movement pips below health bar
+    drawMovementPips(ctx, cx, cy, unit.movement, unit.movementLeft);
   }
 
   ctx.restore();
+}
+
+/** Find unit at screen position (for hover detection) */
+export function findUnitAtPosition(
+  units: Record<string, Unit>,
+  screenX: number,
+  screenY: number,
+  offset: { x: number; y: number },
+  zoom: number,
+  currentTime?: number,
+): string | null {
+  const now = currentTime ?? Date.now();
+  const hitRadius = 18; // Approximate click/hover radius
+
+  // Check units in reverse order (last rendered = on top)
+  const unitList = Object.values(units);
+  for (let i = unitList.length - 1; i >= 0; i--) {
+    const unit = unitList[i];
+    const screen = getUnitScreenPosition(unit, now);
+    const cx = (screen.x + TILE_WIDTH / 2) * zoom + offset.x;
+    const cy = (screen.y + TILE_HEIGHT / 2 - 4) * zoom + offset.y;
+
+    const dx = screenX - cx;
+    const dy = screenY - cy;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance <= hitRadius * zoom) {
+      return unit.id;
+    }
+  }
+
+  return null;
 }
 
 // ============================================================================
