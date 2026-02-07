@@ -1,4 +1,4 @@
-import { CivTile, TerrainType, ResourceType, CivId, CivGameState, Civilization, Unit, City, NaturalWonder, BarbarianCamp } from '@/games/civ/types';
+import { CivTile, TerrainType, ResourceType, CivId, CivGameState, Civilization, Unit, City, NaturalWonder, BarbarianCamp, CivCulture } from '@/games/civ/types';
 import { ruleset } from './ruleset';
 
 // ============================================================================
@@ -549,6 +549,12 @@ export function createInitialGameState(seed: number, gridSize: number = 30, maxT
         cockpit: false,
         engine: false,
       },
+      culture: {
+        artifacts: [],
+        summary: null,
+        constitutionName: '',
+        religionName: '',
+      },
     };
   }
 
@@ -573,6 +579,8 @@ export function createInitialGameState(seed: number, gridSize: number = 30, maxT
     notifications: [],
     turnEvents: [],
     cameraEvents: [],
+    civTurnSummaries: [],
+    culturalEvents: [],
     winner: null,
   };
 }

@@ -1,7 +1,7 @@
 import { spawn } from 'child_process';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { CivId, CivGameState, DiplomacyMessage, AgentAction } from '@/games/civ/types';
+import { CivId, CivGameState, DiplomacyMessage, AgentAction, CulturalSummary } from '@/games/civ/types';
 import { getSystemPrompt, getActionPrompt, getNarratorPrompt } from './civPersonalities';
 import { ruleset } from './ruleset';
 
@@ -150,6 +150,13 @@ export async function runDiplomacyPhase(civId: CivId, state: CivGameState, inbox
 // Planning phase
 // ============================================================================
 
+export interface PlanningResult {
+  actions: AgentAction[];
+  artifacts: Array<{ type: string; title: string; content: string }>;
+  constitutionName?: string;
+  religionName?: string;
+}
+
 function getActionsFormat(civId: CivId, state: CivGameState): string {
   const civ = state.civilizations[civId];
   const availableUnits = ruleset.getAvailableUnits(civ.researchedTechs);
@@ -253,16 +260,19 @@ Respond with ONLY a JSON object in this exact format (no markdown, no code block
   {"type":"upgrade_unit","unitId":"u1"},
   {"type":"change_government","government":"republic"},
   {"type":"expend_great_person","unitId":"gp500","ability":"instant_research"}
-]}
+], "cultural_artifacts":[{"type":"law|decree|religious_text|propaganda|tradition|constitutional","title":"short title","content":"the full text"}], "constitution_name":"Name of Constitution (first turn only)", "religion_name":"Name of Religion (first turn only)"}
 
 Only include actions you want to take.
 Valid unit build targets: ${availableUnits.join(', ')}
 Valid building build targets: ${availableBuildings.join(', ')}
 Valid improvements (for workers): ${improvementInfo}
-Valid research targets: ${researchable.map(t => t.id).join(', ') || 'none available'}${upgradeInfo}${rangedInfo}${governmentSection}${greatPersonsSection}`;
+Valid research targets: ${researchable.map(t => t.id).join(', ') || 'none available'}${upgradeInfo}${rangedInfo}${governmentSection}${greatPersonsSection}
+
+Also include cultural output with your actions:
+- cultural_artifacts: 0-2 cultural artifacts this turn (laws, decrees, religious texts, propaganda, traditions, or constitutional articles). These become part of your civilization's permanent cultural record and will constrain your future decisions. Write them in-character.${state.turn === 1 ? '\n- constitution_name: Name your civilization\'s constitution/governing document\n- religion_name: Name your civilization\'s state religion or belief system' : ''}`;
 }
 
-export async function runPlanningPhase(civId: CivId, state: CivGameState, diplomacyContext: string): Promise<AgentAction[]> {
+export async function runPlanningPhase(civId: CivId, state: CivGameState, diplomacyContext: string): Promise<PlanningResult> {
   const actionsFormat = getActionsFormat(civId, state);
   const prompt = getActionPrompt(civId, state, diplomacyContext) + actionsFormat;
   const systemPrompt = `You are the AI controlling ${state.civilizations[civId].name}. Make strategic decisions. Return ONLY valid JSON, no markdown.`;
@@ -270,7 +280,12 @@ export async function runPlanningPhase(civId: CivId, state: CivGameState, diplom
   try {
     const raw = await runClaude(prompt, systemPrompt);
     const jsonStr = extractJson(raw);
-    const output = JSON.parse(jsonStr) as { actions: Array<Record<string, unknown>> };
+    const output = JSON.parse(jsonStr) as {
+      actions: Array<Record<string, unknown>>;
+      cultural_artifacts?: Array<{ type: string; title: string; content: string }>;
+      constitution_name?: string;
+      religion_name?: string;
+    };
 
     const actions: AgentAction[] = [];
     for (const a of output.actions || []) {
@@ -311,10 +326,25 @@ export async function runPlanningPhase(civId: CivId, state: CivGameState, diplom
       }
     }
 
-    return actions;
+    // Parse cultural artifacts with defensive fallbacks
+    const artifacts: Array<{ type: string; title: string; content: string }> = [];
+    if (Array.isArray(output.cultural_artifacts)) {
+      for (const ca of output.cultural_artifacts) {
+        if (ca && typeof ca.type === 'string' && typeof ca.title === 'string' && typeof ca.content === 'string') {
+          artifacts.push({ type: ca.type, title: ca.title, content: ca.content });
+        }
+      }
+    }
+
+    return {
+      actions,
+      artifacts,
+      constitutionName: typeof output.constitution_name === 'string' ? output.constitution_name : undefined,
+      religionName: typeof output.religion_name === 'string' ? output.religion_name : undefined,
+    };
   } catch (error) {
     console.error(`Planning error for ${civId}:`, error);
-    return [];
+    return { actions: [], artifacts: [] };
   }
 }
 
@@ -333,6 +363,50 @@ export async function generateNarration(turnEvents: string[], state: CivGameStat
   } catch (error) {
     console.error('Narrator error:', error);
     return 'The world turns in silence.';
+  }
+}
+
+// ============================================================================
+// Cultural Summarization
+// ============================================================================
+
+export async function runCulturalSummarization(civId: CivId, state: CivGameState): Promise<CulturalSummary | null> {
+  const civ = state.civilizations[civId];
+  if (!civ?.culture || civ.culture.artifacts.length === 0) return null;
+
+  const artifactList = civ.culture.artifacts
+    .map(a => `[${a.type}${a.isActive ? '' : ' (repealed)'}] "${a.title}" (Turn ${a.turn}): ${a.content}`)
+    .join('\n');
+
+  const prompt = `You are summarizing the cultural identity of ${civ.name} (${civ.leaderName}) based on their cultural artifacts.
+
+ALL CULTURAL ARTIFACTS:
+${artifactList}
+
+Compress all of these into a concise cultural identity summary (~200 tokens max). Return ONLY a JSON object:
+{"governingPrinciples":"<how this civ governs, key laws and constitutional themes>","religiousIdentity":"<their religious beliefs and practices>","culturalValues":"<core values, traditions, what they celebrate>","propagandaThemes":"<recurring propaganda narratives and themes>"}`;
+
+  try {
+    const raw = await runClaude(prompt, `You are a cultural historian. Return ONLY valid JSON, no markdown.`);
+    const jsonStr = extractJson(raw);
+    const output = JSON.parse(jsonStr) as {
+      governingPrinciples?: string;
+      religiousIdentity?: string;
+      culturalValues?: string;
+      propagandaThemes?: string;
+    };
+
+    return {
+      civId,
+      lastUpdatedTurn: state.turn,
+      governingPrinciples: output.governingPrinciples || '',
+      religiousIdentity: output.religiousIdentity || '',
+      culturalValues: output.culturalValues || '',
+      propagandaThemes: output.propagandaThemes || '',
+    };
+  } catch (error) {
+    console.error(`Cultural summarization error for ${civId}:`, error);
+    return null;
   }
 }
 

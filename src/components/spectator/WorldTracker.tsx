@@ -42,22 +42,6 @@ function ProductionIcon({ className }: { className?: string }) {
   );
 }
 
-function ChevronIcon({ direction, className }: { direction: 'up' | 'down'; className?: string }) {
-  return (
-    <svg
-      className={`${className} transition-transform ${direction === 'up' ? 'rotate-180' : ''}`}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
 // ============================================================================
 // Progress Bar Component
 // ============================================================================
@@ -223,11 +207,11 @@ function ProductionSection({ cities }: ProductionSectionProps) {
 
 // ============================================================================
 // Main WorldTracker Component
+// Now renders inline (no absolute positioning) for use inside OverlayPanel
 // ============================================================================
 
 export function WorldTracker() {
   const { state, perspective } = useCivGame();
-  const [isCollapsed, setIsCollapsed] = useState(false);
   const [selectedCivId, setSelectedCivId] = useState<string | null>(null);
 
   // Determine which civ to show
@@ -256,121 +240,80 @@ export function WorldTracker() {
   if (!civ) return null;
 
   return (
-    <div
-      className="absolute left-3 top-3 z-30 select-none"
-      style={{
-        width: isCollapsed ? 'auto' : '220px',
-      }}
-    >
-      {/* Panel container */}
-      <div
-        className="rounded-lg overflow-hidden shadow-xl"
-        style={{
-          background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.90) 100%)',
-          border: '1px solid rgba(71, 85, 105, 0.5)',
-        }}
-      >
-        {/* Header */}
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
-          style={{
-            borderBottom: isCollapsed ? 'none' : '1px solid rgba(71, 85, 105, 0.5)',
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <span
-              className="text-[10px] font-bold tracking-widest"
-              style={{ color: '#d4a373' }}
+    <div className="p-3 space-y-4">
+      {/* Civ selector (mini tabs) */}
+      <div className="flex gap-1">
+        {civIds.map(civId => {
+          const c = CIV_COLORS[civId] ?? { primary: '#888', secondary: '#CCC', label: civId };
+          const isActive = civId === displayCivId;
+          return (
+            <button
+              key={civId}
+              onClick={() => setSelectedCivId(civId)}
+              className={`flex-1 px-1.5 py-1 rounded text-[9px] font-bold tracking-wider transition-all ${
+                isActive
+                  ? 'ring-1'
+                  : 'opacity-50 hover:opacity-75'
+              }`}
+              style={{
+                backgroundColor: isActive ? `${c.primary}20` : 'transparent',
+                color: c.primary,
+                boxShadow: isActive ? `0 0 0 1px ${c.primary}` : 'none',
+              }}
+              title={c.label}
             >
-              WORLD TRACKER
-            </span>
-          </div>
-          <ChevronIcon
-            direction={isCollapsed ? 'down' : 'up'}
-            className="w-4 h-4 text-gray-500"
-          />
-        </button>
+              {c.label.slice(0, 3).toUpperCase()}
+            </button>
+          );
+        })}
+      </div>
 
-        {/* Collapsible content */}
-        {!isCollapsed && (
-          <div className="p-3 space-y-4">
-            {/* Civ selector (mini tabs) */}
-            <div className="flex gap-1">
-              {civIds.map(civId => {
-                const c = CIV_COLORS[civId] ?? { primary: '#888', secondary: '#CCC', label: civId };
-                const isActive = civId === displayCivId;
-                return (
-                  <button
-                    key={civId}
-                    onClick={() => setSelectedCivId(civId)}
-                    className={`flex-1 px-1.5 py-1 rounded text-[9px] font-bold tracking-wider transition-all ${
-                      isActive
-                        ? 'ring-1'
-                        : 'opacity-50 hover:opacity-75'
-                    }`}
-                    style={{
-                      backgroundColor: isActive ? `${c.primary}20` : 'transparent',
-                      color: c.primary,
-                      boxShadow: isActive ? `0 0 0 1px ${c.primary}` : 'none',
-                    }}
-                    title={c.label}
-                  >
-                    {c.label.slice(0, 3).toUpperCase()}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Current Civ indicator */}
-            <div className="flex items-center gap-2 pb-2 border-b border-gray-700/50">
-              <div
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: colors.primary }}
-              />
-              <span className="text-xs font-semibold text-gray-200">{civ.name}</span>
-              {!civ.isAlive && (
-                <span className="text-[8px] text-red-400 bg-red-900/30 px-1 py-0.5 rounded">
-                  ELIMINATED
-                </span>
-              )}
-            </div>
-
-            {/* Research Section */}
-            <div>
-              <div className="text-[9px] text-gray-500 font-bold tracking-wider mb-2">
-                RESEARCH
-              </div>
-              <ResearchSection civ={civ} colors={colors} />
-            </div>
-
-            {/* Production Section */}
-            <div>
-              <div className="text-[9px] text-gray-500 font-bold tracking-wider mb-2">
-                PRODUCTION
-              </div>
-              <ProductionSection cities={cities} />
-            </div>
-
-            {/* Quick Stats */}
-            <div className="pt-2 border-t border-gray-700/50">
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <div className="text-[9px] text-gray-500">GOLD</div>
-                  <div className="text-xs font-mono text-yellow-400">{civ.gold}</div>
-                </div>
-                <div>
-                  <div className="text-[9px] text-gray-500">SCIENCE</div>
-                  <div className="text-xs font-mono text-teal-400">+{civ.sciencePerTurn}</div>
-                </div>
-                <div>
-                  <div className="text-[9px] text-gray-500">CITIES</div>
-                  <div className="text-xs font-mono text-gray-200">{cities.length}</div>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Current Civ indicator */}
+      <div className="flex items-center gap-2 pb-2 border-b border-gray-700/50">
+        <div
+          className="w-2.5 h-2.5 rounded-full"
+          style={{ backgroundColor: colors.primary }}
+        />
+        <span className="text-xs font-semibold text-gray-200">{civ.name}</span>
+        {!civ.isAlive && (
+          <span className="text-[8px] text-red-400 bg-red-900/30 px-1 py-0.5 rounded">
+            ELIMINATED
+          </span>
         )}
+      </div>
+
+      {/* Research Section */}
+      <div>
+        <div className="text-[9px] text-gray-500 font-bold tracking-wider mb-2">
+          RESEARCH
+        </div>
+        <ResearchSection civ={civ} colors={colors} />
+      </div>
+
+      {/* Production Section */}
+      <div>
+        <div className="text-[9px] text-gray-500 font-bold tracking-wider mb-2">
+          PRODUCTION
+        </div>
+        <ProductionSection cities={cities} />
+      </div>
+
+      {/* Quick Stats */}
+      <div className="pt-2 border-t border-gray-700/50">
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div>
+            <div className="text-[9px] text-gray-500">GOLD</div>
+            <div className="text-xs font-mono text-yellow-400">{civ.gold}</div>
+          </div>
+          <div>
+            <div className="text-[9px] text-gray-500">SCIENCE</div>
+            <div className="text-xs font-mono text-teal-400">+{civ.sciencePerTurn}</div>
+          </div>
+          <div>
+            <div className="text-[9px] text-gray-500">CITIES</div>
+            <div className="text-xs font-mono text-gray-200">{cities.length}</div>
+          </div>
+        </div>
       </div>
     </div>
   );

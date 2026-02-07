@@ -1,6 +1,6 @@
-import { CivGameState, CivId, DiplomacyMessage } from '@/games/civ/types';
-import { runDiplomacyPhase, runPlanningPhase, generateNarration } from './agentService';
-import { validateAction, executeAction, processEndOfTurn } from './civSimulation';
+import { CivGameState, CivId, DiplomacyMessage, CivTurnSummary, CulturalArtifact, CulturalArtifactType } from '@/games/civ/types';
+import { runDiplomacyPhase, runPlanningPhase, generateNarration, runCulturalSummarization } from './agentService';
+import { validateAction, executeAction, processEndOfTurn, addTurnEvent } from './civSimulation';
 import { ruleset } from './ruleset';
 
 export type TurnCallback = (state: CivGameState, event: string) => void;
@@ -43,8 +43,35 @@ export async function advanceTurn(state: CivGameState, seed: number, onUpdate?: 
   const actionResults: Array<{ civId: CivId; actions: import('@/games/civ/types').AgentAction[] }> = [];
 
   for (const civId of aliveCivs) {
-    const actions = await runPlanningPhase(civId, state, diplomacyContext);
-    actionResults.push({ civId, actions });
+    const result = await runPlanningPhase(civId, state, diplomacyContext);
+    actionResults.push({ civId, actions: result.actions });
+
+    // Process cultural artifacts
+    const civ = state.civilizations[civId];
+    if (civ.culture) {
+      // Set constitution/religion name on first turn
+      if (state.turn === 1) {
+        if (result.constitutionName) civ.culture.constitutionName = result.constitutionName;
+        if (result.religionName) civ.culture.religionName = result.religionName;
+      }
+
+      // Process each artifact
+      for (const artifact of result.artifacts) {
+        const artifactId = `art_${civId}_${state.turn}_${civ.culture.artifacts.length}`;
+        const culturalArtifact: CulturalArtifact = {
+          id: artifactId,
+          civId,
+          turn: state.turn,
+          type: artifact.type as CulturalArtifactType,
+          title: artifact.title,
+          content: artifact.content,
+          isActive: true,
+        };
+        civ.culture.artifacts.push(culturalArtifact);
+        state.culturalEvents.push(culturalArtifact);
+        addTurnEvent(state, 'culture', `${civ.name} created ${artifact.type}: "${artifact.title}"`, civId);
+      }
+    }
   }
 
   onUpdate?.(state, 'planning_complete');
@@ -53,19 +80,48 @@ export async function advanceTurn(state: CivGameState, seed: number, onUpdate?: 
   state.phase = 'resolution';
   onUpdate?.(state, 'resolution_start');
 
+  // Build per-civ turn summaries for action replay
+  state.civTurnSummaries = [];
+
   for (const { civId, actions } of actionResults) {
+    const eventsBefore = state.turnEvents.length;
+
     for (const action of actions) {
       if (validateAction(state, action, civId)) {
         const events = executeAction(state, action, civId, seed);
         allEvents.push(...events);
       }
     }
+
+    const eventsAfter = state.turnEvents.length;
+    const civEvents = state.turnEvents.slice(eventsBefore, eventsAfter);
+    const civDiplomacy = allDiplomacyMessages.filter(m => m.from === civId);
+
+    state.civTurnSummaries.push({
+      civId,
+      turn: state.turn,
+      diplomacyMessages: civDiplomacy,
+      resolvedEvents: civEvents,
+    });
   }
 
   const eotEvents = processEndOfTurn(state);
   allEvents.push(...eotEvents);
 
   onUpdate?.(state, 'resolution_complete');
+
+  // Cultural summarization every 5 turns
+  if (state.turn % 5 === 0) {
+    const summarizationPromises = aliveCivs
+      .filter(civId => state.civilizations[civId].culture?.artifacts.length > 0)
+      .map(async (civId) => {
+        const summary = await runCulturalSummarization(civId, state);
+        if (summary) {
+          state.civilizations[civId].culture.summary = summary;
+        }
+      });
+    await Promise.all(summarizationPromises);
+  }
 
   // -- Phase 4: Narration --
   state.phase = 'narration';

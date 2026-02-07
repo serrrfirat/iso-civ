@@ -5,6 +5,13 @@ import { CivGameState, CivId, CameraEvent, CameraEventType } from '@/games/civ/t
 import { createInitialGameState } from '@/lib/civ/mapGenerator';
 import { EventAnnouncementData } from '@/components/spectator/EventAnnouncement';
 
+export interface ReplayHighlight {
+  location?: { x: number; y: number };
+  targetLocation?: { x: number; y: number };
+  civId?: string;
+  type?: string;
+}
+
 interface ViewportState {
   offset: { x: number; y: number };
   zoom: number;
@@ -56,6 +63,14 @@ interface CivGameContextValue {
   announcement: EventAnnouncementData | null;
   showAnnouncement: (event: EventAnnouncementData) => void;
   clearAnnouncement: () => void;
+  // Action replay state
+  replayHighlight: ReplayHighlight | null;
+  setReplayHighlight: (highlight: ReplayHighlight | null) => void;
+  isReplaying: boolean;
+  setIsReplaying: (replaying: boolean) => void;
+  // Auto-replay setting
+  autoReplay: boolean;
+  setAutoReplay: (a: boolean) => void;
 }
 
 const CivGameCtx = createContext<CivGameContextValue | null>(null);
@@ -95,6 +110,11 @@ export function CivGameProvider({ children, initialState }: { children: React.Re
   // Event announcement state for dramatic overlays
   const [announcement, setAnnouncement] = useState<EventAnnouncementData | null>(null);
   const announcementTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Action replay state
+  const [replayHighlight, setReplayHighlight] = useState<ReplayHighlight | null>(null);
+  const [isReplaying, setIsReplaying] = useState(false);
+  const [autoReplay, setAutoReplay] = useState(true);
 
   const setSlowMotion = useCallback((enabled: boolean, duration?: number) => {
     // Clear any existing timeout
@@ -264,6 +284,8 @@ export function CivGameProvider({ children, initialState }: { children: React.Re
       screenShake, triggerScreenShake,
       activeVisualEvent, triggerVisualEvent,
       announcement, showAnnouncement, clearAnnouncement,
+      replayHighlight, setReplayHighlight, isReplaying, setIsReplaying,
+      autoReplay, setAutoReplay,
     }}>
       {children}
     </CivGameCtx.Provider>

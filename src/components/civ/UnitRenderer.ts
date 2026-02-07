@@ -63,108 +63,334 @@ function getUnitScreenPosition(unit: Unit, currentTime: number): { x: number; y:
 // Unit shape rendering — fallback geometric shapes when sprites not available
 // ============================================================================
 
+/** Draw an isometric figure (person silhouette) viewed from SW direction */
+function drawIsoPerson(
+  ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, bodyColor: string, accentColor: string,
+): void {
+  // Shadow on ground (isometric ellipse)
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + s * 0.1, s * 0.5, s * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Body (oval torso, isometric lean)
+  ctx.fillStyle = bodyColor;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - s * 0.25, s * 0.35, s * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+
+  // Head
+  ctx.fillStyle = '#E8C89E';
+  ctx.beginPath();
+  ctx.arc(cx, cy - s * 0.85, s * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+
+  // Accent detail on torso (belt/sash)
+  ctx.strokeStyle = accentColor;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - s * 0.3, cy - s * 0.1);
+  ctx.lineTo(cx + s * 0.3, cy - s * 0.1);
+  ctx.stroke();
+}
+
 const UNIT_SHAPES: Record<string, (ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string) => void> = {
   warrior: (ctx, cx, cy, size, color) => {
-    // Shield shape
+    const s = size * 1.3;
+    drawIsoPerson(ctx, cx, cy, s, color, '#8B7355');
+
+    // Sword (angled right, held in front)
+    ctx.strokeStyle = '#B0B0B0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + s * 0.25, cy - s * 0.5);
+    ctx.lineTo(cx + s * 0.55, cy - s * 1.0);
+    ctx.stroke();
+    // Hilt
+    ctx.strokeStyle = '#8B6914';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + s * 0.15, cy - s * 0.35);
+    ctx.lineTo(cx + s * 0.35, cy - s * 0.35);
+    ctx.stroke();
+
+    // Shield (left side)
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(cx, cy - size);
-    ctx.lineTo(cx + size * 0.8, cy - size * 0.3);
-    ctx.lineTo(cx + size * 0.8, cy + size * 0.3);
-    ctx.lineTo(cx, cy + size);
-    ctx.lineTo(cx - size * 0.8, cy + size * 0.3);
-    ctx.lineTo(cx - size * 0.8, cy - size * 0.3);
+    ctx.ellipse(cx - s * 0.35, cy - s * 0.2, s * 0.2, s * 0.3, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  },
+  swordsman: (ctx, cx, cy, size, color) => {
+    const s = size * 1.3;
+    drawIsoPerson(ctx, cx, cy, s, color, '#666');
+
+    // Longer sword
+    ctx.strokeStyle = '#C0C0C0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + s * 0.2, cy - s * 0.4);
+    ctx.lineTo(cx + s * 0.6, cy - s * 1.1);
+    ctx.stroke();
+    ctx.strokeStyle = '#8B6914';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + s * 0.1, cy - s * 0.3);
+    ctx.lineTo(cx + s * 0.3, cy - s * 0.3);
+    ctx.stroke();
+
+    // Larger shield
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.5, cy - s * 0.5);
+    ctx.lineTo(cx - s * 0.15, cy - s * 0.4);
+    ctx.lineTo(cx - s * 0.15, cy + s * 0.1);
+    ctx.lineTo(cx - s * 0.35, cy + s * 0.2);
+    ctx.lineTo(cx - s * 0.5, cy + s * 0.1);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.strokeStyle = '#FFF';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - size * 0.5);
-    ctx.lineTo(cx, cy + size * 0.5);
-    ctx.moveTo(cx - size * 0.3, cy - size * 0.1);
-    ctx.lineTo(cx + size * 0.3, cy - size * 0.1);
+    ctx.lineWidth = 0.8;
     ctx.stroke();
   },
   archer: (ctx, cx, cy, size, color) => {
-    // Triangle (arrowhead)
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - size);
-    ctx.lineTo(cx + size * 0.8, cy + size * 0.7);
-    ctx.lineTo(cx - size * 0.8, cy + size * 0.7);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.strokeStyle = '#FFF';
+    const s = size * 1.3;
+    drawIsoPerson(ctx, cx, cy, s, color, '#4A6B2F');
+
+    // Bow (curved arc on right side)
+    ctx.strokeStyle = '#8B6914';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(cx, cy - size * 0.4);
-    ctx.lineTo(cx, cy + size * 0.4);
+    ctx.arc(cx + s * 0.35, cy - s * 0.35, s * 0.55, -Math.PI * 0.7, Math.PI * 0.15);
     ctx.stroke();
+
+    // Bowstring
+    ctx.strokeStyle = '#CCC';
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    const bowTopX = cx + s * 0.35 + s * 0.55 * Math.cos(-Math.PI * 0.7);
+    const bowTopY = cy - s * 0.35 + s * 0.55 * Math.sin(-Math.PI * 0.7);
+    const bowBotX = cx + s * 0.35 + s * 0.55 * Math.cos(Math.PI * 0.15);
+    const bowBotY = cy - s * 0.35 + s * 0.55 * Math.sin(Math.PI * 0.15);
+    ctx.moveTo(bowTopX, bowTopY);
+    ctx.lineTo(bowBotX, bowBotY);
+    ctx.stroke();
+
+    // Quiver on back
+    ctx.fillStyle = '#6B4E2E';
+    ctx.fillRect(cx - s * 0.45, cy - s * 0.7, s * 0.12, s * 0.5);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(cx - s * 0.45, cy - s * 0.7, s * 0.12, s * 0.5);
   },
   scout: (ctx, cx, cy, size, color) => {
-    // Diamond
-    ctx.fillStyle = color;
+    const s = size * 1.2;
+    drawIsoPerson(ctx, cx, cy, s, color, '#556B2F');
+
+    // Spyglass / staff (diagonal)
+    ctx.strokeStyle = '#8B6914';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(cx, cy - size);
-    ctx.lineTo(cx + size * 0.7, cy);
-    ctx.lineTo(cx, cy + size);
-    ctx.lineTo(cx - size * 0.7, cy);
+    ctx.moveTo(cx + s * 0.15, cy + s * 0.1);
+    ctx.lineTo(cx + s * 0.5, cy - s * 0.7);
+    ctx.stroke();
+
+    // Hood/cloak detail
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.25, cy - s * 0.7);
+    ctx.lineTo(cx + s * 0.25, cy - s * 0.7);
+    ctx.lineTo(cx + s * 0.15, cy - s * 0.3);
+    ctx.lineTo(cx - s * 0.15, cy - s * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+  },
+  settler: (ctx, cx, cy, size, color) => {
+    const s = size * 1.3;
+    // Cart/wagon base (isometric rectangle)
+    ctx.fillStyle = '#8B6914';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - s * 0.15);
+    ctx.lineTo(cx + s * 0.5, cy);
+    ctx.lineTo(cx, cy + s * 0.15);
+    ctx.lineTo(cx - s * 0.5, cy);
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 0.7;
     ctx.stroke();
-    ctx.fillStyle = '#FFF';
+
+    // Covered wagon top (white canvas)
+    ctx.fillStyle = '#F5F0E0';
     ctx.beginPath();
-    ctx.arc(cx, cy, size * 0.2, 0, Math.PI * 2);
+    ctx.moveTo(cx - s * 0.35, cy - s * 0.15);
+    ctx.quadraticCurveTo(cx, cy - s * 0.65, cx + s * 0.35, cy - s * 0.15);
+    ctx.closePath();
     ctx.fill();
-  },
-  settler: (ctx, cx, cy, size, color) => {
-    // Circle with star
+    ctx.strokeStyle = '#AAA';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+
+    // Civ color flag on wagon
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(cx, cy, size * 0.8, 0, Math.PI * 2);
+    ctx.moveTo(cx, cy - s * 0.6);
+    ctx.lineTo(cx + s * 0.2, cy - s * 0.5);
+    ctx.lineTo(cx, cy - s * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    // Pole
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - s * 0.6);
+    ctx.lineTo(cx, cy - s * 0.15);
+    ctx.stroke();
+
+    // Wheels (isometric circles)
+    ctx.strokeStyle = '#5A4020';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(cx - s * 0.3, cy + s * 0.05, s * 0.08, s * 0.12, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx + s * 0.3, cy + s * 0.05, s * 0.08, s * 0.12, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  },
+  worker: (ctx, cx, cy, size, color) => {
+    const s = size * 1.2;
+    drawIsoPerson(ctx, cx, cy, s, '#B8860B', color);
+
+    // Pickaxe/tool
+    ctx.strokeStyle = '#8B6914';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + s * 0.15, cy + s * 0.05);
+    ctx.lineTo(cx + s * 0.45, cy - s * 0.55);
+    ctx.stroke();
+    // Head of tool
+    ctx.strokeStyle = '#808080';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + s * 0.35, cy - s * 0.55);
+    ctx.lineTo(cx + s * 0.55, cy - s * 0.45);
+    ctx.stroke();
+  },
+  horseman: (ctx, cx, cy, size, color) => {
+    const s = size * 1.3;
+    // Horse body (isometric oval)
+    ctx.fillStyle = '#8B6C42';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, s * 0.55, s * 0.3, -0.3, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = '#000';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 0.7;
     ctx.stroke();
-    ctx.fillStyle = '#FFF';
+
+    // Horse legs (4 short lines)
+    ctx.strokeStyle = '#6B4C22';
+    ctx.lineWidth = 1.5;
+    for (const lx of [-0.3, -0.1, 0.15, 0.35]) {
+      ctx.beginPath();
+      ctx.moveTo(cx + s * lx, cy + s * 0.2);
+      ctx.lineTo(cx + s * lx, cy + s * 0.45);
+      ctx.stroke();
+    }
+
+    // Horse head
+    ctx.fillStyle = '#7B5C32';
     ctx.beginPath();
-    ctx.arc(cx, cy, size * 0.3, 0, Math.PI * 2);
+    ctx.ellipse(cx + s * 0.5, cy - s * 0.15, s * 0.12, s * 0.2, -0.5, 0, Math.PI * 2);
     ctx.fill();
+
+    // Rider (small person on top)
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - s * 0.35, s * 0.18, s * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+    // Rider head
+    ctx.fillStyle = '#E8C89E';
+    ctx.beginPath();
+    ctx.arc(cx, cy - s * 0.65, s * 0.12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Spear
+    ctx.strokeStyle = '#8B6914';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + s * 0.1, cy - s * 0.3);
+    ctx.lineTo(cx + s * 0.25, cy - s * 1.0);
+    ctx.stroke();
+  },
+  catapult: (ctx, cx, cy, size, color) => {
+    const s = size * 1.3;
+    // Base platform (isometric diamond)
+    ctx.fillStyle = '#8B6914';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - s * 0.15);
+    ctx.lineTo(cx + s * 0.45, cy);
+    ctx.lineTo(cx, cy + s * 0.15);
+    ctx.lineTo(cx - s * 0.45, cy);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+
+    // Arm (angled upward)
+    ctx.strokeStyle = '#6B4E2E';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.1, cy);
+    ctx.lineTo(cx + s * 0.3, cy - s * 0.8);
+    ctx.stroke();
+
+    // Sling/bucket at end
+    ctx.fillStyle = '#555';
+    ctx.beginPath();
+    ctx.arc(cx + s * 0.3, cy - s * 0.8, s * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Wheels
+    ctx.strokeStyle = '#5A4020';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(cx - s * 0.3, cy + s * 0.08, s * 0.07, s * 0.1, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(cx + s * 0.3, cy + s * 0.08, s * 0.07, s * 0.1, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Civ color marking
+    ctx.fillStyle = color;
+    ctx.fillRect(cx - s * 0.15, cy - s * 0.05, s * 0.3, s * 0.08);
   },
 };
 
 /** Generic fallback shape for unit types without a specific shape */
 function drawGenericUnit(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, color: string, label: string): void {
-  // Pentagon shape
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  for (let i = 0; i < 5; i++) {
-    const angle = (i * 2 * Math.PI) / 5 - Math.PI / 2;
-    const x = cx + size * 0.8 * Math.cos(angle);
-    const y = cy + size * 0.8 * Math.sin(angle);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  const s = size * 1.3;
+  drawIsoPerson(ctx, cx, cy, s, color, '#888');
 
-  // First letter of unit type
+  // Label on torso
   ctx.fillStyle = '#FFF';
-  ctx.font = `bold ${Math.round(size * 0.8)}px sans-serif`;
+  ctx.font = `bold ${Math.round(s * 0.45)}px sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(label[0].toUpperCase(), cx, cy);
+  ctx.fillText(label[0].toUpperCase(), cx, cy - s * 0.25);
 }
 
 // ============================================================================
@@ -359,7 +585,7 @@ export function renderUnits(
     // Draw selection/hover glow BEFORE unit sprite (so it appears behind)
     drawSelectionGlow(ctx, cx, cy, isSelected, isHovered, now);
 
-    // Try generated sprite
+    // Try generated sprite first
     const spritePath = UNIT_SPRITES[unit.type];
     const spriteImg = spritePath ? spriteCache.getImage(spritePath) : null;
 
@@ -371,7 +597,7 @@ export function renderUnits(
 
       spriteCache.drawImage(ctx, spritePath, dx, dy, sw, sh);
 
-      // Colored ring at feet for civ identification (kept for consistency with sprite)
+      // Colored ring at feet for civ identification
       ctx.strokeStyle = civColor.primary;
       ctx.lineWidth = 2;
       ctx.beginPath();

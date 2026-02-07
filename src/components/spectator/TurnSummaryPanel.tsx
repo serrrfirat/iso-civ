@@ -18,6 +18,7 @@ const EVENT_CONFIG: Record<TurnEventType, { icon: string; color: string; label: 
   unit_destroyed: { icon: 'x', color: 'text-red-500', label: 'Unit Lost' },
   improvement: { icon: '%', color: 'text-lime-400', label: 'Improvement' },
   city_growth: { icon: 'o', color: 'text-teal-400', label: 'City Growth' },
+  culture: { icon: '♦', color: 'text-violet-400', label: 'Culture' },
 };
 
 const ALL_EVENT_TYPES: TurnEventType[] = [
@@ -33,6 +34,7 @@ const ALL_EVENT_TYPES: TurnEventType[] = [
   'unit_destroyed',
   'improvement',
   'city_growth',
+  'culture',
 ];
 
 function EventCard({ event }: { event: TurnEvent }) {

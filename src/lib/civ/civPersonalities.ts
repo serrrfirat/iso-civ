@@ -1,6 +1,52 @@
 import { CivId, CivGameState, CIV_COLORS } from '@/games/civ/types';
 import { ruleset } from './ruleset';
 
+export function buildCulturalContext(civId: CivId, state: CivGameState): string {
+  const civ = state.civilizations[civId];
+  if (!civ?.culture) return '';
+
+  const { culture } = civ;
+  const lines: string[] = [];
+
+  // Section 1: Cultural summary (if exists)
+  if (culture.summary) {
+    lines.push('CULTURAL IDENTITY SUMMARY:');
+    if (culture.constitutionName) lines.push(`Constitution: "${culture.constitutionName}"`);
+    if (culture.religionName) lines.push(`State Religion: "${culture.religionName}"`);
+    if (culture.summary.governingPrinciples) lines.push(`Governing Principles: ${culture.summary.governingPrinciples}`);
+    if (culture.summary.religiousIdentity) lines.push(`Religious Identity: ${culture.summary.religiousIdentity}`);
+    if (culture.summary.culturalValues) lines.push(`Cultural Values: ${culture.summary.culturalValues}`);
+    if (culture.summary.propagandaThemes) lines.push(`Propaganda Themes: ${culture.summary.propagandaThemes}`);
+    lines.push('');
+  }
+
+  // Section 2: Active laws and constitutional articles (cap at 6)
+  const activeLaws = culture.artifacts
+    .filter(a => a.isActive && (a.type === 'law' || a.type === 'constitutional'))
+    .slice(-6);
+  if (activeLaws.length > 0) {
+    lines.push('ACTIVE LAWS & PRINCIPLES:');
+    for (const law of activeLaws) {
+      lines.push(`- [${law.type.toUpperCase()}] "${law.title}": ${law.content}`);
+    }
+    lines.push('');
+  }
+
+  // Section 3: Recent artifacts (last 4 turns, cap at 8)
+  const recentArtifacts = culture.artifacts
+    .filter(a => a.turn >= state.turn - 4)
+    .slice(-8);
+  if (recentArtifacts.length > 0) {
+    lines.push('RECENT CULTURAL DEVELOPMENTS:');
+    for (const artifact of recentArtifacts) {
+      lines.push(`- Turn ${artifact.turn} [${artifact.type}] "${artifact.title}": ${artifact.content}`);
+    }
+    lines.push('');
+  }
+
+  return lines.length > 0 ? '\n' + lines.join('\n') : '';
+}
+
 export function getSystemPrompt(civId: CivId, state: CivGameState): string {
   const civ = state.civilizations[civId];
   const civDef = ruleset.getCiv(civId);
@@ -14,7 +60,7 @@ ${personality}
 
 CURRENT SITUATION (Turn ${state.turn}/${state.maxTurns}):
 ${worldView}
-
+${buildCulturalContext(civId, state)}
 RULES:
 - You can send diplomatic messages to other civilizations or to all
 - Messages should be in-character and reflect your personality
@@ -57,6 +103,10 @@ STRATEGIC GUIDELINES:
 - Focus production on what you need most: military if threatened, economy if safe
 - Research technologies to unlock new units and buildings
 - Consider your diplomatic relationships when deciding who to attack
+
+CULTURAL MANDATE:
+${buildCulturalContext(civId, state)}
+Your decisions should be influenced by your civilization's cultural identity, laws, and values described above. When your laws or cultural values conflict with pure optimization, lean toward cultural consistency — this is what makes your civilization unique.
 
 Return your actions using the provided tools. You may take multiple actions per turn.`;
 }
@@ -152,6 +202,15 @@ ${state.diplomacyLog
     .join('\n') || 'No diplomatic exchanges.'}
 
 SCORES: ${scoreStr}
+
+CULTURAL HIGHLIGHTS:
+${Object.keys(state.civilizations).map(id => {
+  const c = state.civilizations[id];
+  if (!c.culture) return '';
+  const recentArtifacts = c.culture.artifacts.filter(a => a.turn === state.turn);
+  if (recentArtifacts.length === 0) return '';
+  return `${c.name}: ${recentArtifacts.map(a => `"${a.title}" (${a.type})`).join(', ')}`;
+}).filter(Boolean).join('\n') || 'No new cultural developments.'}
 
 Write a dramatic, concise narration (2-3 sentences) describing the most important events of this turn. Be entertaining and build tension. Write in the style of a historical documentary narrator. Focus on the most dramatic events: wars, betrayals, new cities, or shifting alliances.`;
 }

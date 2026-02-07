@@ -48,7 +48,9 @@ export function addTurnEvent(
   state: CivGameState,
   type: TurnEventType,
   message: string,
-  civId?: CivId
+  civId?: CivId,
+  location?: { x: number; y: number },
+  targetLocation?: { x: number; y: number }
 ): void {
   const event: TurnEvent = {
     id: `event_${nextTurnEventId++}`,
@@ -56,6 +58,8 @@ export function addTurnEvent(
     type,
     message,
     civId,
+    location,
+    targetLocation,
   };
   state.turnEvents.push(event);
 }
@@ -437,7 +441,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
       unit.actedThisTurn = true;
 
       events.push(`${civId} moved ${unit.type} to (${dest.x}, ${dest.y})`);
-      addTurnEvent(state, 'move', `${state.civilizations[civId]?.name || civId} moved ${unit.type} from (${oldX}, ${oldY}) to (${dest.x}, ${dest.y})`, civId);
+      addTurnEvent(state, 'move', `${state.civilizations[civId]?.name || civId} moved ${unit.type} from (${oldX}, ${oldY}) to (${dest.x}, ${dest.y})`, civId, {x: oldX, y: oldY}, {x: dest.x, y: dest.y});
       break;
     }
 
@@ -456,7 +460,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
       if (!result) break;
 
       events.push(`${result.attackerCiv} attacked ${result.defenderCiv}: ${result.defenderDamage} damage dealt, ${result.attackerDamage} received`);
-      addTurnEvent(state, 'attack', `${state.civilizations[result.attackerCiv]?.name || result.attackerCiv} attacked ${state.civilizations[result.defenderCiv]?.name || result.defenderCiv}: ${result.defenderDamage} damage dealt, ${result.attackerDamage} received`, result.attackerCiv);
+      addTurnEvent(state, 'attack', `${state.civilizations[result.attackerCiv]?.name || result.attackerCiv} attacked ${state.civilizations[result.defenderCiv]?.name || result.defenderCiv}: ${result.defenderDamage} damage dealt, ${result.attackerDamage} received`, result.attackerCiv, {x: attackerX, y: attackerY}, {x: defenderX, y: defenderY});
 
       // Increase war weariness for both civs (+1 per combat)
       const attackerCivState = state.civilizations[result.attackerCiv];
@@ -494,7 +498,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
           delete state.units[action.targetId];
           events.push(`${result.defenderCiv}'s ${defUnitType} was destroyed`);
           addNotification(state, 'combat', `${defCiv.name}'s ${defUnitType} was destroyed in combat!`, result.defenderCiv, { x: defenderX, y: defenderY });
-          addTurnEvent(state, 'unit_destroyed', `${state.civilizations[result.defenderCiv]?.name || result.defenderCiv}'s ${defUnitType} was destroyed at (${defenderX}, ${defenderY})`, result.defenderCiv);
+          addTurnEvent(state, 'unit_destroyed', `${state.civilizations[result.defenderCiv]?.name || result.defenderCiv}'s ${defUnitType} was destroyed at (${defenderX}, ${defenderY})`, result.defenderCiv, {x: defenderX, y: defenderY});
           // Add camera event for unit destruction
           addCameraEvent(state, 'unit_destroyed', defenderX, defenderY);
         }
@@ -514,7 +518,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
           addNotification(state, 'combat', `${atkCiv.name}'s ${atkUnitType} was destroyed in combat!`, result.attackerCiv, { x: attackerX, y: attackerY });
           // Add camera event for unit destruction
           addCameraEvent(state, 'unit_destroyed', attackerX, attackerY);
-          addTurnEvent(state, 'unit_destroyed', `${state.civilizations[result.attackerCiv]?.name || result.attackerCiv}'s ${atkUnitType} was destroyed at (${attackerX}, ${attackerY})`, result.attackerCiv);
+          addTurnEvent(state, 'unit_destroyed', `${state.civilizations[result.attackerCiv]?.name || result.attackerCiv}'s ${atkUnitType} was destroyed at (${attackerX}, ${attackerY})`, result.attackerCiv, {x: attackerX, y: attackerY});
         }
       }
 
@@ -570,7 +574,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
 
       events.push(`${civId} founded ${action.cityName}`);
       addNotification(state, 'city', `${civ.name} founded ${action.cityName}!`, civId, { x: city.x, y: city.y });
-      addTurnEvent(state, 'city_founded', `${state.civilizations[civId]?.name || civId} founded ${action.cityName} at (${settler.x}, ${settler.y})`, civId);
+      addTurnEvent(state, 'city_founded', `${state.civilizations[civId]?.name || civId} founded ${action.cityName} at (${settler.x}, ${settler.y})`, civId, {x: settler.x, y: settler.y});
       // Add camera event for city founding
       addCameraEvent(state, 'city_founded', city.x, city.y);
       break;
@@ -597,7 +601,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
       };
 
       events.push(`${civId}'s ${city.name} started building ${action.target}`);
-      addTurnEvent(state, 'build', `${state.civilizations[civId]?.name || civId}'s ${city.name} started building ${action.target}`, civId);
+      addTurnEvent(state, 'build', `${state.civilizations[civId]?.name || civId}'s ${city.name} started building ${action.target}`, civId, {x: city.x, y: city.y});
       break;
     }
 
@@ -636,9 +640,9 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
         tile.improvement = action.improvement;
         tile.improvementProgress = undefined;
         events.push(`${civId} completed ${improvement.name} at (${worker.x}, ${worker.y})`);
-        addTurnEvent(state, 'improvement', `${state.civilizations[civId]?.name || civId} completed ${improvement.name} at (${worker.x}, ${worker.y})`, civId);
+        addTurnEvent(state, 'improvement', `${state.civilizations[civId]?.name || civId} completed ${improvement.name} at (${worker.x}, ${worker.y})`, civId, {x: worker.x, y: worker.y});
       } else {
-        addTurnEvent(state, 'improvement', `${state.civilizations[civId]?.name || civId}'s worker is building ${improvement.name} at (${worker.x}, ${worker.y})`, civId);
+        addTurnEvent(state, 'improvement', `${state.civilizations[civId]?.name || civId}'s worker is building ${improvement.name} at (${worker.x}, ${worker.y})`, civId, {x: worker.x, y: worker.y});
       }
 
       // Worker uses all movement when building
@@ -679,7 +683,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
       if (!result) break;
 
       events.push(`${result.attackerCiv} ranged attacked ${result.defenderCiv}: ${result.defenderDamage} damage dealt (no retaliation)`);
-      addTurnEvent(state, 'attack', `${state.civilizations[result.attackerCiv]?.name || result.attackerCiv} ranged attacked ${state.civilizations[result.defenderCiv]?.name || result.defenderCiv}: ${result.defenderDamage} damage dealt`, result.attackerCiv);
+      addTurnEvent(state, 'attack', `${state.civilizations[result.attackerCiv]?.name || result.attackerCiv} ranged attacked ${state.civilizations[result.defenderCiv]?.name || result.defenderCiv}: ${result.defenderDamage} damage dealt`, result.attackerCiv, {x: attackerX, y: attackerY}, {x: defenderX, y: defenderY});
 
       // Increase war weariness for both civs (+1 per combat)
       const rangedAttackerCiv = state.civilizations[result.attackerCiv];
@@ -717,7 +721,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
           delete state.units[defenderId];
           events.push(`${result.defenderCiv}'s ${defUnitType} was destroyed`);
           addNotification(state, 'unit', `${defCiv.name}'s ${defUnitType} was destroyed!`, result.defenderCiv, { x: defenderX, y: defenderY });
-          addTurnEvent(state, 'unit_destroyed', `${state.civilizations[result.defenderCiv]?.name || result.defenderCiv}'s ${defUnitType} was destroyed at (${defenderX}, ${defenderY})`, result.defenderCiv);
+          addTurnEvent(state, 'unit_destroyed', `${state.civilizations[result.defenderCiv]?.name || result.defenderCiv}'s ${defUnitType} was destroyed at (${defenderX}, ${defenderY})`, result.defenderCiv, {x: defenderX, y: defenderY});
           // Add camera event for unit destruction
           addCameraEvent(state, 'unit_destroyed', defenderX, defenderY);
         }
@@ -766,7 +770,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
       // Don't reset movementLeft - unit keeps remaining movement
 
       events.push(`${civId} upgraded ${oldType} to ${unit.type} for ${oldUnitDef.upgradeCost} gold`);
-      addTurnEvent(state, 'build', `${civ.name} upgraded ${oldType} to ${unit.type} at (${unit.x}, ${unit.y})`, civId);
+      addTurnEvent(state, 'build', `${civ.name} upgraded ${oldType} to ${unit.type} at (${unit.x}, ${unit.y})`, civId, {x: unit.x, y: unit.y});
       break;
     }
 
@@ -809,7 +813,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
       const civ = state.civilizations[civId];
       events.push(`${civId} established trade route from ${fromCity.name} to ${targetCity.name} (${goldPerTurn} gold/turn for ${turnsRemaining} turns)`);
       addNotification(state, 'city', `${civ.name} established trade route from ${fromCity.name} to ${targetCity.name}!`, civId, { x: fromCity.x, y: fromCity.y });
-      addTurnEvent(state, 'diplomacy', `${civ.name} established trade route from ${fromCity.name} to ${targetCity.name} (${goldPerTurn} gold/turn)`, civId);
+      addTurnEvent(state, 'diplomacy', `${civ.name} established trade route from ${fromCity.name} to ${targetCity.name} (${goldPerTurn} gold/turn)`, civId, {x: fromCity.x, y: fromCity.y}, {x: targetCity.x, y: targetCity.y});
       break;
     }
 
@@ -909,7 +913,7 @@ export function executeAction(state: CivGameState, action: AgentAction, civId: C
 
               events.push(`${civ.name}'s Great Engineer rushed production of ${productionTarget} in ${city.name}!`);
               addNotification(state, 'city', `Great Engineer rushed production of ${productionTarget} in ${city.name}!`, civId, { x: city.x, y: city.y });
-              addTurnEvent(state, 'building_completed', `${civ.name}'s Great Engineer rushed ${productionTarget} in ${city.name}`, civId);
+              addTurnEvent(state, 'building_completed', `${civ.name}'s Great Engineer rushed ${productionTarget} in ${city.name}`, civId, {x: city.x, y: city.y});
               break;
             }
           }
@@ -1190,7 +1194,7 @@ export function processEndOfTurn(state: CivGameState): string[] {
 
           events.push(`${civId}'s ${city.name} completed ${buildingId}`);
           addNotification(state, 'city', `${city.name} completed ${buildingId}!`, civId, { x: city.x, y: city.y });
-          addTurnEvent(state, 'building_completed', `${civ.name}'s ${city.name} completed ${buildingId}`, civId);
+          addTurnEvent(state, 'building_completed', `${civ.name}'s ${city.name} completed ${buildingId}`, civId, {x: city.x, y: city.y});
         } else {
           // Spawn unit
           const unitType = city.currentProduction.target;
@@ -1212,7 +1216,7 @@ export function processEndOfTurn(state: CivGameState): string[] {
               civ.units.push(unitId);
               events.push(`${civId}'s ${city.name} produced a ${unitType}`);
               addNotification(state, 'city', `${city.name} produced a ${unitType}!`, civId, { x: city.x, y: city.y });
-              addTurnEvent(state, 'unit_created', `${civ.name}'s ${city.name} produced a ${unitType}`, civId);
+              addTurnEvent(state, 'unit_created', `${civ.name}'s ${city.name} produced a ${unitType}`, civId, {x: city.x, y: city.y});
             }
           }
         }
@@ -1353,7 +1357,7 @@ export function processEndOfTurn(state: CivGameState): string[] {
         }
 
         events.push(`${civ.name}'s ${city.name} expanded its borders to radius ${city.borderRadius}`);
-        addTurnEvent(state, 'city_growth', `${city.name} expanded its cultural borders`, civId);
+        addTurnEvent(state, 'city_growth', `${city.name} expanded its cultural borders`, civId, {x: city.x, y: city.y});
       }
     }
 
@@ -1781,7 +1785,7 @@ function spawnGreatPerson(state: CivGameState, civId: CivId, gpType: GreatPerson
 
   events.push(`${civ.name} has earned a ${gpName}!`);
   addNotification(state, 'unit', `${civ.name} has earned a ${gpName} in ${capital.name}!`, civId, { x: capital.x, y: capital.y });
-  addTurnEvent(state, 'unit_created', `${civ.name} earned a ${gpName}`, civId);
+  addTurnEvent(state, 'unit_created', `${civ.name} earned a ${gpName}`, civId, {x: capital.x, y: capital.y});
 
   return events;
 }

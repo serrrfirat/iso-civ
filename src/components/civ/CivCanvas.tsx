@@ -7,7 +7,7 @@ import { renderUnits, renderCities, setHoveredUnit, setSelectedUnit, findUnitAtP
 import { renderCityBanners } from './CityBannerRenderer';
 import { renderCombatEffects, cleanupCombatEffects, hasActiveCombatEffects } from './CombatEffectRenderer';
 import { particleSystem } from './ParticleRenderer';
-import { CivId } from '@/games/civ/types';
+import { CivId, CIV_COLORS } from '@/games/civ/types';
 import { spriteCache } from '@/lib/civ/spriteLoader';
 
 const SLOW_MOTION_DURATION = 2000; // 2 seconds of slow motion for combat
@@ -45,7 +45,8 @@ export function CivCanvas() {
     state, stateRef, setState, perspective, setSelectedCityId, setViewport, setPanToGrid,
     slowMotion, slowMotionFactor, setSlowMotion,
     eventQueue, addCameraEvent, processingEvent, setProcessingEvent, consumeCameraEvent,
-    screenShake, triggerScreenShake, triggerVisualEvent
+    screenShake, triggerScreenShake, triggerVisualEvent,
+    replayHighlight, isReplaying
   } = useCivGame();
   const terrainCanvasRef = useRef<HTMLCanvasElement>(null);
   const entityCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -74,6 +75,14 @@ export function CivCanvas() {
   // Screen shake calculation
   const screenShakeRef = useRef(screenShake);
   screenShakeRef.current = screenShake;
+
+  // Replay highlight ref for render loop access
+  const replayHighlightRef = useRef(replayHighlight);
+  replayHighlightRef.current = replayHighlight;
+
+  // isReplaying ref for camera guard
+  const isReplayingRef = useRef(isReplaying);
+  isReplayingRef.current = isReplaying;
 
   // Track combat effects for particle emission
   const lastCombatEffectsRef = useRef<string[]>([]);
@@ -206,8 +215,8 @@ export function CivCanvas() {
 
   // Auto-pan camera system - watches eventQueue and smoothly pans to events
   useEffect(() => {
-    // Don't start processing if already processing or no events
-    if (processingEvent || eventQueue.length === 0) return;
+    // Don't start processing if already processing, no events, or replaying
+    if (processingEvent || eventQueue.length === 0 || isReplaying) return;
 
     // Get the highest priority event (already sorted)
     const event = eventQueue[0];
@@ -238,7 +247,7 @@ export function CivCanvas() {
     // Consume the event from the queue
     consumeCameraEvent();
 
-  }, [eventQueue, processingEvent, setProcessingEvent, consumeCameraEvent]);
+  }, [eventQueue, processingEvent, setProcessingEvent, consumeCameraEvent, isReplaying]);
 
   // Animation loop for camera panning
   useEffect(() => {
@@ -413,6 +422,71 @@ export function CivCanvas() {
             const knownSet = new Set(civ.knownTiles);
             renderFogOfWar(uiCtx, currentState.gridSize, knownSet, effectiveOffset, currentZoom, rect.width, rect.height);
           }
+        }
+
+        // Replay highlight
+        const currentReplayHighlight = replayHighlightRef.current;
+        if (currentReplayHighlight?.location) {
+          uiCtx.save();
+          uiCtx.translate(effectiveOffset.x, effectiveOffset.y);
+          uiCtx.scale(currentZoom, currentZoom);
+
+          const loc = currentReplayHighlight.location;
+          const screen = gridToScreen(loc.x, loc.y);
+          const hw = TILE_WIDTH / 2;
+          const hh = TILE_HEIGHT / 2;
+
+          // Pulsing diamond highlight
+          const pulse = 0.6 + 0.4 * Math.sin(time / 300);
+          const civColors = CIV_COLORS[currentReplayHighlight.civId || ''];
+          const highlightColor = civColors?.primary || '#FFD700';
+
+          uiCtx.globalAlpha = pulse * 0.6;
+          uiCtx.strokeStyle = highlightColor;
+          uiCtx.lineWidth = 3 / currentZoom;
+          uiCtx.beginPath();
+          uiCtx.moveTo(screen.x + hw, screen.y);
+          uiCtx.lineTo(screen.x + TILE_WIDTH, screen.y + hh);
+          uiCtx.lineTo(screen.x + hw, screen.y + TILE_HEIGHT);
+          uiCtx.lineTo(screen.x, screen.y + hh);
+          uiCtx.closePath();
+          uiCtx.stroke();
+
+          // Fill with semi-transparent color
+          uiCtx.globalAlpha = pulse * 0.15;
+          uiCtx.fillStyle = highlightColor;
+          uiCtx.fill();
+
+          // Arrow to target if exists
+          if (currentReplayHighlight.targetLocation) {
+            const target = currentReplayHighlight.targetLocation;
+            const targetScreen = gridToScreen(target.x, target.y);
+
+            uiCtx.globalAlpha = pulse * 0.7;
+            uiCtx.strokeStyle = highlightColor;
+            uiCtx.lineWidth = 2 / currentZoom;
+            uiCtx.setLineDash([6 / currentZoom, 4 / currentZoom]);
+            uiCtx.beginPath();
+            uiCtx.moveTo(screen.x + hw, screen.y + hh);
+            uiCtx.lineTo(targetScreen.x + hw, targetScreen.y + hh);
+            uiCtx.stroke();
+            uiCtx.setLineDash([]);
+
+            // Target diamond
+            uiCtx.globalAlpha = pulse * 0.4;
+            uiCtx.strokeStyle = '#FF4444';
+            uiCtx.lineWidth = 2 / currentZoom;
+            uiCtx.beginPath();
+            uiCtx.moveTo(targetScreen.x + hw, targetScreen.y);
+            uiCtx.lineTo(targetScreen.x + TILE_WIDTH, targetScreen.y + hh);
+            uiCtx.lineTo(targetScreen.x + hw, targetScreen.y + TILE_HEIGHT);
+            uiCtx.lineTo(targetScreen.x, targetScreen.y + hh);
+            uiCtx.closePath();
+            uiCtx.stroke();
+          }
+
+          uiCtx.globalAlpha = 1;
+          uiCtx.restore();
         }
 
         // Hover tile highlight

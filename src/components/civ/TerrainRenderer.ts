@@ -85,43 +85,41 @@ function getTerrainHeight(terrain: TerrainType): number {
 // Sprite-based terrain tile drawing
 // ---------------------------------------------------------------------------
 
-/** Whether a terrain type has a usable sprite in the tileset (water handled separately) */
+/** Whether a terrain type uses the tileset sprites (hills only — they need elevation) */
 function hasTerrainSprite(terrain: TerrainType): boolean {
-  return terrain === 'plains' || terrain === 'forest' || terrain === 'desert'
-    || terrain === 'hills' || terrain === 'mountain';
+  return terrain === 'hills' || terrain === 'mountain';
 }
 
-/**
- * Draw a terrain tile using the sprite tileset.
- * The 64x64 sprite cell contains a 64x32 isometric diamond centered vertically.
- * The diamond top in the sprite is at y=16 (cell center - 16).
- * We position the sprite so its diamond aligns with our grid position.
- */
-function drawTerrainSprite(
+// ---------------------------------------------------------------------------
+// Programmatic terrain tiles (plains, forest, desert)
+// ---------------------------------------------------------------------------
+
+/** Color palettes for programmatic terrain diamonds with subtle variation */
+const PLAINS_COLORS = [
+  { top: '#6B9E3C', left: '#5A8A2F', right: '#7CB848', stroke: '#4A7A22' },
+  { top: '#5F9335', left: '#508228', right: '#70AC40', stroke: '#437520' },
+  { top: '#74A844', left: '#639234', right: '#85C050', stroke: '#538425' },
+];
+
+const DESERT_COLORS = [
+  { top: '#D4B87A', left: '#C4A86A', right: '#E0C88A', stroke: '#B0985A' },
+  { top: '#CCAE70', left: '#BC9E60', right: '#D8BE80', stroke: '#A89050' },
+  { top: '#DAC084', left: '#CAB074', right: '#E6D094', stroke: '#B8A060' },
+];
+
+function drawProgrammaticTerrain(
   ctx: CanvasRenderingContext2D,
   screenX: number, screenY: number,
   terrain: TerrainType,
   gx: number, gy: number,
-): boolean {
-  // Desert, forest, and mountain use plains/hills as base tile
-  const baseTerrain = terrain === 'forest' || terrain === 'desert' ? 'plains'
-    : terrain === 'mountain' ? 'hills' : terrain;
-  const { region, tileset } = getTerrainVariant(baseTerrain, gx, gy);
+): void {
+  const corners = getDiamondCorners(screenX, screenY, TILE_WIDTH, TILE_HEIGHT);
+  // Deterministic variant based on tile position
+  const hash = ((gx * 374761393 + gy * 668265263) >>> 0) % 3;
 
-  const tilesetImg = spriteCache.getImage(tileset);
-  if (!tilesetImg) return false;
-
-  // Sprite diamond center is at (32, 32) in the 64x64 cell.
-  // Our tile center is at (screenX + TILE_WIDTH/2, screenY + TILE_HEIGHT/2).
-  const dx = screenX;
-  const dy = screenY + TILE_HEIGHT / 2 - SPRITE_CELL / 2;
-
-  spriteCache.drawSprite(ctx, tileset, region, dx, dy, SPRITE_CELL, SPRITE_CELL);
-
-  // Desert: overlay sandy tint on top of grass base
   if (terrain === 'desert') {
-    const corners = getDiamondCorners(screenX, screenY, TILE_WIDTH, TILE_HEIGHT);
-    ctx.fillStyle = 'rgba(210, 180, 110, 0.65)';
+    const c = DESERT_COLORS[hash];
+    ctx.fillStyle = c.top;
     ctx.beginPath();
     ctx.moveTo(corners.top.x, corners.top.y);
     ctx.lineTo(corners.right.x, corners.right.y);
@@ -129,9 +127,26 @@ function drawTerrainSprite(
     ctx.lineTo(corners.left.x, corners.left.y);
     ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = c.stroke;
+    ctx.lineWidth = 0.3;
+    ctx.stroke();
+  } else {
+    // Plains and forest use green base
+    const c = PLAINS_COLORS[hash];
+    ctx.fillStyle = c.top;
+    ctx.beginPath();
+    ctx.moveTo(corners.top.x, corners.top.y);
+    ctx.lineTo(corners.right.x, corners.right.y);
+    ctx.lineTo(corners.bottom.x, corners.bottom.y);
+    ctx.lineTo(corners.left.x, corners.left.y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = c.stroke;
+    ctx.lineWidth = 0.3;
+    ctx.stroke();
   }
 
-  // Forest: overlay tree decoration
+  // Forest: overlay tree decoration on green base
   if (terrain === 'forest') {
     const treeKey = (gx + gy) % 2 === 0 ? 'firtree' : 'oaktree';
     const treePath = BUILDING_SPRITES[treeKey];
@@ -142,6 +157,27 @@ function drawTerrainSprite(
       spriteCache.drawImage(ctx, treePath, treeCx, treeCy, treeSize, treeSize);
     }
   }
+}
+
+/**
+ * Draw a terrain tile using the sprite tileset (hills/mountain only).
+ */
+function drawTerrainSprite(
+  ctx: CanvasRenderingContext2D,
+  screenX: number, screenY: number,
+  terrain: TerrainType,
+  gx: number, gy: number,
+): boolean {
+  const baseTerrain = terrain === 'mountain' ? 'hills' : terrain;
+  const { region, tileset } = getTerrainVariant(baseTerrain, gx, gy);
+
+  const tilesetImg = spriteCache.getImage(tileset);
+  if (!tilesetImg) return false;
+
+  const dx = screenX;
+  const dy = screenY + TILE_HEIGHT / 2 - SPRITE_CELL / 2;
+
+  spriteCache.drawSprite(ctx, tileset, region, dx, dy, SPRITE_CELL, SPRITE_CELL);
 
   // Mountain: overlay generated mountain sprite
   if (terrain === 'mountain') {
@@ -158,10 +194,10 @@ function drawTerrainSprite(
 }
 
 // ---------------------------------------------------------------------------
-// Resource icons (drawn directly on terrain with no background)
+// Resource icons (sprite-based with programmatic fallback)
 // ---------------------------------------------------------------------------
 
-/** Resource color scheme for programmatic markers */
+/** Resource color scheme for programmatic fallback markers */
 const RESOURCE_MARKER_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
   food:       { bg: '#4CAF50', fg: '#FFF', label: 'F' },
   gold:       { bg: '#FFD700', fg: '#000', label: 'G' },
@@ -174,9 +210,9 @@ function drawResourceIcon(ctx: CanvasRenderingContext2D, screenX: number, screen
 
   const cx = screenX + TILE_WIDTH / 2;
   const cy = screenY + TILE_HEIGHT / 2;
-  const iconSize = zoom > 1 ? 16 : 12;
+  const iconSize = zoom > 1 ? 28 : 22;
 
-  // Try sprite icon first (food, gold, production have RPG icons)
+  // Try sprite icon first
   const spritePath = RESOURCE_SPRITES[resource];
   if (spritePath) {
     const img = spriteCache.getImage(spritePath);
@@ -195,12 +231,11 @@ function drawResourceIcon(ctx: CanvasRenderingContext2D, screenX: number, screen
     }
   }
 
-  // Programmatic marker (used for horses and as fallback)
+  // Programmatic fallback
   const marker = RESOURCE_MARKER_COLORS[resource];
   if (!marker) return;
   const r = zoom > 1 ? 7 : 5;
 
-  // Circle background
   ctx.fillStyle = marker.bg;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -209,7 +244,6 @@ function drawResourceIcon(ctx: CanvasRenderingContext2D, screenX: number, screen
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // Letter label
   if (zoom >= 0.6) {
     ctx.fillStyle = marker.fg;
     ctx.font = `bold ${r}px sans-serif`;
@@ -431,26 +465,11 @@ function drawWaterTile(
   time: number,
   gx: number, gy: number,
 ): void {
-  // Use tileset water sprite as base so it sits at the same level as land
-  const { region, tileset } = getTerrainVariant('water', gx, gy);
-  const tilesetImg = spriteCache.getImage(tileset);
-
-  const dx = screenX;
-  const dy = screenY + TILE_HEIGHT / 2 - SPRITE_CELL / 2;
-
-  if (tilesetImg) {
-    spriteCache.drawSprite(ctx, tileset, region, dx, dy, SPRITE_CELL, SPRITE_CELL);
-  }
-
-  // Overlay depth-based tint on the diamond area
   const corners = getDiamondCorners(screenX, screenY, TILE_WIDTH, TILE_HEIGHT);
-  const tint = depth <= 1
-    ? 'rgba(90, 190, 220, 0.35)'   // coastal — light turquoise
-    : depth <= 2
-    ? 'rgba(40, 100, 170, 0.45)'   // medium — blue
-    : 'rgba(15, 30, 70, 0.55)';    // deep — dark navy
 
-  ctx.fillStyle = tint;
+  // Draw clean water diamond (no tileset sprite — they had ugly dark blobs)
+  const colors = getWaterColors(depth);
+  ctx.fillStyle = colors.top;
   ctx.beginPath();
   ctx.moveTo(corners.top.x, corners.top.y);
   ctx.lineTo(corners.right.x, corners.right.y);
@@ -459,9 +478,14 @@ function drawWaterTile(
   ctx.closePath();
   ctx.fill();
 
+  // Subtle grid stroke for structure
+  ctx.strokeStyle = colors.stroke;
+  ctx.lineWidth = 0.3;
+  ctx.stroke();
+
   // Animated wave shimmer
-  const wave = Math.sin(time * 1.5 + gx * 0.7 + gy * 0.5) * 0.04;
-  const shimmer = depth <= 1 ? 0.10 + wave : depth <= 2 ? 0.06 + wave : 0.03 + wave;
+  const wave = Math.sin(time * 1.5 + gx * 0.7 + gy * 0.5) * 0.06;
+  const shimmer = depth <= 1 ? 0.12 + wave : depth <= 2 ? 0.07 + wave : 0.03 + wave;
 
   ctx.fillStyle = `rgba(255, 255, 255, ${shimmer})`;
   ctx.beginPath();
@@ -471,6 +495,19 @@ function drawWaterTile(
   ctx.lineTo(corners.left.x, corners.left.y);
   ctx.closePath();
   ctx.fill();
+
+  // Secondary wave ripple for coastal tiles
+  if (depth <= 1) {
+    const ripple = Math.sin(time * 2.0 + gx * 1.3 + gy * 0.9) * 0.04;
+    ctx.fillStyle = `rgba(200, 230, 255, ${0.08 + ripple})`;
+    ctx.beginPath();
+    ctx.moveTo(corners.top.x, corners.top.y);
+    ctx.lineTo(corners.right.x, corners.right.y);
+    ctx.lineTo(corners.bottom.x, corners.bottom.y);
+    ctx.lineTo(corners.left.x, corners.left.y);
+    ctx.closePath();
+    ctx.fill();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -631,6 +668,168 @@ function drawNaturalWonderMarker(ctx: CanvasRenderingContext2D, screenX: number,
 }
 
 // ---------------------------------------------------------------------------
+// Programmatic improvement overlays (farm, mine, road)
+// Drawn in isometric perspective to match the grid perfectly.
+// ---------------------------------------------------------------------------
+
+function drawFarmOverlay(
+  ctx: CanvasRenderingContext2D,
+  screenX: number, screenY: number,
+  height: number,
+): void {
+  const corners = getDiamondCorners(screenX, screenY - height, TILE_WIDTH, TILE_HEIGHT);
+
+  // Golden wheat field base
+  ctx.fillStyle = '#C8A84E';
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(corners.top.x, corners.top.y);
+  ctx.lineTo(corners.right.x, corners.right.y);
+  ctx.lineTo(corners.bottom.x, corners.bottom.y);
+  ctx.lineTo(corners.left.x, corners.left.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1.0;
+
+  // Draw wheat rows following isometric lines
+  const rows = 6;
+  for (let i = 1; i < rows; i++) {
+    const t = i / rows;
+    // Interpolate along top→left and right→bottom edges (isometric diagonal)
+    const startX = corners.top.x + (corners.left.x - corners.top.x) * t;
+    const startY = corners.top.y + (corners.left.y - corners.top.y) * t;
+    const endX = corners.right.x + (corners.bottom.x - corners.right.x) * t;
+    const endY = corners.right.y + (corners.bottom.y - corners.right.y) * t;
+
+    // Furrow line
+    ctx.strokeStyle = '#A08040';
+    ctx.lineWidth = 0.6;
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+
+    // Wheat stalks along each row
+    const stalks = 5;
+    for (let d = 1; d < stalks; d++) {
+      const dt = d / stalks;
+      const bx = startX + (endX - startX) * dt;
+      const by = startY + (endY - startY) * dt;
+
+      // Stalk
+      ctx.strokeStyle = '#B8960A';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx, by - 4);
+      ctx.stroke();
+
+      // Wheat head (tiny golden oval)
+      ctx.fillStyle = (d + i) % 2 === 0 ? '#DAA520' : '#C8A010';
+      ctx.beginPath();
+      ctx.ellipse(bx, by - 4.5, 1, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawMineOverlay(
+  ctx: CanvasRenderingContext2D,
+  screenX: number, screenY: number,
+  height: number,
+): void {
+  const cx = screenX + TILE_WIDTH / 2;
+  const cy = screenY - height + TILE_HEIGHT / 2;
+
+  // Dark pit opening (isometric ellipse)
+  ctx.fillStyle = '#2A1A0A';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 8, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Stone rim around the pit
+  ctx.strokeStyle = '#6B6B6B';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 9, 5, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Pickaxe icon above the pit
+  ctx.strokeStyle = '#8B7355';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cx - 5, cy - 8);
+  ctx.lineTo(cx + 3, cy - 2);
+  ctx.stroke();
+
+  // Pickaxe head
+  ctx.strokeStyle = '#808080';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - 7, cy - 9);
+  ctx.lineTo(cx - 3, cy - 7);
+  ctx.stroke();
+
+  // Small ore sparkle
+  ctx.fillStyle = '#FFD700';
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  ctx.arc(cx + 5, cy - 4, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1.0;
+}
+
+function drawRoadOverlay(
+  ctx: CanvasRenderingContext2D,
+  screenX: number, screenY: number,
+  height: number,
+): void {
+  const corners = getDiamondCorners(screenX, screenY - height, TILE_WIDTH, TILE_HEIGHT);
+  const cx = screenX + TILE_WIDTH / 2;
+  const cy = screenY - height + TILE_HEIGHT / 2;
+
+  // Draw a subtle path crossing the tile diagonally (NE-SW isometric direction)
+  ctx.strokeStyle = '#9E8E6E';
+  ctx.lineWidth = 4;
+  ctx.globalAlpha = 0.4;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(corners.top.x, corners.top.y);
+  ctx.quadraticCurveTo(cx + 1, cy, corners.bottom.x, corners.bottom.y);
+  ctx.stroke();
+
+  // Edge lines
+  ctx.strokeStyle = '#7A6A4A';
+  ctx.lineWidth = 0.5;
+  ctx.globalAlpha = 0.3;
+  ctx.beginPath();
+  ctx.moveTo(corners.top.x - 2, corners.top.y + 1);
+  ctx.quadraticCurveTo(cx - 1, cy + 1, corners.bottom.x - 2, corners.bottom.y + 1);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(corners.top.x + 2, corners.top.y - 1);
+  ctx.quadraticCurveTo(cx + 3, cy - 1, corners.bottom.x + 2, corners.bottom.y - 1);
+  ctx.stroke();
+
+  ctx.globalAlpha = 1.0;
+}
+
+function drawImprovementOverlay(
+  ctx: CanvasRenderingContext2D,
+  screenX: number, screenY: number,
+  height: number,
+  improvement: string,
+): void {
+  switch (improvement) {
+    case 'farm': drawFarmOverlay(ctx, screenX, screenY, height); break;
+    case 'mine': drawMineOverlay(ctx, screenX, screenY, height); break;
+    case 'road': drawRoadOverlay(ctx, screenX, screenY, height); break;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main terrain renderer
 // ---------------------------------------------------------------------------
 
@@ -663,10 +862,12 @@ export function renderTerrain(
       if (tile.terrain === 'water') {
         const depth = waterDepth.get(`${x},${y}`) ?? 3;
         drawWaterTile(ctx, screen.x, screen.y, depth, time, x, y);
+      } else if (tile.terrain === 'plains' || tile.terrain === 'forest' || tile.terrain === 'desert') {
+        // Programmatic flat terrain (clean diamonds, no tileset grid artifacts)
+        drawProgrammaticTerrain(ctx, screen.x, screen.y, tile.terrain, x, y);
       } else if (hasTerrainSprite(tile.terrain)) {
-        // Try sprite rendering for supported terrain types
+        // Hills/mountain use tileset sprites (they need elevation visuals)
         if (!drawTerrainSprite(ctx, screen.x, screen.y, tile.terrain, x, y)) {
-          // Fallback to colored diamond if sprites not loaded yet
           const terrainColors = TERRAIN_COLORS[tile.terrain];
           drawDiamond(ctx, screen.x, screen.y, terrainColors, zoom >= 0.5, 0);
         }
@@ -681,14 +882,16 @@ export function renderTerrain(
         drawTerritoryOverlay(ctx, screen.x, screen.y - height, tile.ownerId, grid, gridSize, x, y);
       }
 
-      // Improvement sprite (farm, mine, road)
+      // Improvement (farm, mine, road) — sprite with programmatic fallback
       if (tile.improvement) {
         const impPath = IMPROVEMENT_SPRITES[tile.improvement];
         if (impPath && spriteCache.getImage(impPath)) {
-          const impSize = 24;
+          const impSize = 34;
           const impX = screen.x + TILE_WIDTH / 2 - impSize / 2;
-          const impY = screen.y - height + TILE_HEIGHT / 2 - impSize / 2 - 4;
+          const impY = screen.y - height + TILE_HEIGHT / 2 - impSize / 2 - 6;
           spriteCache.drawImage(ctx, impPath, impX, impY, impSize, impSize);
+        } else {
+          drawImprovementOverlay(ctx, screen.x, screen.y, height, tile.improvement);
         }
       }
 

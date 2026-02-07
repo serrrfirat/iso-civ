@@ -133,6 +133,8 @@ export interface Civilization {
   spaceshipParts: SpaceshipParts;
   // Combat bonus from Great General ability
   combatBonusTurns?: number; // remaining turns of +10% combat bonus
+  // Cultural identity
+  culture: CivCulture;
 }
 
 export interface DiplomacyMessage {
@@ -191,7 +193,8 @@ export type TurnEventType =
   | 'research_completed'
   | 'unit_destroyed'
   | 'improvement'
-  | 'city_growth';
+  | 'city_growth'
+  | 'culture';
 
 export interface TurnEvent {
   id: string;
@@ -199,6 +202,46 @@ export interface TurnEvent {
   type: TurnEventType;
   message: string;
   civId?: CivId;
+  location?: { x: number; y: number };
+  targetLocation?: { x: number; y: number };
+}
+
+// Per-civilization turn summary for action replay
+export interface CivTurnSummary {
+  civId: CivId;
+  turn: number;
+  diplomacyMessages: DiplomacyMessage[];
+  resolvedEvents: TurnEvent[];
+}
+
+// Cultural identity types
+export type CulturalArtifactType = 'law' | 'decree' | 'religious_text' | 'propaganda' | 'tradition' | 'constitutional';
+
+export interface CulturalArtifact {
+  id: string;
+  civId: CivId;
+  turn: number;
+  type: CulturalArtifactType;
+  title: string;
+  content: string;
+  supersedes?: string; // ID of artifact this replaces
+  isActive: boolean;
+}
+
+export interface CulturalSummary {
+  civId: CivId;
+  lastUpdatedTurn: number;
+  governingPrinciples: string;
+  religiousIdentity: string;
+  culturalValues: string;
+  propagandaThemes: string;
+}
+
+export interface CivCulture {
+  artifacts: CulturalArtifact[];
+  summary: CulturalSummary | null;
+  constitutionName: string;
+  religionName: string;
 }
 
 export interface CombatEvent {
@@ -262,6 +305,8 @@ export interface CivGameState {
   notifications: GameNotification[];
   turnEvents: TurnEvent[];
   cameraEvents: CameraEvent[];
+  civTurnSummaries: CivTurnSummary[];
+  culturalEvents: CulturalArtifact[];
   winner: CivId | null;
   victoryType?: VictoryType;
 }
