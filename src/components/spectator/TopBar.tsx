@@ -5,26 +5,26 @@ import { useCivGame } from '@/context/CivGameContext';
 
 // SVG Icons for resources
 const ScienceIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+  <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="currentColor">
     <path d="M7 2v2h1v6.17a5 5 0 1 0 8 0V4h1V2H7zm5 18a3 3 0 0 1-2.83-4h5.66A3 3 0 0 1 12 20zm2-6H10V4h4v10z" />
   </svg>
 );
 
 const GoldIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+  <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="currentColor">
     <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1" fill="none" />
     <text x="12" y="16" textAnchor="middle" fontSize="10" fontWeight="bold" fill="currentColor">$</text>
   </svg>
 );
 
 const CultureIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+  <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="currentColor">
     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" />
   </svg>
 );
 
 const ProductionIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+  <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="currentColor">
     <path d="M12.5 2L2 7v10l10.5 5 10.5-5V7l-10.5-5zm-1 15.75L4 14.31V9.44l7.5 3.75v5.56zm1-7.5L5.23 6.5 12.5 3l7.27 3.5L12.5 10.25zm8 4.56l-7.5 3.75v-5.56l7.5-3.75v5.56z" />
   </svg>
 );
@@ -91,9 +91,9 @@ function ResourceDisplay({ icon, value, label, iconColor }: ResourceDisplayProps
   const isPositive = value >= 0;
 
   return (
-    <div className="flex items-center gap-1.5 px-2 py-1" title={label}>
+    <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-black/20 border border-white/10" title={label}>
       <span style={{ color: iconColor }}>{icon}</span>
-      <span className={`font-bold text-sm tracking-tight ${isPositive ? 'text-emerald-400' : 'text-red-400'}`}>
+      <span className={`font-semibold text-sm tracking-tight tabular-nums ${isPositive ? 'text-emerald-300' : 'text-red-300'}`}>
         {isPositive ? '+' : ''}{formatValue(value)}
       </span>
     </div>

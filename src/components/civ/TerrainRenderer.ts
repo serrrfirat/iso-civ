@@ -210,20 +210,29 @@ function drawResourceIcon(ctx: CanvasRenderingContext2D, screenX: number, screen
 
   const cx = screenX + TILE_WIDTH / 2;
   const cy = screenY + TILE_HEIGHT / 2;
-  const iconSize = zoom > 1 ? 28 : 22;
+  const iconSize = Math.round(20 + Math.min(12, Math.max(0, (zoom - 0.6) * 12)));
 
   // Try sprite icon first
   const spritePath = RESOURCE_SPRITES[resource];
   if (spritePath) {
     const img = spriteCache.getImage(spritePath);
     if (img) {
-      // Subtle drop shadow
+      // Plate shadow for separation from busy terrain.
       ctx.globalAlpha = 0.3;
       ctx.fillStyle = '#000';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 2, iconSize * 0.5, iconSize * 0.3, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy + 2, iconSize * 0.55, iconSize * 0.35, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1.0;
+
+      // Dark backing disk to stabilize readability at medium zoom.
+      ctx.fillStyle = 'rgba(8, 12, 20, 0.55)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, iconSize * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
 
       spriteCache.drawImage(ctx, spritePath,
         cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize);

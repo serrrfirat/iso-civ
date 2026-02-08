@@ -115,10 +115,10 @@ export const CITY_SPRITE = '/sprites/buildings/citysim/castle.png';
 
 /** Resource icon paths — small icons drawn on top of terrain */
 export const RESOURCE_SPRITES: Record<string, string> = {
-  food:       '/sprites/generated/farm.png',
-  gold:       '/sprites/generated/goldmine.png',
-  production: '/sprites/icons/rpg/W_Mace003.png',
-  horses:     '/sprites/generated/horses.png',
+  food:       '/sprites/generated/food_tile.png',
+  gold:       '/sprites/generated/gold_tile.png',
+  production: '/sprites/generated/production_tile.png',
+  horses:     '/sprites/generated/horses_tile.png',
   iron:       '/sprites/generated/iron.png',
 };
 
@@ -188,13 +188,29 @@ const SPRITES_NEEDING_BG_REMOVAL = new Set([
   ...Object.values(IMPROVEMENT_SPRITES),
   MOUNTAIN_SPRITE,
   '/sprites/generated/horses.png',
+  '/sprites/generated/horses_tile.png',
   '/sprites/generated/farm.png',
+  '/sprites/generated/food_tile.png',
   '/sprites/generated/goldmine.png',
+  '/sprites/generated/gold_tile.png',
   '/sprites/generated/iron.png',
+  '/sprites/generated/production_tile.png',
   // Also include generated building sprites
   ...Object.entries(BUILDING_SPRITES)
     .filter(([, path]) => path.startsWith('/sprites/generated/'))
     .map(([, path]) => path),
+]);
+
+/** Sprites with common AI-generated red fringe artifacts */
+const SPRITES_NEEDING_RED_FRINGE_CLEANUP = new Set([
+  '/sprites/generated/horses.png',
+  '/sprites/generated/horses_tile.png',
+  '/sprites/generated/farm.png',
+  '/sprites/generated/food_tile.png',
+  '/sprites/generated/goldmine.png',
+  '/sprites/generated/gold_tile.png',
+  '/sprites/generated/iron.png',
+  '/sprites/generated/production_tile.png',
 ]);
 
 /**
@@ -232,6 +248,43 @@ function removeBackground(img: HTMLImageElement): HTMLImageElement {
   return result;
 }
 
+/**
+ * Removes the hard red contour often present on AI-generated transparent assets.
+ */
+function removeRedFringe(img: HTMLImageElement): HTMLImageElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return img;
+
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const alpha = data[i + 3];
+    if (alpha === 0) continue;
+
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    // Remove saturated red outline while preserving warm/orange shading.
+    const redDominant = r > 150 && r - Math.max(g, b) > 70;
+    const lowGreenBlue = g < 120 && b < 120;
+    if (redDominant && lowGreenBlue) {
+      data[i + 3] = 0;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  const result = new Image();
+  result.src = canvas.toDataURL('image/png');
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // SpriteCache — singleton image loader and drawing helper
 // ---------------------------------------------------------------------------
@@ -251,11 +304,15 @@ class SpriteCache {
     if (inflight) return inflight;
 
     const needsBgRemoval = SPRITES_NEEDING_BG_REMOVAL.has(src);
+    const needsFringeCleanup = SPRITES_NEEDING_RED_FRINGE_CLEANUP.has(src);
 
     const promise = new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.onload = () => {
-        const final = needsBgRemoval ? removeBackground(img) : img;
+        let final = needsBgRemoval ? removeBackground(img) : img;
+        if (needsFringeCleanup) {
+          final = removeRedFringe(final);
+        }
         this.images.set(src, final);
         this.loading.delete(src);
         resolve(final);

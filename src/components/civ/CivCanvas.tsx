@@ -627,18 +627,29 @@ export function CivCanvas() {
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
 
-    setZoom(prevZoom => {
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, prevZoom * delta));
-      const scale = newZoom / prevZoom;
+    // Use current camera refs so each wheel event anchors to the latest committed camera.
+    const currentZoom = zoomRef.current;
+    const currentOffset = offsetRef.current;
 
-      setOffset(prev => ({
-        x: mouseX - (mouseX - prev.x) * scale,
-        y: mouseY - (mouseY - prev.y) * scale,
-      }));
+    // Smooth zoom response for trackpads/mice while keeping hard min/max limits.
+    const zoomFactor = Math.exp(-e.deltaY * 0.0015);
+    const newZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, currentZoom * zoomFactor));
+    if (Math.abs(newZoom - currentZoom) < 0.0001) return;
 
-      return newZoom;
-    });
+    // Keep the world point under cursor fixed during zoom.
+    const worldX = (mouseX - currentOffset.x) / currentZoom;
+    const worldY = (mouseY - currentOffset.y) / currentZoom;
+    const newOffset = {
+      x: mouseX - worldX * newZoom,
+      y: mouseY - worldY * newZoom,
+    };
+
+    // Update refs immediately to avoid drift during rapid wheel bursts.
+    zoomRef.current = newZoom;
+    offsetRef.current = newOffset;
+
+    setZoom(newZoom);
+    setOffset(newOffset);
   }, []);
 
   // Keyboard events
